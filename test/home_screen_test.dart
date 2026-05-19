@@ -208,15 +208,20 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.brightness_6_rounded));
     await tester.pumpAndSettle();
+<<<<<<< HEAD
     await tester.tap(
       find.byType(CheckedPopupMenuItem<AppThemePreference>).at(2),
     );
+=======
+    await tester.tap(find.text('Dark').last);
+>>>>>>> c56a561f46aece35209894ab9964dffedf88c3d3
     await tester.pumpAndSettle();
 
     expect(themeViewModel.preference, AppThemePreference.dark);
     expect(themeStore.savedPreference, AppThemePreference.dark);
   });
 
+<<<<<<< HEAD
   testWidgets('renders dashboard in light theme', (tester) async {
     final viewModel = HomeViewModel(
       transactionRepository: _FakeTransactionRepository(),
@@ -242,6 +247,8 @@ void main() {
     expect(find.text('No masked credit cards detected yet'), findsOneWidget);
   });
 
+=======
+>>>>>>> c56a561f46aece35209894ab9964dffedf88c3d3
   testWidgets('renders dashboard in dark theme', (tester) async {
     final viewModel = HomeViewModel(
       transactionRepository: _FakeTransactionRepository(),
