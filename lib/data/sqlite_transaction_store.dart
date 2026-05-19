@@ -1,0 +1,309 @@
+import 'package:path/path.dart' as p;
+import 'package:sqflite/sqflite.dart';
+
+import '../models/transaction_models.dart';
+import 'transaction_store.dart';
+
+class SqliteTransactionStore implements TransactionStore {
+  SqliteTransactionStore({this.databaseName = 'finance_sms_mvp.db'});
+
+  final String databaseName;
+
+  Database? _database;
+
+  Future<Database> get _db async {
+    final existing = _database;
+    if (existing != null) {
+      return existing;
+    }
+
+    final databasesPath = await getDatabasesPath();
+    final database = await openDatabase(
+      p.join(databasesPath, databaseName),
+      version: 2,
+      onCreate: _createSchema,
+      onUpgrade: _upgradeSchema,
+      onOpen: _ensureDefaultCategories,
+    );
+    _database = database;
+    return database;
+  }
+
+  Future<void> _createSchema(Database db, int version) async {
+    await db.execute('''
+      CREATE TABLE transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_sms_id TEXT NOT NULL UNIQUE,
+        sender TEXT NOT NULL,
+        normalized_sender TEXT NOT NULL,
+        timestamp_millis INTEGER NOT NULL,
+        amount_paise INTEGER NOT NULL,
+        direction TEXT NOT NULL,
+        instrument TEXT NOT NULL,
+        account_hint TEXT,
+        merchant TEXT,
+        confidence REAL NOT NULL,
+        category_id INTEGER,
+        category_name TEXT,
+        classified_at_millis INTEGER,
+        created_at_millis INTEGER NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE INDEX transactions_timestamp_idx
+      ON transactions(timestamp_millis DESC)
+    ''');
+    await db.execute('''
+      CREATE TABLE app_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    ''');
+    await _createCategoriesTable(db);
+  }
+
+  Future<void> _upgradeSchema(Database db, int oldVersion, int version) async {
+    if (oldVersion < 2) {
+      await _addColumnIfMissing(db, 'transactions', 'category_id', 'INTEGER');
+      await _addColumnIfMissing(db, 'transactions', 'category_name', 'TEXT');
+      await _addColumnIfMissing(
+        db,
+        'transactions',
+        'classified_at_millis',
+        'INTEGER',
+      );
+      await _createCategoriesTable(db);
+    }
+  }
+
+  Future<void> _createCategoriesTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        normalized_name TEXT NOT NULL UNIQUE,
+        is_default INTEGER NOT NULL,
+        created_at_millis INTEGER NOT NULL
+      )
+    ''');
+  }
+
+  Future<void> _addColumnIfMissing(
+    Database db,
+    String table,
+    String column,
+    String type,
+  ) async {
+    final columns = await db.rawQuery('PRAGMA table_info($table)');
+    final hasColumn = columns.any((row) => row['name'] == column);
+    if (!hasColumn) {
+      await db.execute('ALTER TABLE $table ADD COLUMN $column $type');
+    }
+  }
+
+  Future<void> _ensureDefaultCategories(Database db) async {
+    final createdAtMillis = DateTime.now().millisecondsSinceEpoch;
+    for (final category in defaultExpenseCategoryNames) {
+      await db.insert('categories', {
+        'name': category,
+        'normalized_name': _normalizeCategoryName(category),
+        'is_default': 1,
+        'created_at_millis': createdAtMillis,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+  }
+
+  @override
+  Future<int> upsertTransactions(
+    List<ParsedTransaction> transactions, {
+    required DateTime createdAt,
+  }) async {
+    if (transactions.isEmpty) {
+      return 0;
+    }
+
+    final db = await _db;
+    final createdAtMillis = createdAt.millisecondsSinceEpoch;
+    return db.transaction<int>((txn) async {
+      var inserted = 0;
+      for (final parsed in transactions) {
+        final row =
+            parsed
+                .toFinanceTransaction(createdAtMillis: createdAtMillis)
+                .toMap()
+              ..remove('id');
+        final id = await txn.insert(
+          'transactions',
+          row,
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+        if (id > 0) {
+          inserted += 1;
+        }
+      }
+      return inserted;
+    });
+  }
+
+  @override
+  Future<List<FinanceTransaction>> allTransactions() async {
+    final db = await _db;
+    final rows = await db.query(
+      'transactions',
+      orderBy: 'timestamp_millis DESC',
+    );
+    return rows.map(FinanceTransaction.fromMap).toList(growable: false);
+  }
+
+  @override
+  Future<List<FinanceTransaction>> recentTransactions({int limit = 20}) async {
+    final db = await _db;
+    final rows = await db.query(
+      'transactions',
+      orderBy: 'timestamp_millis DESC',
+      limit: limit,
+    );
+    return rows.map(FinanceTransaction.fromMap).toList(growable: false);
+  }
+
+  @override
+  Future<List<FinanceTransaction>> uncategorizedTransactions({
+    int limit = 10,
+  }) async {
+    final db = await _db;
+    final rows = await db.query(
+      'transactions',
+      where: 'category_id IS NULL',
+      orderBy: 'timestamp_millis DESC',
+      limit: limit,
+    );
+    return rows.map(FinanceTransaction.fromMap).toList(growable: false);
+  }
+
+  @override
+  Future<int> monthlySpendPaise(DateTime month) async {
+    final db = await _db;
+    final start = DateTime(month.year, month.month);
+    final end = DateTime(month.year, month.month + 1);
+    final rows = await db.rawQuery(
+      '''
+      SELECT COALESCE(SUM(amount_paise), 0) AS total
+      FROM transactions
+      WHERE direction = ?
+        AND timestamp_millis >= ?
+        AND timestamp_millis < ?
+      ''',
+      [
+        TransactionDirection.expense.name,
+        start.millisecondsSinceEpoch,
+        end.millisecondsSinceEpoch,
+      ],
+    );
+    final total = rows.first['total'];
+    if (total is int) {
+      return total;
+    }
+    if (total is num) {
+      return total.toInt();
+    }
+    return 0;
+  }
+
+  @override
+  Future<List<ExpenseCategory>> categories() async {
+    final db = await _db;
+    final rows = await db.query(
+      'categories',
+      orderBy: 'is_default DESC, name COLLATE NOCASE ASC',
+    );
+    return rows.map(ExpenseCategory.fromMap).toList(growable: false);
+  }
+
+  @override
+  Future<ExpenseCategory> addCategory(String name) async {
+    final cleanedName = _cleanCategoryName(name);
+    if (cleanedName.isEmpty) {
+      throw ArgumentError('Category name cannot be empty.');
+    }
+
+    final db = await _db;
+    final normalizedName = _normalizeCategoryName(cleanedName);
+    await db.insert('categories', {
+      'name': cleanedName,
+      'normalized_name': normalizedName,
+      'is_default': 0,
+      'created_at_millis': DateTime.now().millisecondsSinceEpoch,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+
+    final rows = await db.query(
+      'categories',
+      where: 'normalized_name = ?',
+      whereArgs: [normalizedName],
+      limit: 1,
+    );
+    return ExpenseCategory.fromMap(rows.first);
+  }
+
+  @override
+  Future<void> assignCategory({
+    required int transactionId,
+    required ExpenseCategory category,
+    required DateTime classifiedAt,
+  }) async {
+    final db = await _db;
+    await db.update(
+      'transactions',
+      {
+        'category_id': category.id,
+        'category_name': category.name,
+        'classified_at_millis': classifiedAt.millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [transactionId],
+    );
+  }
+
+  @override
+  Future<DateTime?> lastScanAt() async {
+    final db = await _db;
+    final rows = await db.query(
+      'app_meta',
+      columns: ['value'],
+      where: 'key = ?',
+      whereArgs: [_lastScanKey],
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      return null;
+    }
+    final millis = int.tryParse(rows.first['value'] as String);
+    return millis == null ? null : DateTime.fromMillisecondsSinceEpoch(millis);
+  }
+
+  @override
+  Future<void> saveLastScanAt(DateTime scannedAt) async {
+    final db = await _db;
+    await db.insert('app_meta', {
+      'key': _lastScanKey,
+      'value': scannedAt.millisecondsSinceEpoch.toString(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  static const _lastScanKey = 'last_scan_at';
+}
+
+const defaultExpenseCategoryNames = [
+  'Food',
+  'Travel',
+  'Lifestyle',
+  'Education',
+  'Bills',
+];
+
+String _cleanCategoryName(String name) {
+  return name.trim().replaceAll(RegExp(r'\s+'), ' ');
+}
+
+String _normalizeCategoryName(String name) {
+  return _cleanCategoryName(name).toLowerCase();
+}
