@@ -2,7 +2,9 @@ import 'package:finnance_app/app.dart';
 import 'package:finnance_app/models/transaction_models.dart';
 import 'package:finnance_app/repositories/transaction_repository.dart';
 import 'package:finnance_app/services/permission_service.dart';
+import 'package:finnance_app/viewmodels/theme_view_model.dart';
 import 'package:finnance_app/viewmodels/home_view_model.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -17,7 +19,15 @@ void main() {
       now: () => DateTime(2026, 5, 19, 9, 0),
     );
 
-    await tester.pumpWidget(FinanceApp(homeViewModel: viewModel));
+    await tester.pumpWidget(
+      FinanceApp(
+        homeViewModel: viewModel,
+        themeViewModel: ThemeViewModel(
+          initialPreference: AppThemePreference.system,
+          preferenceStore: _FakeThemePreferenceStore(),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('SMS access required'), findsOneWidget);
@@ -35,7 +45,15 @@ void main() {
       now: () => DateTime(2026, 5, 19, 9, 0),
     );
 
-    await tester.pumpWidget(FinanceApp(homeViewModel: viewModel));
+    await tester.pumpWidget(
+      FinanceApp(
+        homeViewModel: viewModel,
+        themeViewModel: ThemeViewModel(
+          initialPreference: AppThemePreference.system,
+          preferenceStore: _FakeThemePreferenceStore(),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('No transactions parsed yet'), findsOneWidget);
@@ -71,7 +89,15 @@ void main() {
       now: () => DateTime(2026, 5, 19, 9, 0),
     );
 
-    await tester.pumpWidget(FinanceApp(homeViewModel: viewModel));
+    await tester.pumpWidget(
+      FinanceApp(
+        homeViewModel: viewModel,
+        themeViewModel: ThemeViewModel(
+          initialPreference: AppThemePreference.system,
+          preferenceStore: _FakeThemePreferenceStore(),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Scan inbox'));
@@ -83,6 +109,56 @@ void main() {
     expect(find.textContaining('1 SMS read'), findsOneWidget);
   });
 
+  testWidgets('shows detected credit card summaries after a successful scan', (
+    tester,
+  ) async {
+    final repository = _FakeTransactionRepository(
+      seedTransactions: [
+        FinanceTransaction(
+          id: 1,
+          sourceSmsId: 'sms-1',
+          sender: 'ICICIC',
+          normalizedSender: 'ICICIC',
+          timestampMillis: DateTime(2026, 5, 19, 9, 0).millisecondsSinceEpoch,
+          amountPaise: 249900,
+          direction: TransactionDirection.expense,
+          instrument: TransactionInstrument.creditCard,
+          accountOrCardHint: '4321',
+          merchantOrPayee: 'Amazon',
+          cardIssuer: 'ICICI Bank',
+          cardLastDigits: '4321',
+          confidence: 0.94,
+          createdAtMillis: DateTime(2026, 5, 19, 9, 0).millisecondsSinceEpoch,
+        ),
+      ],
+    );
+    final viewModel = HomeViewModel(
+      transactionRepository: repository,
+      permissionService: _FakePermissionService(
+        initialState: SmsPermissionState.granted,
+      ),
+      now: () => DateTime(2026, 5, 19, 9, 0),
+    );
+
+    await tester.pumpWidget(
+      FinanceApp(
+        homeViewModel: viewModel,
+        themeViewModel: ThemeViewModel(
+          initialPreference: AppThemePreference.system,
+          preferenceStore: _FakeThemePreferenceStore(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Scan inbox'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Detected credit cards'), findsOneWidget);
+    expect(find.textContaining('ICICI Bank'), findsWidgets);
+    expect(find.textContaining('xx4321'), findsWidgets);
+  });
+
   testWidgets('shows an error banner when scan fails', (tester) async {
     final viewModel = HomeViewModel(
       transactionRepository: _FakeTransactionRepository(throwOnScan: true),
@@ -92,13 +168,75 @@ void main() {
       now: () => DateTime(2026, 5, 19, 9, 0),
     );
 
-    await tester.pumpWidget(FinanceApp(homeViewModel: viewModel));
+    await tester.pumpWidget(
+      FinanceApp(
+        homeViewModel: viewModel,
+        themeViewModel: ThemeViewModel(
+          initialPreference: AppThemePreference.system,
+          preferenceStore: _FakeThemePreferenceStore(),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Scan inbox'));
     await tester.pumpAndSettle();
 
     expect(find.text('Scan failed. Please try again.'), findsOneWidget);
+  });
+
+  testWidgets('renders the theme selector and can switch to dark mode', (
+    tester,
+  ) async {
+    final themeStore = _FakeThemePreferenceStore();
+    final viewModel = HomeViewModel(
+      transactionRepository: _FakeTransactionRepository(),
+      permissionService: _FakePermissionService(
+        initialState: SmsPermissionState.granted,
+      ),
+      now: () => DateTime(2026, 5, 19, 9, 0),
+    );
+    final themeViewModel = ThemeViewModel(
+      initialPreference: AppThemePreference.system,
+      preferenceStore: themeStore,
+    );
+
+    await tester.pumpWidget(
+      FinanceApp(homeViewModel: viewModel, themeViewModel: themeViewModel),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.brightness_6_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dark').last);
+    await tester.pumpAndSettle();
+
+    expect(themeViewModel.preference, AppThemePreference.dark);
+    expect(themeStore.savedPreference, AppThemePreference.dark);
+  });
+
+  testWidgets('renders dashboard in dark theme', (tester) async {
+    final viewModel = HomeViewModel(
+      transactionRepository: _FakeTransactionRepository(),
+      permissionService: _FakePermissionService(
+        initialState: SmsPermissionState.granted,
+      ),
+      now: () => DateTime(2026, 5, 19, 9, 0),
+    );
+    final themeViewModel = ThemeViewModel(
+      initialPreference: AppThemePreference.dark,
+      preferenceStore: _FakeThemePreferenceStore(
+        initialPreference: AppThemePreference.dark,
+      ),
+    );
+
+    await tester.pumpWidget(
+      FinanceApp(homeViewModel: viewModel, themeViewModel: themeViewModel),
+    );
+    await tester.pumpAndSettle();
+
+    final theme = Theme.of(tester.element(find.byType(Scaffold)));
+    expect(theme.brightness, Brightness.dark);
   });
 }
 
@@ -188,6 +326,8 @@ class _FakeTransactionRepository implements TransactionRepositoryBase {
       accountOrCardHint: transaction.accountOrCardHint,
       merchantOrPayee: transaction.merchantOrPayee,
       referenceId: transaction.referenceId,
+      cardIssuer: transaction.cardIssuer,
+      cardLastDigits: transaction.cardLastDigits,
       confidence: transaction.confidence,
       categoryId: category.id,
       categoryName: category.name,
@@ -198,6 +338,11 @@ class _FakeTransactionRepository implements TransactionRepositoryBase {
 
   @override
   Future<List<ExpenseCategory>> categories() async => _categories;
+
+  @override
+  Future<List<CreditCardSummary>> creditCardSummaries(DateTime month) async {
+    return _summaries();
+  }
 
   @override
   Future<String> exportCsv() async => 'finance-transactions.csv';
@@ -255,5 +400,64 @@ class _FakeTransactionRepository implements TransactionRepositoryBase {
       insertedTransactions: seedTransactions.length,
       scannedAt: _lastScanAt!,
     );
+  }
+
+  List<CreditCardSummary> _summaries() {
+    final byCard = <String, List<FinanceTransaction>>{};
+    for (final transaction in _transactions) {
+      final issuer = transaction.cardIssuer;
+      final digits = transaction.cardLastDigits;
+      if (issuer == null || digits == null) {
+        continue;
+      }
+      final key = '$issuer|$digits';
+      byCard.putIfAbsent(key, () => <FinanceTransaction>[]).add(transaction);
+    }
+
+    final summaries = <CreditCardSummary>[];
+    for (final entry in byCard.entries) {
+      final grouped = entry.value;
+      grouped.sort((a, b) => a.timestampMillis.compareTo(b.timestampMillis));
+      final first = grouped.first;
+      final last = grouped.last;
+      summaries.add(
+        CreditCardSummary(
+          issuer: first.cardIssuer!,
+          lastDigits: first.cardLastDigits!,
+          firstSeenMillis: first.timestampMillis,
+          lastSeenMillis: last.timestampMillis,
+          monthlySpendPaise: grouped.fold<int>(
+            0,
+            (total, transaction) => total + transaction.amountPaise,
+          ),
+          transactionCount: grouped.length,
+          confidence:
+              grouped
+                  .map((transaction) => transaction.confidence)
+                  .reduce((a, b) => a + b) /
+              grouped.length,
+        ),
+      );
+    }
+    return summaries;
+  }
+}
+
+class _FakeThemePreferenceStore implements ThemePreferenceStore {
+  _FakeThemePreferenceStore({
+    this.initialPreference = AppThemePreference.system,
+  });
+
+  AppThemePreference initialPreference;
+  AppThemePreference? savedPreference;
+
+  @override
+  Future<AppThemePreference> load() async {
+    return savedPreference ?? initialPreference;
+  }
+
+  @override
+  Future<void> save(AppThemePreference preference) async {
+    savedPreference = preference;
   }
 }

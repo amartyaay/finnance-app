@@ -64,10 +64,37 @@ class DefaultSmsParserService implements SmsParserService {
     r'\b(?:a/?c|acct|account|card|debit card|credit card|ending)\s*[x*#-]*\s*([0-9]{2,4})\b',
     caseSensitive: false,
   );
+  static final RegExp _cardDigitsPattern = RegExp(
+    r'\b(?:card(?:\s*ending)?|ending|xx|x)\s*[x*#-]*\s*([0-9]{4,6})\b',
+    caseSensitive: false,
+  );
   static final RegExp _referencePattern = RegExp(
     r'\b(?:upi\s*(?:ref(?:erence)?|txn|transaction)?\s*(?:no\.?|id)?|utr|rrn|ref(?:erence)?\s*(?:no\.?|id)?|txn\s*(?:id|no\.?)|transaction\s*(?:id|no\.?))\s*[:#-]?\s*([A-Z0-9]{6,24})\b',
     caseSensitive: false,
   );
+  static final Map<String, RegExp> _issuerPatterns = {
+    'HDFC Bank': RegExp(r'\bhdfc\b', caseSensitive: false),
+    'ICICI Bank': RegExp(r'\bicici\b', caseSensitive: false),
+    'SBI Card': RegExp(r'\b(?:sbi\s*card|sbicard)\b', caseSensitive: false),
+    'Axis Bank': RegExp(r'\baxis\b', caseSensitive: false),
+    'Kotak': RegExp(r'\bkotak\b', caseSensitive: false),
+    'RBL Bank': RegExp(r'\brbl\b', caseSensitive: false),
+    'IndusInd Bank': RegExp(r'\bindusind\b', caseSensitive: false),
+    'IDFC FIRST Bank': RegExp(r'\bidfc\b', caseSensitive: false),
+    'Yes Bank': RegExp(r'\byes\s*bank\b', caseSensitive: false),
+    'AU Bank': RegExp(
+      r'\bau\s*(?:small\s*finance\s*)?bank\b',
+      caseSensitive: false,
+    ),
+    'American Express': RegExp(
+      r'\b(?:american\s*express|amex)\b',
+      caseSensitive: false,
+    ),
+    'Standard Chartered': RegExp(
+      r'\b(?:standard\s*chartered|stanchart)\b',
+      caseSensitive: false,
+    ),
+  };
 
   @override
   ParsedTransaction? parse(SmsMessageRecord record) {
@@ -111,6 +138,17 @@ class DefaultSmsParserService implements SmsParserService {
     final accountHint = _extractAccountHint(body);
     final referenceId = _extractReferenceId(body);
     final direction = _detectDirection(lowerBody);
+    final cardLastDigits = _extractCardLastDigits(
+      body: body,
+      lowerBody: lowerBody,
+      instrument: instrument,
+    );
+    final cardIssuer = _extractCardIssuer(
+      body: body,
+      senderProfile: senderProfile,
+      instrument: instrument,
+      cardLastDigits: cardLastDigits,
+    );
 
     return ParsedTransaction(
       sourceSmsId: _buildSourceSmsId(record, normalizedSender, amountPaise),
@@ -123,6 +161,8 @@ class DefaultSmsParserService implements SmsParserService {
       accountOrCardHint: accountHint,
       merchantOrPayee: merchant,
       referenceId: referenceId,
+      cardIssuer: cardIssuer,
+      cardLastDigits: cardLastDigits,
       confidence: _confidenceScore(
         senderProfile: senderProfile,
         lowerBody: lowerBody,
@@ -205,7 +245,11 @@ class DefaultSmsParserService implements SmsParserService {
         lowerBody.contains('amazon pay')) {
       return TransactionInstrument.wallet;
     }
-    if (lowerBody.contains('credit card') || lowerBody.contains('card used')) {
+    if (lowerBody.contains('credit card') ||
+        lowerBody.contains('card used') ||
+        (senderProfile?.suggestedInstrument ==
+                TransactionInstrument.creditCard &&
+            lowerBody.contains('card'))) {
       return TransactionInstrument.creditCard;
     }
     if (lowerBody.contains('debit card') ||
@@ -283,6 +327,54 @@ class DefaultSmsParserService implements SmsParserService {
       return null;
     }
     return match.group(1);
+  }
+
+  String? _extractCardLastDigits({
+    required String body,
+    required String lowerBody,
+    required TransactionInstrument instrument,
+  }) {
+    final isCreditCardRelated =
+        instrument == TransactionInstrument.creditCard ||
+        _creditCardBillPaymentPattern.hasMatch(lowerBody);
+    if (!isCreditCardRelated) {
+      return null;
+    }
+
+    final match =
+        _cardDigitsPattern.firstMatch(body) ??
+        _accountHintPattern.firstMatch(body);
+    final digits = match?.group(1);
+    if (digits == null || digits.length < 4) {
+      return null;
+    }
+    return digits;
+  }
+
+  String? _extractCardIssuer({
+    required String body,
+    required SmsSenderProfile? senderProfile,
+    required TransactionInstrument instrument,
+    required String? cardLastDigits,
+  }) {
+    final isCreditCardRelated =
+        instrument == TransactionInstrument.creditCard ||
+        _creditCardBillPaymentPattern.hasMatch(body);
+    if (!isCreditCardRelated || cardLastDigits == null) {
+      return null;
+    }
+
+    final profileIssuer = senderProfile?.cardIssuer;
+    if (profileIssuer != null && profileIssuer.isNotEmpty) {
+      return profileIssuer;
+    }
+
+    for (final entry in _issuerPatterns.entries) {
+      if (entry.value.hasMatch(body)) {
+        return entry.key;
+      }
+    }
+    return null;
   }
 
   String? _extractReferenceId(String body) {
@@ -363,6 +455,7 @@ class SmsSenderCatalog {
       normalizedSender: 'ICICIC',
       displayName: 'ICICI Bank Card',
       suggestedInstrument: TransactionInstrument.creditCard,
+      cardIssuer: 'ICICI Bank',
     ),
     'AXISBK': SmsSenderProfile(
       normalizedSender: 'AXISBK',
@@ -381,6 +474,7 @@ class SmsSenderCatalog {
       normalizedSender: 'SBICRD',
       displayName: 'State Bank of India Card',
       suggestedInstrument: TransactionInstrument.creditCard,
+      cardIssuer: 'SBI Card',
     ),
     'SBIINB': SmsSenderProfile(
       normalizedSender: 'SBIINB',
@@ -394,6 +488,7 @@ class SmsSenderCatalog {
       normalizedSender: 'KOTAKC',
       displayName: 'Kotak Card',
       suggestedInstrument: TransactionInstrument.creditCard,
+      cardIssuer: 'Kotak',
     ),
     'IDFCFB': SmsSenderProfile(
       normalizedSender: 'IDFCFB',
@@ -515,9 +610,11 @@ class SmsSenderProfile {
     required this.normalizedSender,
     required this.displayName,
     this.suggestedInstrument = TransactionInstrument.unknown,
+    this.cardIssuer,
   });
 
   final String normalizedSender;
   final String displayName;
   final TransactionInstrument suggestedInstrument;
+  final String? cardIssuer;
 }

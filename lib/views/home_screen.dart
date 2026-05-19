@@ -5,6 +5,7 @@ import '../models/transaction_models.dart';
 import '../services/permission_service.dart';
 import '../utils/money_format.dart';
 import '../viewmodels/home_view_model.dart';
+import '../viewmodels/theme_view_model.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -38,13 +39,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Consumer<HomeViewModel>(
       builder: (context, viewModel, _) {
         return Scaffold(
-          backgroundColor: const Color(0xFFF6F7F2),
           appBar: AppBar(
             title: const Text('Finance SMS'),
-            backgroundColor: Colors.transparent,
-            surfaceTintColor: Colors.transparent,
-            elevation: 0,
             actions: [
+              const _ThemeMenuButton(),
               IconButton(
                 tooltip: 'Refresh',
                 onPressed: viewModel.isScanning
@@ -76,6 +74,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     _PendingCategoryPanel(viewModel: viewModel),
                     const SizedBox(height: 12),
                   ],
+                  _CreditCardSummarySection(viewModel: viewModel),
+                  const SizedBox(height: 16),
                   _RecentHeader(viewModel: viewModel),
                   const SizedBox(height: 8),
                   if (viewModel.recentTransactions.isEmpty)
@@ -103,6 +103,35 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 }
 
+class _ThemeMenuButton extends StatelessWidget {
+  const _ThemeMenuButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<ThemeViewModel>(
+      builder: (context, viewModel, _) {
+        return PopupMenuButton<AppThemePreference>(
+          tooltip: 'Theme',
+          icon: const Icon(Icons.brightness_6_rounded),
+          initialValue: viewModel.preference,
+          onSelected: viewModel.setPreference,
+          itemBuilder: (context) {
+            return AppThemePreference.values
+                .map((preference) {
+                  return CheckedPopupMenuItem<AppThemePreference>(
+                    value: preference,
+                    checked: viewModel.preference == preference,
+                    child: Text(viewModel.labelFor(preference)),
+                  );
+                })
+                .toList(growable: false);
+          },
+        );
+      },
+    );
+  }
+}
+
 class _HeaderPanel extends StatelessWidget {
   const _HeaderPanel({required this.viewModel});
 
@@ -111,13 +140,14 @@ class _HeaderPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final amountText = formatInrFromPaise(viewModel.monthlySpendPaise);
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFFFDFCF8),
+        color: colors.primaryContainer,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE4E7DA)),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -130,7 +160,14 @@ class _HeaderPanel extends StatelessWidget {
               amountText,
               style: theme.textTheme.displaySmall?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: const Color(0xFF164B2F),
+                color: colors.onPrimaryContainer,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${viewModel.creditCardSummaries.length} cards detected from SMS',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colors.onPrimaryContainer,
               ),
             ),
             const SizedBox(height: 10),
@@ -167,7 +204,9 @@ class _HeaderPanel extends StatelessWidget {
                 ),
                 Text(
                   'Last scan: ${formatScanTime(viewModel.lastScanAt)}',
-                  style: theme.textTheme.bodyMedium,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colors.onPrimaryContainer,
+                  ),
                 ),
               ],
             ),
@@ -177,7 +216,9 @@ class _HeaderPanel extends StatelessWidget {
                 '${viewModel.lastScanResult!.parsedTransactions} parsed - '
                 '${viewModel.lastScanResult!.insertedTransactions} new - '
                 '${viewModel.lastScanResult!.totalSmsRead} SMS read',
-                style: theme.textTheme.bodySmall,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.onPrimaryContainer,
+                ),
               ),
             ],
           ],
@@ -195,13 +236,14 @@ class _PermissionPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final isBlocked = viewModel.shouldOpenSettings;
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFFFBF4EE),
+        color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE7C7B2)),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -264,12 +306,13 @@ class _PendingCategoryPanelState extends State<_PendingCategoryPanel> {
   Widget build(BuildContext context) {
     final viewModel = widget.viewModel;
     final transaction = viewModel.uncategorizedTransactions.first;
+    final colors = Theme.of(context).colorScheme;
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFFFDFCF8),
+        color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE4E7DA)),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -351,6 +394,196 @@ class _PendingCategoryPanelState extends State<_PendingCategoryPanel> {
   }
 }
 
+class _CreditCardSummarySection extends StatelessWidget {
+  const _CreditCardSummarySection({required this.viewModel});
+
+  final HomeViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final summaries = viewModel.creditCardSummaries;
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Detected credit cards',
+                style: theme.textTheme.titleMedium,
+              ),
+            ),
+            Text('${summaries.length}', style: theme.textTheme.labelLarge),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (summaries.isEmpty)
+          const _NoCardSummary()
+        else
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final summary in summaries) ...[
+                  _CreditCardTile(summary: summary),
+                  const SizedBox(width: 10),
+                ],
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _CreditCardTile extends StatelessWidget {
+  const _CreditCardTile({required this.summary});
+
+  final CreditCardSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Container(
+      width: 232,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: colors.primaryContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.credit_card_rounded,
+                  color: colors.onPrimaryContainer,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      summary.issuer,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    Text(
+                      summary.maskedDigits,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text('This month', style: theme.textTheme.labelMedium),
+          const SizedBox(height: 2),
+          Text(
+            formatInrFromPaise(summary.monthlySpendPaise),
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _MiniMetric(
+                icon: Icons.receipt_long_rounded,
+                label: '${summary.transactionCount} SMS',
+              ),
+              _MiniMetric(
+                icon: Icons.verified_rounded,
+                label: '${(summary.confidence * 100).round()}%',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniMetric extends StatelessWidget {
+  const _MiniMetric({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: colors.onSurfaceVariant),
+          const SizedBox(width: 4),
+          Text(label, style: theme.textTheme.labelSmall),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoCardSummary extends StatelessWidget {
+  const _NoCardSummary();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.credit_card_off_rounded, color: colors.onSurfaceVariant),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'No masked credit cards detected yet',
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _RecentHeader extends StatelessWidget {
   const _RecentHeader({required this.viewModel});
 
@@ -382,13 +615,16 @@ class _TransactionItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE7E8E1)),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -397,12 +633,12 @@ class _TransactionItem extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: const Color(0xFFEAF3E7),
+              color: colors.primaryContainer,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
               _iconForInstrument(transaction.instrument),
-              color: const Color(0xFF245338),
+              color: colors.onPrimaryContainer,
             ),
           ),
           const SizedBox(width: 12),
@@ -414,16 +650,21 @@ class _TransactionItem extends StatelessWidget {
                   transaction.merchantOrPayee?.isNotEmpty == true
                       ? transaction.merchantOrPayee!
                       : transaction.displayLabel,
-                  style: Theme.of(context).textTheme.titleSmall,
+                  style: theme.textTheme.titleSmall,
                 ),
                 const SizedBox(height: 4),
                 Text(
                   [
+                    if (transaction.cardIssuer != null) transaction.cardIssuer!,
                     transaction.sender,
-                    if (transaction.accountOrCardHint != null)
+                    if (transaction.cardLastDigits != null)
+                      'xx${transaction.cardLastDigits}'
+                    else if (transaction.accountOrCardHint != null)
                       'xx${transaction.accountOrCardHint}',
                   ].join(' - '),
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
                 ),
                 if (transaction.categoryName != null) ...[
                   const SizedBox(height: 6),
@@ -433,12 +674,14 @@ class _TransactionItem extends StatelessWidget {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF0F4EA),
+                      color: colors.secondaryContainer,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       transaction.categoryName!,
-                      style: Theme.of(context).textTheme.labelSmall,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colors.onSecondaryContainer,
+                      ),
                     ),
                   ),
                 ],
@@ -451,14 +694,16 @@ class _TransactionItem extends StatelessWidget {
             children: [
               Text(
                 formatInrFromPaise(transaction.amountPaise),
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
                 formatScanTime(transaction.timestamp),
-                style: Theme.of(context).textTheme.bodySmall,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
               ),
             ],
           ),
@@ -492,12 +737,15 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE7E8E1)),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -506,7 +754,7 @@ class _EmptyState extends StatelessWidget {
             viewModel.hasSmsPermission
                 ? 'No transactions parsed yet'
                 : 'Grant SMS access to start',
-            style: Theme.of(context).textTheme.titleMedium,
+            style: theme.textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
           Text(
@@ -527,18 +775,25 @@ class _ErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF1F0),
+        color: colors.errorContainer,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFF1B9B4)),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, color: Color(0xFF9F3A31)),
+          Icon(Icons.error_outline_rounded, color: colors.onErrorContainer),
           const SizedBox(width: 10),
-          Expanded(child: Text(message)),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(color: colors.onErrorContainer),
+            ),
+          ),
         ],
       ),
     );
@@ -552,18 +807,25 @@ class _InfoBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
+        color: colors.tertiaryContainer,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFBBD7F6)),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Row(
         children: [
-          const Icon(Icons.info_outline_rounded, color: Color(0xFF235A8D)),
+          Icon(Icons.info_outline_rounded, color: colors.onTertiaryContainer),
           const SizedBox(width: 10),
-          Expanded(child: Text(message)),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(color: colors.onTertiaryContainer),
+            ),
+          ),
         ],
       ),
     );

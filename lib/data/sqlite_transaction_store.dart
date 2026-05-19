@@ -20,7 +20,7 @@ class SqliteTransactionStore implements TransactionStore {
     final databasesPath = await getDatabasesPath();
     final database = await openDatabase(
       p.join(databasesPath, databaseName),
-      version: 3,
+      version: 4,
       onCreate: _createSchema,
       onUpgrade: _upgradeSchema,
       onOpen: _ensureDefaultCategories,
@@ -43,6 +43,8 @@ class SqliteTransactionStore implements TransactionStore {
         account_hint TEXT,
         merchant TEXT,
         reference_id TEXT,
+        card_issuer TEXT,
+        card_last_digits TEXT,
         confidence REAL NOT NULL,
         category_id INTEGER,
         category_name TEXT,
@@ -57,6 +59,10 @@ class SqliteTransactionStore implements TransactionStore {
     await db.execute('''
       CREATE INDEX transactions_reference_idx
       ON transactions(reference_id)
+    ''');
+    await db.execute('''
+      CREATE INDEX transactions_card_idx
+      ON transactions(card_issuer, card_last_digits)
     ''');
     await db.execute('''
       CREATE TABLE app_meta (
@@ -84,6 +90,14 @@ class SqliteTransactionStore implements TransactionStore {
       await db.execute('''
         CREATE INDEX IF NOT EXISTS transactions_reference_idx
         ON transactions(reference_id)
+      ''');
+    }
+    if (oldVersion < 4) {
+      await _addColumnIfMissing(db, 'transactions', 'card_issuer', 'TEXT');
+      await _addColumnIfMissing(db, 'transactions', 'card_last_digits', 'TEXT');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS transactions_card_idx
+        ON transactions(card_issuer, card_last_digits)
       ''');
     }
   }
@@ -223,6 +237,46 @@ class SqliteTransactionStore implements TransactionStore {
       return total.toInt();
     }
     return 0;
+  }
+
+  @override
+  Future<List<CreditCardSummary>> creditCardSummaries(DateTime month) async {
+    final db = await _db;
+    final start = DateTime(month.year, month.month);
+    final end = DateTime(month.year, month.month + 1);
+    final rows = await db.rawQuery(
+      '''
+      SELECT
+        card_issuer,
+        card_last_digits,
+        MIN(timestamp_millis) AS first_seen_millis,
+        MAX(timestamp_millis) AS last_seen_millis,
+        COALESCE(SUM(
+          CASE
+            WHEN direction = ?
+              AND timestamp_millis >= ?
+              AND timestamp_millis < ?
+            THEN amount_paise
+            ELSE 0
+          END
+        ), 0) AS monthly_spend_paise,
+        COUNT(*) AS transaction_count,
+        AVG(confidence) AS confidence
+      FROM transactions
+      WHERE card_issuer IS NOT NULL
+        AND card_issuer != ''
+        AND card_last_digits IS NOT NULL
+        AND card_last_digits != ''
+      GROUP BY card_issuer, card_last_digits
+      ORDER BY monthly_spend_paise DESC, last_seen_millis DESC
+      ''',
+      [
+        TransactionDirection.expense.name,
+        start.millisecondsSinceEpoch,
+        end.millisecondsSinceEpoch,
+      ],
+    );
+    return rows.map(CreditCardSummary.fromMap).toList(growable: false);
   }
 
   @override

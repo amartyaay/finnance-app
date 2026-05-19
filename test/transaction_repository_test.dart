@@ -169,6 +169,88 @@ void main() {
       expect(await repository.uncategorizedTransactions(), hasLength(1));
     },
   );
+
+  test('creditCardSummaries groups cards by issuer and ending', () async {
+    final timestampMillis = DateTime(2026, 5, 19, 9, 0).millisecondsSinceEpoch;
+    final store = _MemoryTransactionStore();
+    final repository = TransactionRepository(
+      smsReaderService: _FakeSmsReaderService(
+        messages: [
+          SmsMessageRecord(
+            id: 'card-1',
+            sender: 'ICICIC',
+            body:
+                'Your ICICI Bank Credit Card ending 4321 was used for INR 1,000.00 at Amazon.',
+            timestampMillis: timestampMillis,
+          ),
+          SmsMessageRecord(
+            id: 'card-2',
+            sender: 'ICICIC',
+            body:
+                'Your ICICI Bank Credit Card ending 4321 was used for INR 500.00 at Swiggy.',
+            timestampMillis: timestampMillis + 1000,
+          ),
+          SmsMessageRecord(
+            id: 'card-3',
+            sender: 'KOTAKC',
+            body:
+                'Kotak credit card ending 9876 was used for INR 250.00 at Uber.',
+            timestampMillis: timestampMillis + 2000,
+          ),
+        ],
+      ),
+      smsParserService: DefaultSmsParserService(),
+      transactionStore: store,
+      csvExportService: _FakeCsvExportService(),
+      now: () => DateTime(2026, 5, 19, 9, 30),
+    );
+
+    await repository.scanInbox();
+    final summaries = await repository.creditCardSummaries(DateTime(2026, 5));
+
+    expect(summaries, hasLength(2));
+    expect(summaries.first.issuer, 'ICICI Bank');
+    expect(summaries.first.lastDigits, '4321');
+    expect(summaries.first.monthlySpendPaise, 150000);
+  });
+
+  test('creditCardSummaries distinguishes same ending across issuers', () async {
+    final timestampMillis = DateTime(2026, 5, 19, 9, 0).millisecondsSinceEpoch;
+    final store = _MemoryTransactionStore();
+    final repository = TransactionRepository(
+      smsReaderService: _FakeSmsReaderService(
+        messages: [
+          SmsMessageRecord(
+            id: 'card-1',
+            sender: 'ICICIC',
+            body:
+                'Your ICICI Bank Credit Card ending 4321 was used for INR 1,000.00 at Amazon.',
+            timestampMillis: timestampMillis,
+          ),
+          SmsMessageRecord(
+            id: 'card-2',
+            sender: 'SBICRD',
+            body:
+                'Your SBI Card ending 4321 was used for INR 750.00 at Flipkart.',
+            timestampMillis: timestampMillis + 1000,
+          ),
+        ],
+      ),
+      smsParserService: DefaultSmsParserService(),
+      transactionStore: store,
+      csvExportService: _FakeCsvExportService(),
+      now: () => DateTime(2026, 5, 19, 9, 30),
+    );
+
+    await repository.scanInbox();
+    final summaries = await repository.creditCardSummaries(DateTime(2026, 5));
+
+    expect(summaries, hasLength(2));
+    expect(summaries.map((summary) => summary.issuer).toSet(), {
+      'ICICI Bank',
+      'SBI Card',
+    });
+  });
 }
 
 class _FakeSmsReaderService implements SmsReaderService {
@@ -248,6 +330,8 @@ class _MemoryTransactionStore implements TransactionStore {
       accountOrCardHint: transaction.accountOrCardHint,
       merchantOrPayee: transaction.merchantOrPayee,
       referenceId: transaction.referenceId,
+      cardIssuer: transaction.cardIssuer,
+      cardLastDigits: transaction.cardLastDigits,
       confidence: transaction.confidence,
       categoryId: category.id,
       categoryName: category.name,
@@ -258,6 +342,60 @@ class _MemoryTransactionStore implements TransactionStore {
 
   @override
   Future<List<ExpenseCategory>> categories() async => _categories;
+
+  @override
+  Future<List<CreditCardSummary>> creditCardSummaries(DateTime month) async {
+    final byCard = <String, List<FinanceTransaction>>{};
+    for (final transaction in _transactions.values) {
+      final issuer = transaction.cardIssuer;
+      final digits = transaction.cardLastDigits;
+      if (issuer == null || digits == null) {
+        continue;
+      }
+      final key = '$issuer|$digits';
+      byCard.putIfAbsent(key, () => <FinanceTransaction>[]).add(transaction);
+    }
+
+    final start = DateTime(month.year, month.month);
+    final end = DateTime(month.year, month.month + 1);
+    final summaries = <CreditCardSummary>[];
+    for (final entry in byCard.entries) {
+      final grouped = entry.value;
+      grouped.sort((a, b) => a.timestampMillis.compareTo(b.timestampMillis));
+      final first = grouped.first;
+      final last = grouped.last;
+      final monthlySpend = grouped
+          .where(
+            (transaction) =>
+                transaction.direction == TransactionDirection.expense &&
+                !transaction.timestamp.isBefore(start) &&
+                transaction.timestamp.isBefore(end),
+          )
+          .fold<int>(
+            0,
+            (total, transaction) => total + transaction.amountPaise,
+          );
+      summaries.add(
+        CreditCardSummary(
+          issuer: first.cardIssuer!,
+          lastDigits: first.cardLastDigits!,
+          firstSeenMillis: first.timestampMillis,
+          lastSeenMillis: last.timestampMillis,
+          monthlySpendPaise: monthlySpend,
+          transactionCount: grouped.length,
+          confidence:
+              grouped
+                  .map((transaction) => transaction.confidence)
+                  .reduce((a, b) => a + b) /
+              grouped.length,
+        ),
+      );
+    }
+    summaries.sort(
+      (a, b) => b.monthlySpendPaise.compareTo(a.monthlySpendPaise),
+    );
+    return summaries;
+  }
 
   @override
   Future<DateTime?> lastScanAt() async => _lastScanAt;

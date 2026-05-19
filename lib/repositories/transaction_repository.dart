@@ -13,6 +13,8 @@ abstract class TransactionRepositoryBase {
 
   Future<int> monthlySpendPaise(DateTime month);
 
+  Future<List<CreditCardSummary>> creditCardSummaries(DateTime month);
+
   Future<List<ExpenseCategory>> categories();
 
   Future<ExpenseCategory> addCategory(String name);
@@ -88,6 +90,11 @@ class TransactionRepository implements TransactionRepositoryBase {
   }
 
   @override
+  Future<List<CreditCardSummary>> creditCardSummaries(DateTime month) {
+    return transactionStore.creditCardSummaries(month);
+  }
+
+  @override
   Future<List<ExpenseCategory>> categories() {
     return transactionStore.categories();
   }
@@ -135,6 +142,8 @@ class TransactionRepository implements TransactionRepositoryBase {
         'sender',
         'account_or_card_hint',
         'reference_id',
+        'card_issuer',
+        'card_last_digits',
         'confidence',
       ],
       ...transactions.map(
@@ -150,6 +159,8 @@ class TransactionRepository implements TransactionRepositoryBase {
           transaction.sender,
           transaction.accountOrCardHint ?? '',
           transaction.referenceId ?? '',
+          transaction.cardIssuer ?? '',
+          transaction.cardLastDigits ?? '',
           transaction.confidence.toStringAsFixed(2),
         ],
       ),

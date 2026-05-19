@@ -55,6 +55,24 @@ void main() {
       expect(transaction.instrument, TransactionInstrument.creditCard);
       expect(transaction.accountOrCardHint, '4321');
       expect(transaction.merchantOrPayee, 'Amazon');
+      expect(transaction.cardIssuer, 'ICICI Bank');
+      expect(transaction.cardLastDigits, '4321');
+    });
+
+    test('detects card identity from sender and masked ending', () {
+      final transaction = parser.parse(
+        const SmsMessageRecord(
+          id: 'sms-2b',
+          sender: 'KOTAKC',
+          body:
+              'Kotak credit card ending 9876 was used for INR 250.00 at Uber.',
+          timestampMillis: 1779177600000,
+        ),
+      );
+
+      expect(transaction, isNotNull);
+      expect(transaction!.cardIssuer, 'Kotak');
+      expect(transaction.cardLastDigits, '9876');
     });
 
     test('ignores credited, refund, and reversal messages', () {
