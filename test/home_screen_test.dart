@@ -1,6 +1,7 @@
 import 'package:finnance_app/app.dart';
 import 'package:finnance_app/models/transaction_models.dart';
 import 'package:finnance_app/repositories/transaction_repository.dart';
+import 'package:finnance_app/services/import_parser_service.dart';
 import 'package:finnance_app/services/permission_service.dart';
 import 'package:finnance_app/viewmodels/theme_view_model.dart';
 import 'package:finnance_app/viewmodels/home_view_model.dart';
@@ -57,6 +58,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('No transactions parsed yet'),
+      250,
+    );
 
     expect(find.text('No transactions parsed yet'), findsOneWidget);
     expect(find.text('Grant SMS access to start'), findsNothing);
@@ -157,6 +162,8 @@ void main() {
 
     await tester.tap(find.text('Scan inbox'));
     await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
 
     expect(find.text('Detected credit cards'), findsOneWidget);
     expect(find.textContaining('ICICI Bank'), findsWidgets);
@@ -186,6 +193,10 @@ void main() {
 
     await tester.tap(find.text('Scan inbox'));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Scan failed. Please try again.'),
+      250,
+    );
 
     expect(find.text('Scan failed. Please try again.'), findsOneWidget);
   });
@@ -253,6 +264,32 @@ void main() {
     final theme = Theme.of(tester.element(find.byType(Scaffold)));
     expect(theme.brightness, Brightness.light);
     expect(find.text('No masked credit cards detected yet'), findsOneWidget);
+  });
+
+  testWidgets('shows import center on mobile dashboard', (tester) async {
+    final viewModel = HomeViewModel(
+      transactionRepository: _FakeTransactionRepository(),
+      permissionService: _FakePermissionService(
+        initialState: SmsPermissionState.granted,
+      ),
+      now: () => DateTime(2026, 5, 19, 9, 0),
+    );
+
+    await tester.pumpWidget(
+      FinanceApp(
+        homeViewModel: viewModel,
+        themeViewModel: ThemeViewModel(
+          initialPreference: AppThemePreference.system,
+          preferenceStore: _FakeThemePreferenceStore(),
+        ),
+        initialScreen: AppInitialScreen.home,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Import transactions'), findsOneWidget);
+    expect(find.text('Choose file'), findsOneWidget);
+    expect(find.text('CSV ready'), findsOneWidget);
   });
 
   testWidgets('renders dashboard in dark theme', (tester) async {
@@ -335,6 +372,7 @@ void main() {
     expect(find.text('Account overview'), findsOneWidget);
     expect(find.text('Analysis'), findsOneWidget);
     expect(find.text('No SMS on web'), findsOneWidget);
+    expect(find.text('Import transactions'), findsOneWidget);
   });
 }
 
@@ -444,6 +482,27 @@ class _FakeTransactionRepository implements TransactionRepositoryBase {
 
   @override
   Future<String> exportCsv() async => 'finance-transactions.csv';
+
+  @override
+  ImportBatchPreview previewImport(ImportFilePayload file) {
+    return ImportBatchPreview(
+      batchId: 'test-batch',
+      sourceType: TransactionSourceType.csv,
+      sourceLabel: 'Test Import',
+      fileName: file.name,
+      transactions: const [],
+      warnings: const [],
+    );
+  }
+
+  @override
+  Future<ImportResult> confirmImport(ImportBatchPreview preview) async {
+    return ImportResult(
+      previewedTransactions: preview.transactions.length,
+      insertedTransactions: preview.transactions.length,
+      importedAt: DateTime(2026, 5, 19),
+    );
+  }
 
   @override
   Future<int> monthlySpendPaise(DateTime month) async {

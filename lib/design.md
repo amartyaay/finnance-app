@@ -95,3 +95,15 @@ Design decisions:
 - Web copy explicitly says there is no SMS scanning on web.
 - Web dashboard uses finance-oriented panels: account overview, category metrics, analysis bars, detected credit cards, and recent activity.
 - All new surfaces use the existing Material 3 light/dark theme and 8 px component radius.
+
+## 2026-05-19 Import Center Pivot
+
+Goal: keep the SMS MVP while adding safer future paths for bank and UPI transaction import.
+
+Design decisions:
+- Add Import transactions to the Android dashboard and web account dashboard.
+- CSV import is the first working format because it is easier to parse and review.
+- PDF statement import and screenshot OCR are visible as planned paths, not silently promised as working.
+- Mobile import uses a review-before-save flow so users can confirm parsed rows.
+- Web import is preview-only until account sync exists.
+- Screen capture is not a production UX. If explored later, it must be user-started and consent-based.

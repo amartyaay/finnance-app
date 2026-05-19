@@ -9,6 +9,25 @@ enum TransactionInstrument {
   unknown,
 }
 
+enum TransactionSourceType { sms, csv, pdf, screenshot, manual }
+
+extension TransactionSourceTypeLabel on TransactionSourceType {
+  String get displayName {
+    switch (this) {
+      case TransactionSourceType.sms:
+        return 'SMS';
+      case TransactionSourceType.csv:
+        return 'CSV';
+      case TransactionSourceType.pdf:
+        return 'PDF';
+      case TransactionSourceType.screenshot:
+        return 'Screenshot';
+      case TransactionSourceType.manual:
+        return 'Manual';
+    }
+  }
+}
+
 class ExpenseCategory {
   const ExpenseCategory({
     required this.id,
@@ -46,6 +65,9 @@ class ParsedTransaction {
     this.referenceId,
     this.cardIssuer,
     this.cardLastDigits,
+    this.sourceType = TransactionSourceType.sms,
+    this.sourceLabel,
+    this.importBatchId,
     required this.confidence,
     this.categoryId,
     this.categoryName,
@@ -64,6 +86,9 @@ class ParsedTransaction {
   final String? referenceId;
   final String? cardIssuer;
   final String? cardLastDigits;
+  final TransactionSourceType sourceType;
+  final String? sourceLabel;
+  final String? importBatchId;
   final double confidence;
   final int? categoryId;
   final String? categoryName;
@@ -87,6 +112,9 @@ class ParsedTransaction {
       referenceId: referenceId,
       cardIssuer: cardIssuer,
       cardLastDigits: cardLastDigits,
+      sourceType: sourceType,
+      sourceLabel: sourceLabel,
+      importBatchId: importBatchId,
       confidence: confidence,
       categoryId: categoryId,
       categoryName: categoryName,
@@ -111,6 +139,9 @@ class FinanceTransaction {
     this.referenceId,
     this.cardIssuer,
     this.cardLastDigits,
+    this.sourceType = TransactionSourceType.sms,
+    this.sourceLabel,
+    this.importBatchId,
     required this.confidence,
     this.categoryId,
     this.categoryName,
@@ -135,6 +166,11 @@ class FinanceTransaction {
       referenceId: map['reference_id'] as String?,
       cardIssuer: map['card_issuer'] as String?,
       cardLastDigits: map['card_last_digits'] as String?,
+      sourceType: TransactionSourceType.values.byName(
+        (map['source_type'] as String?) ?? TransactionSourceType.sms.name,
+      ),
+      sourceLabel: map['source_label'] as String?,
+      importBatchId: map['import_batch_id'] as String?,
       confidence: (map['confidence'] as num).toDouble(),
       categoryId: map['category_id'] as int?,
       categoryName: map['category_name'] as String?,
@@ -156,6 +192,9 @@ class FinanceTransaction {
   final String? referenceId;
   final String? cardIssuer;
   final String? cardLastDigits;
+  final TransactionSourceType sourceType;
+  final String? sourceLabel;
+  final String? importBatchId;
   final double confidence;
   final int? categoryId;
   final String? categoryName;
@@ -180,6 +219,9 @@ class FinanceTransaction {
       'reference_id': referenceId,
       'card_issuer': cardIssuer,
       'card_last_digits': cardLastDigits,
+      'source_type': sourceType.name,
+      'source_label': sourceLabel,
+      'import_batch_id': importBatchId,
       'confidence': confidence,
       'category_id': categoryId,
       'category_name': categoryName,
@@ -187,6 +229,36 @@ class FinanceTransaction {
       'created_at_millis': createdAtMillis,
     };
   }
+}
+
+class ImportBatchPreview {
+  const ImportBatchPreview({
+    required this.batchId,
+    required this.sourceType,
+    required this.sourceLabel,
+    required this.fileName,
+    required this.transactions,
+    required this.warnings,
+  });
+
+  final String batchId;
+  final TransactionSourceType sourceType;
+  final String sourceLabel;
+  final String fileName;
+  final List<ParsedTransaction> transactions;
+  final List<String> warnings;
+}
+
+class ImportResult {
+  const ImportResult({
+    required this.previewedTransactions,
+    required this.insertedTransactions,
+    required this.importedAt,
+  });
+
+  final int previewedTransactions;
+  final int insertedTransactions;
+  final DateTime importedAt;
 }
 
 class CreditCardSummary {

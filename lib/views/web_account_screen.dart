@@ -1,10 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/transaction_models.dart';
+import '../services/import_file_service.dart';
+import '../services/import_parser_service.dart';
+import '../utils/money_format.dart';
 import '../viewmodels/theme_view_model.dart';
 
-class WebAccountScreen extends StatelessWidget {
+class WebAccountScreen extends StatefulWidget {
   const WebAccountScreen({super.key});
+
+  @override
+  State<WebAccountScreen> createState() => _WebAccountScreenState();
+}
+
+class _WebAccountScreenState extends State<WebAccountScreen> {
+  final ImportFileService _fileService = const FilePickerImportFileService();
+  final ImportParserRegistry _parserRegistry = const ImportParserRegistry();
+  ImportBatchPreview? _preview;
+  String? _importMessage;
+  bool _isImporting = false;
 
   @override
   Widget build(BuildContext context) {
@@ -34,29 +49,45 @@ class WebAccountScreen extends StatelessWidget {
                       builder: (context, constraints) {
                         final isWide = constraints.maxWidth >= 900;
                         if (!isWide) {
-                          return const Column(
+                          return Column(
                             children: [
-                              _AnalysisPanel(),
-                              SizedBox(height: 14),
-                              _CardsPanel(),
-                              SizedBox(height: 14),
-                              _WebTransactionsPanel(),
+                              _WebImportPanel(
+                                preview: _preview,
+                                importMessage: _importMessage,
+                                isImporting: _isImporting,
+                                onPickFile: _pickFile,
+                                onClear: _clearPreview,
+                              ),
+                              const SizedBox(height: 14),
+                              const _AnalysisPanel(),
+                              const SizedBox(height: 14),
+                              const _CardsPanel(),
+                              const SizedBox(height: 14),
+                              const _WebTransactionsPanel(),
                             ],
                           );
                         }
 
-                        return const Row(
+                        return Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(flex: 6, child: _AnalysisPanel()),
-                            SizedBox(width: 14),
+                            const Expanded(flex: 6, child: _AnalysisPanel()),
+                            const SizedBox(width: 14),
                             Expanded(
                               flex: 5,
                               child: Column(
                                 children: [
-                                  _CardsPanel(),
-                                  SizedBox(height: 14),
-                                  _WebTransactionsPanel(),
+                                  _WebImportPanel(
+                                    preview: _preview,
+                                    importMessage: _importMessage,
+                                    isImporting: _isImporting,
+                                    onPickFile: _pickFile,
+                                    onClear: _clearPreview,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  const _CardsPanel(),
+                                  const SizedBox(height: 14),
+                                  const _WebTransactionsPanel(),
                                 ],
                               ),
                             ),
@@ -72,6 +103,45 @@ class WebAccountScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _pickFile() async {
+    setState(() {
+      _isImporting = true;
+      _importMessage = null;
+    });
+    try {
+      final file = await _fileService.pickImportFile();
+      if (file == null) {
+        setState(() {
+          _importMessage = 'Import cancelled.';
+        });
+        return;
+      }
+      final batchId =
+          'web-preview-${DateTime.now().millisecondsSinceEpoch}-${file.name}';
+      final preview = _parserRegistry.parserFor(file.name).parse(
+            file: file,
+            batchId: batchId,
+          );
+      setState(() {
+        _preview = preview;
+        _importMessage = preview.transactions.isEmpty
+            ? preview.warnings.firstOrNull ?? 'No transactions found.'
+            : '${preview.transactions.length} rows ready for account sync later.';
+      });
+    } finally {
+      setState(() {
+        _isImporting = false;
+      });
+    }
+  }
+
+  void _clearPreview() {
+    setState(() {
+      _preview = null;
+      _importMessage = null;
+    });
   }
 }
 
@@ -395,6 +465,89 @@ class _CardsPanel extends StatelessWidget {
           for (final card in _cards) ...[
             _WebCardRow(card: card),
             if (card != _cards.last) const SizedBox(height: 10),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _WebImportPanel extends StatelessWidget {
+  const _WebImportPanel({
+    required this.preview,
+    required this.importMessage,
+    required this.isImporting,
+    required this.onPickFile,
+    required this.onClear,
+  });
+
+  final ImportBatchPreview? preview;
+  final String? importMessage;
+  final bool isImporting;
+  final VoidCallback onPickFile;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final rows = preview?.transactions.take(3).toList(growable: false) ?? [];
+
+    return _Panel(
+      title: 'Import transactions',
+      icon: Icons.upload_file_rounded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Upload bank or UPI exports. CSV preview works now; PDF and screenshot OCR are planned.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: isImporting ? null : onPickFile,
+            icon: isImporting
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.file_open_rounded),
+            label: Text(isImporting ? 'Reading' : 'Choose file'),
+          ),
+          if (importMessage != null) ...[
+            const SizedBox(height: 10),
+            Text(importMessage!, style: theme.textTheme.bodySmall),
+          ],
+          if (preview != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              '${preview!.sourceType.displayName} - ${preview!.fileName}',
+              style: theme.textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            for (final transaction in rows)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        transaction.merchantOrPayee ?? 'Imported transaction',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(formatInrFromPaise(transaction.amountPaise)),
+                  ],
+                ),
+              ),
+            OutlinedButton.icon(
+              onPressed: onClear,
+              icon: const Icon(Icons.close_rounded),
+              label: const Text('Clear preview'),
+            ),
           ],
         ],
       ),

@@ -1,6 +1,7 @@
 import '../data/transaction_store.dart';
 import '../models/transaction_models.dart';
 import '../services/csv_export_service.dart';
+import '../services/import_parser_service.dart';
 import '../services/sms_parser_service.dart';
 import '../services/sms_reader_service.dart';
 
@@ -27,6 +28,10 @@ abstract class TransactionRepositoryBase {
   Future<String> exportCsv();
 
   Future<DateTime?> lastScanAt();
+
+  ImportBatchPreview previewImport(ImportFilePayload file);
+
+  Future<ImportResult> confirmImport(ImportBatchPreview preview);
 }
 
 class TransactionRepository implements TransactionRepositoryBase {
@@ -130,6 +135,27 @@ class TransactionRepository implements TransactionRepositoryBase {
   @override
   Future<DateTime?> lastScanAt() => transactionStore.lastScanAt();
 
+  @override
+  ImportBatchPreview previewImport(ImportFilePayload file) {
+    final batchId = _buildImportBatchId(file.name, _now());
+    final registry = const ImportParserRegistry();
+    return registry.parserFor(file.name).parse(file: file, batchId: batchId);
+  }
+
+  @override
+  Future<ImportResult> confirmImport(ImportBatchPreview preview) async {
+    final importedAt = _now();
+    final inserted = await transactionStore.upsertTransactions(
+      preview.transactions,
+      createdAt: importedAt,
+    );
+    return ImportResult(
+      previewedTransactions: preview.transactions.length,
+      insertedTransactions: inserted,
+      importedAt: importedAt,
+    );
+  }
+
   String _toCsv(List<FinanceTransaction> transactions) {
     final rows = <List<String>>[
       [
@@ -144,6 +170,9 @@ class TransactionRepository implements TransactionRepositoryBase {
         'reference_id',
         'card_issuer',
         'card_last_digits',
+        'source_type',
+        'source_label',
+        'import_batch_id',
         'confidence',
       ],
       ...transactions.map(
@@ -161,6 +190,9 @@ class TransactionRepository implements TransactionRepositoryBase {
           transaction.referenceId ?? '',
           transaction.cardIssuer ?? '',
           transaction.cardLastDigits ?? '',
+          transaction.sourceType.name,
+          transaction.sourceLabel ?? '',
+          transaction.importBatchId ?? '',
           transaction.confidence.toStringAsFixed(2),
         ],
       ),
@@ -193,5 +225,14 @@ class TransactionRepository implements TransactionRepositoryBase {
       two(time.hour),
       two(time.minute),
     ].join('');
+  }
+
+  String _buildImportBatchId(String fileName, DateTime time) {
+    final safeName = fileName
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
+    return 'import-${_fileTimestamp(time)}-$safeName';
   }
 }

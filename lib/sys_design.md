@@ -50,6 +50,7 @@ Stored transaction fields:
 - `reference_id` when a UPI/UTR/RRN/transaction/reference ID is safely inferred.
 - `confidence`.
 - `category_id`, `category_name`, and `classified_at_millis`.
+- `source_type`, `source_label`, and `import_batch_id` for imported rows.
 - `created_at_millis`.
 
 Raw SMS body is not persisted.
@@ -157,6 +158,14 @@ Native Android:
 - `MainActivity` export channel: writes CSV to Downloads/Finance SMS on Android 10+ and app documents on older Android versions.
 - Food/Travel notification actions use a broadcast `PendingIntent`, so choosing them does not open the app. The transaction is already stored by `TransactionSmsReceiver`; `CategoryActionReceiver` only updates `category_id`, `category_name`, and `classified_at_millis` on that existing row.
 - Manual inbox scans use the same source fingerprint/reference/merchant-window dedupe path, so a transaction classified from notification is not inserted again when the user later opens the app and scans.
+
+Import Center:
+- SMS remains active in the current Android build.
+- User-selected CSV imports are parsed locally into the same transaction model.
+- PDF statement and screenshot/OCR parsers exist as placeholders and return preview warnings until implemented.
+- Confirmed imports use the same repository/store upsert path as SMS, so duplicate detection applies across SMS and imported rows.
+- Web import currently previews files only; account sync/back-end persistence is not implemented.
+- Automatic screen capture of UPI apps is intentionally out of production scope. Any future MediaProjection work must be user-started and consent-based, never silent background capture.
 
 Theme and UI state:
 - `ThemeViewModel` persists `system`, `light`, and `dark` mode through `shared_preferences`.

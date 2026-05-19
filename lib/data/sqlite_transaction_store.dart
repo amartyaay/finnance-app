@@ -20,7 +20,7 @@ class SqliteTransactionStore implements TransactionStore {
     final databasesPath = await getDatabasesPath();
     final database = await openDatabase(
       p.join(databasesPath, databaseName),
-      version: 4,
+      version: 5,
       onCreate: _createSchema,
       onUpgrade: _upgradeSchema,
       onOpen: _ensureDefaultCategories,
@@ -45,6 +45,9 @@ class SqliteTransactionStore implements TransactionStore {
         reference_id TEXT,
         card_issuer TEXT,
         card_last_digits TEXT,
+        source_type TEXT NOT NULL DEFAULT 'sms',
+        source_label TEXT,
+        import_batch_id TEXT,
         confidence REAL NOT NULL,
         category_id INTEGER,
         category_name TEXT,
@@ -63,6 +66,10 @@ class SqliteTransactionStore implements TransactionStore {
     await db.execute('''
       CREATE INDEX transactions_card_idx
       ON transactions(card_issuer, card_last_digits)
+    ''');
+    await db.execute('''
+      CREATE INDEX transactions_import_batch_idx
+      ON transactions(import_batch_id)
     ''');
     await db.execute('''
       CREATE TABLE app_meta (
@@ -98,6 +105,20 @@ class SqliteTransactionStore implements TransactionStore {
       await db.execute('''
         CREATE INDEX IF NOT EXISTS transactions_card_idx
         ON transactions(card_issuer, card_last_digits)
+      ''');
+    }
+    if (oldVersion < 5) {
+      await _addColumnIfMissing(
+        db,
+        'transactions',
+        'source_type',
+        "TEXT NOT NULL DEFAULT 'sms'",
+      );
+      await _addColumnIfMissing(db, 'transactions', 'source_label', 'TEXT');
+      await _addColumnIfMissing(db, 'transactions', 'import_batch_id', 'TEXT');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS transactions_import_batch_idx
+        ON transactions(import_batch_id)
       ''');
     }
   }

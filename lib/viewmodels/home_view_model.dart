@@ -2,25 +2,34 @@ import 'package:flutter/foundation.dart';
 
 import '../models/transaction_models.dart';
 import '../repositories/transaction_repository.dart';
+import '../services/import_file_service.dart';
 import '../services/permission_service.dart';
 
 class HomeViewModel extends ChangeNotifier {
   HomeViewModel({
     required this._transactionRepository,
     required this._permissionService,
+    ImportFileService? importFileService,
     DateTime Function()? now,
-  }) : _now = now ?? DateTime.now;
+  }) : _importFileService =
+           importFileService ?? const FilePickerImportFileService(),
+       _now = now ?? DateTime.now;
 
   final TransactionRepositoryBase _transactionRepository;
   final SmsPermissionService _permissionService;
+  final ImportFileService _importFileService;
   final DateTime Function() _now;
 
   SmsPermissionState _permissionState = SmsPermissionState.unknown;
   bool _isLoading = true;
   bool _isScanning = false;
   bool _isExporting = false;
+  bool _isImporting = false;
   String? _errorMessage;
   String? _exportMessage;
+  String? _importMessage;
+  ImportBatchPreview? _importPreview;
+  ImportResult? _lastImportResult;
   ScanResult? _lastScanResult;
   DateTime? _lastScanAt;
   int _monthlySpendPaise = 0;
@@ -37,9 +46,17 @@ class HomeViewModel extends ChangeNotifier {
 
   bool get isExporting => _isExporting;
 
+  bool get isImporting => _isImporting;
+
   String? get errorMessage => _errorMessage;
 
   String? get exportMessage => _exportMessage;
+
+  String? get importMessage => _importMessage;
+
+  ImportBatchPreview? get importPreview => _importPreview;
+
+  ImportResult? get lastImportResult => _lastImportResult;
 
   ScanResult? get lastScanResult => _lastScanResult;
 
@@ -177,6 +194,65 @@ class HomeViewModel extends ChangeNotifier {
       _isExporting = false;
       notifyListeners();
     }
+  }
+
+  Future<void> pickImportFile() async {
+    _isImporting = true;
+    _errorMessage = null;
+    _importMessage = null;
+    notifyListeners();
+
+    try {
+      final file = await _importFileService.pickImportFile();
+      if (file == null) {
+        _importMessage = 'Import cancelled.';
+        return;
+      }
+      _importPreview = _transactionRepository.previewImport(file);
+      if (_importPreview!.transactions.isEmpty) {
+        _importMessage = _importPreview!.warnings.isEmpty
+            ? 'No transactions found in ${_importPreview!.fileName}.'
+            : _importPreview!.warnings.first;
+      }
+    } catch (error) {
+      _errorMessage = 'Import failed. Please try another file.';
+    } finally {
+      _isImporting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> confirmImport() async {
+    final preview = _importPreview;
+    if (preview == null || preview.transactions.isEmpty) {
+      return;
+    }
+
+    _isImporting = true;
+    _errorMessage = null;
+    _importMessage = null;
+    notifyListeners();
+
+    try {
+      _lastImportResult = await _transactionRepository.confirmImport(preview);
+      _importMessage =
+          '${_lastImportResult!.insertedTransactions} of '
+          '${_lastImportResult!.previewedTransactions} imported from '
+          '${preview.fileName}.';
+      _importPreview = null;
+      await _refreshSummary();
+    } catch (error) {
+      _errorMessage = 'Could not save imported transactions.';
+    } finally {
+      _isImporting = false;
+      notifyListeners();
+    }
+  }
+
+  void cancelImportPreview() {
+    _importPreview = null;
+    _importMessage = null;
+    notifyListeners();
   }
 
   Future<void> openSettings() async {

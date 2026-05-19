@@ -49,6 +49,9 @@ class NativeFinanceDatabase(context: Context) :
               reference_id TEXT,
               card_issuer TEXT,
               card_last_digits TEXT,
+              source_type TEXT NOT NULL DEFAULT 'sms',
+              source_label TEXT,
+              import_batch_id TEXT,
               confidence REAL NOT NULL,
               category_id INTEGER,
               category_name TEXT,
@@ -73,6 +76,12 @@ class NativeFinanceDatabase(context: Context) :
             """
             CREATE INDEX IF NOT EXISTS transactions_card_idx
             ON transactions(card_issuer, card_last_digits)
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS transactions_import_batch_idx
+            ON transactions(import_batch_id)
             """.trimIndent()
         )
         db.execSQL(
@@ -114,6 +123,17 @@ class NativeFinanceDatabase(context: Context) :
                 """.trimIndent()
             )
         }
+        if (oldVersion < 5) {
+            addColumnIfMissing(db, "transactions", "source_type", "TEXT NOT NULL DEFAULT 'sms'")
+            addColumnIfMissing(db, "transactions", "source_label", "TEXT")
+            addColumnIfMissing(db, "transactions", "import_batch_id", "TEXT")
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS transactions_import_batch_idx
+                ON transactions(import_batch_id)
+                """.trimIndent()
+            )
+        }
     }
 
     override fun onOpen(db: SQLiteDatabase) {
@@ -141,6 +161,8 @@ class NativeFinanceDatabase(context: Context) :
             put("reference_id", parsed.referenceId)
             put("card_issuer", parsed.cardIssuer)
             put("card_last_digits", parsed.cardLastDigits)
+            put("source_type", "sms")
+            put("source_label", parsed.normalizedSender)
             put("confidence", parsed.confidence)
             put("created_at_millis", System.currentTimeMillis())
         }
@@ -331,7 +353,7 @@ class NativeFinanceDatabase(context: Context) :
 
     companion object {
         const val DATABASE_NAME = "finance_sms_mvp.db"
-        private const val DATABASE_VERSION = 4
+        private const val DATABASE_VERSION = 5
         val DEFAULT_CATEGORIES = listOf("Food", "Travel", "Lifestyle", "Education", "Bills")
 
         fun normalizeCategoryName(name: String): String {

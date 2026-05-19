@@ -74,6 +74,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     _PendingCategoryPanel(viewModel: viewModel),
                     const SizedBox(height: 12),
                   ],
+                  _ImportCenterPanel(viewModel: viewModel),
+                  const SizedBox(height: 12),
                   _CreditCardSummarySection(viewModel: viewModel),
                   const SizedBox(height: 16),
                   _RecentHeader(viewModel: viewModel),
@@ -93,12 +95,182 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     const SizedBox(height: 12),
                     _InfoBanner(message: viewModel.exportMessage!),
                   ],
+                  if (viewModel.importMessage != null) ...[
+                    const SizedBox(height: 12),
+                    _InfoBanner(message: viewModel.importMessage!),
+                  ],
                 ],
               ),
             ),
           ),
         );
       },
+    );
+  }
+}
+
+class _ImportCenterPanel extends StatelessWidget {
+  const _ImportCenterPanel({required this.viewModel});
+
+  final HomeViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final preview = viewModel.importPreview;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.upload_file_rounded, color: colors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('Import transactions', style: theme.textTheme.titleMedium),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Upload CSV now. PDF statements and screenshots are planned local import paths.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              FilledButton.icon(
+                onPressed: viewModel.isImporting
+                    ? null
+                    : () => viewModel.pickImportFile(),
+                icon: viewModel.isImporting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.file_open_rounded),
+                label: Text(viewModel.isImporting ? 'Reading' : 'Choose file'),
+              ),
+              const _ImportTypeChip(label: 'CSV ready'),
+              const _ImportTypeChip(label: 'PDF planned'),
+              const _ImportTypeChip(label: 'OCR planned'),
+            ],
+          ),
+          if (preview != null) ...[
+            const SizedBox(height: 14),
+            _ImportPreviewCard(preview: preview, viewModel: viewModel),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ImportTypeChip extends StatelessWidget {
+  const _ImportTypeChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      avatar: const Icon(Icons.check_rounded, size: 16),
+      label: Text(label),
+    );
+  }
+}
+
+class _ImportPreviewCard extends StatelessWidget {
+  const _ImportPreviewCard({
+    required this.preview,
+    required this.viewModel,
+  });
+
+  final ImportBatchPreview preview;
+  final HomeViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final rows = preview.transactions.take(3).toList(growable: false);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${preview.transactions.length} transactions found in ${preview.fileName}',
+            style: theme.textTheme.titleSmall,
+          ),
+          if (preview.warnings.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              preview.warnings.first,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+          ],
+          if (rows.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            for (final transaction in rows)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        transaction.merchantOrPayee ?? 'Imported transaction',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(formatInrFromPaise(transaction.amountPaise)),
+                  ],
+                ),
+              ),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                FilledButton.icon(
+                  onPressed: viewModel.isImporting
+                      ? null
+                      : () => viewModel.confirmImport(),
+                  icon: const Icon(Icons.check_rounded),
+                  label: const Text('Import rows'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: viewModel.isImporting
+                      ? null
+                      : () => viewModel.cancelImportPreview(),
+                  icon: const Icon(Icons.close_rounded),
+                  label: const Text('Cancel'),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

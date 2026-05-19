@@ -1,8 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:finnance_app/data/transaction_store.dart';
 import 'package:finnance_app/models/sms_message_record.dart';
 import 'package:finnance_app/models/transaction_models.dart';
 import 'package:finnance_app/repositories/transaction_repository.dart';
 import 'package:finnance_app/services/csv_export_service.dart';
+import 'package:finnance_app/services/import_parser_service.dart';
 import 'package:finnance_app/services/sms_parser_service.dart';
 import 'package:finnance_app/services/sms_reader_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -251,6 +254,76 @@ void main() {
       'SBI Card',
     });
   });
+
+  test('previewImport parses CSV transactions and stores metadata', () async {
+    final store = _MemoryTransactionStore();
+    final repository = TransactionRepository(
+      smsReaderService: const _FakeSmsReaderService(messages: []),
+      smsParserService: DefaultSmsParserService(),
+      transactionStore: store,
+      csvExportService: _FakeCsvExportService(),
+      now: () => DateTime(2026, 5, 19, 9, 30),
+    );
+    final file = ImportFilePayload(
+      name: 'phonepe-export.csv',
+      bytes: Uint8List.fromList(
+        'Date,Description,Amount,Type,Transaction ID\n'
+                '19/05/2026,Zomato UPI,620.50,DEBIT,UPI123456789\n'
+            .codeUnits,
+      ),
+    );
+
+    final preview = repository.previewImport(file);
+    final result = await repository.confirmImport(preview);
+    final transactions = await repository.recentTransactions();
+
+    expect(preview.sourceType, TransactionSourceType.csv);
+    expect(preview.sourceLabel, 'PhonePe');
+    expect(preview.transactions, hasLength(1));
+    expect(result.insertedTransactions, 1);
+    expect(transactions.single.sourceType, TransactionSourceType.csv);
+    expect(transactions.single.sourceLabel, 'PhonePe');
+    expect(transactions.single.importBatchId, preview.batchId);
+    expect(transactions.single.amountPaise, 62050);
+  });
+
+  test('confirmImport dedupes imported rows against SMS transactions', () async {
+    final timestampMillis = DateTime(2026, 5, 19, 9, 0).millisecondsSinceEpoch;
+    final store = _MemoryTransactionStore();
+    final repository = TransactionRepository(
+      smsReaderService: _FakeSmsReaderService(
+        messages: [
+          SmsMessageRecord(
+            id: 'bank-sms',
+            sender: 'HDFCBK',
+            body:
+                'Rs.500.00 debited from A/c XX1234 via UPI to Cafe. UPI Ref 123456789012.',
+            timestampMillis: timestampMillis,
+          ),
+        ],
+      ),
+      smsParserService: DefaultSmsParserService(),
+      transactionStore: store,
+      csvExportService: _FakeCsvExportService(),
+      now: () => DateTime(2026, 5, 19, 9, 30),
+    );
+
+    await repository.scanInbox();
+    final preview = repository.previewImport(
+      ImportFilePayload(
+        name: 'phonepe.csv',
+        bytes: Uint8List.fromList(
+          'Date,Description,Amount,Type,Transaction ID\n'
+                  '19/05/2026,Cafe,500.00,DEBIT,123456789012\n'
+              .codeUnits,
+        ),
+      ),
+    );
+    final result = await repository.confirmImport(preview);
+
+    expect(result.insertedTransactions, 0);
+    expect(await repository.recentTransactions(), hasLength(1));
+  });
 }
 
 class _FakeSmsReaderService implements SmsReaderService {
@@ -332,6 +405,9 @@ class _MemoryTransactionStore implements TransactionStore {
       referenceId: transaction.referenceId,
       cardIssuer: transaction.cardIssuer,
       cardLastDigits: transaction.cardLastDigits,
+      sourceType: transaction.sourceType,
+      sourceLabel: transaction.sourceLabel,
+      importBatchId: transaction.importBatchId,
       confidence: transaction.confidence,
       categoryId: category.id,
       categoryName: category.name,
