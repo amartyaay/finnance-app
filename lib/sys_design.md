@@ -158,6 +158,17 @@ Native Android:
 - Food/Travel notification actions use a broadcast `PendingIntent`, so choosing them does not open the app. The transaction is already stored by `TransactionSmsReceiver`; `CategoryActionReceiver` only updates `category_id`, `category_name`, and `classified_at_millis` on that existing row.
 - Manual inbox scans use the same source fingerprint/reference/merchant-window dedupe path, so a transaction classified from notification is not inserted again when the user later opens the app and scans.
 
+Theme and UI state:
+- `ThemeViewModel` persists `system`, `light`, and `dark` mode through `shared_preferences`.
+- `MaterialApp.themeMode` is driven by the theme view model, and both light/dark themes are built from Material 3 seed colors.
+- The dashboard is themed entirely from `Theme.of(context).colorScheme`, so the same widgets render correctly in both modes.
+
+Credit card model:
+- Parsed transactions can carry masked card metadata: `card_issuer` and `card_last_digits`.
+- Credit-card summaries are derived from stored transactions and grouped by `issuer + last digits`.
+- Card summaries only count rows where both issuer and masked digits exist.
+- Monthly card spend includes only expense rows, so repayments and transfer-style messages do not inflate the card total.
+
 References:
 - Flutter architecture guide: https://docs.flutter.dev/app-architecture/guide
 - Pub packages: https://pub.dev/packages/provider, https://pub.dev/packages/permission_handler, https://pub.dev/packages/sqflite, https://pub.dev/packages/intl

@@ -9,56 +9,88 @@ import 'services/csv_export_service.dart';
 import 'services/permission_service.dart';
 import 'services/sms_parser_service.dart';
 import 'services/sms_reader_service.dart';
+import 'theme/app_theme.dart';
 import 'viewmodels/home_view_model.dart';
+import 'viewmodels/theme_view_model.dart';
 import 'views/home_screen.dart';
 
-class FinanceApp extends StatelessWidget {
-  const FinanceApp({super.key, this.homeViewModel, this.autoInitialize = true});
+class FinanceApp extends StatefulWidget {
+  const FinanceApp({
+    super.key,
+    this.homeViewModel,
+    this.themeViewModel,
+    this.autoInitialize = true,
+  });
 
   final HomeViewModel? homeViewModel;
+  final ThemeViewModel? themeViewModel;
   final bool autoInitialize;
 
   @override
-  Widget build(BuildContext context) {
-    final providedViewModel = homeViewModel;
-    final child = MaterialApp(
-      title: 'Finance SMS',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2F7D4C),
-          brightness: Brightness.light,
-        ),
-        scaffoldBackgroundColor: const Color(0xFFF6F7F2),
-        cardTheme: const CardThemeData(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(8)),
-          ),
-        ),
-      ),
-      home: const HomeScreen(),
-    );
+  State<FinanceApp> createState() => _FinanceAppState();
+}
 
-    if (providedViewModel != null) {
-      if (autoInitialize) {
-        unawaited(providedViewModel.initialize());
+class _FinanceAppState extends State<FinanceApp> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.autoInitialize) {
+      if (widget.themeViewModel != null) {
+        unawaited(widget.themeViewModel!.initialize());
       }
-      return ChangeNotifierProvider<HomeViewModel>.value(
-        value: providedViewModel,
-        child: child,
-      );
+      if (widget.homeViewModel != null) {
+        unawaited(widget.homeViewModel!.initialize());
+      }
     }
+  }
 
-    return ChangeNotifierProvider<HomeViewModel>(
-      create: (_) {
-        final viewModel = _createHomeViewModel();
-        if (autoInitialize) {
-          unawaited(viewModel.initialize());
-        }
-        return viewModel;
-      },
-      child: child,
+  @override
+  Widget build(BuildContext context) {
+    final providers = [
+      if (widget.themeViewModel != null)
+        ChangeNotifierProvider<ThemeViewModel>.value(
+          value: widget.themeViewModel!,
+        )
+      else
+        ChangeNotifierProvider<ThemeViewModel>(
+          create: (_) {
+            final viewModel = _createThemeViewModel();
+            if (widget.autoInitialize) {
+              unawaited(viewModel.initialize());
+            }
+            return viewModel;
+          },
+        ),
+      if (widget.homeViewModel != null)
+        ChangeNotifierProvider<HomeViewModel>.value(
+          value: widget.homeViewModel!,
+        )
+      else
+        ChangeNotifierProvider<HomeViewModel>(
+          create: (_) {
+            final viewModel = _createHomeViewModel();
+            if (widget.autoInitialize) {
+              unawaited(viewModel.initialize());
+            }
+            return viewModel;
+          },
+        ),
+    ];
+
+    return MultiProvider(
+      providers: providers,
+      child: Consumer<ThemeViewModel>(
+        builder: (context, themeViewModel, _) {
+          return MaterialApp(
+            title: 'Finance SMS',
+            debugShowCheckedModeBanner: false,
+            theme: buildLightTheme(),
+            darkTheme: buildDarkTheme(),
+            themeMode: themeViewModel.themeMode,
+            home: const HomeScreen(),
+          );
+        },
+      ),
     );
   }
 
@@ -74,5 +106,9 @@ class FinanceApp extends StatelessWidget {
       transactionRepository: repository,
       permissionService: const PermissionHandlerSmsPermissionService(),
     );
+  }
+
+  ThemeViewModel _createThemeViewModel() {
+    return ThemeViewModel();
   }
 }

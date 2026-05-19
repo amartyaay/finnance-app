@@ -16,6 +16,8 @@ data class NativeParsedTransaction(
     val accountHint: String?,
     val merchant: String?,
     val referenceId: String?,
+    val cardIssuer: String?,
+    val cardLastDigits: String?,
     val confidence: Double
 )
 
@@ -45,6 +47,8 @@ class NativeFinanceDatabase(context: Context) :
               account_hint TEXT,
               merchant TEXT,
               reference_id TEXT,
+              card_issuer TEXT,
+              card_last_digits TEXT,
               confidence REAL NOT NULL,
               category_id INTEGER,
               category_name TEXT,
@@ -63,6 +67,12 @@ class NativeFinanceDatabase(context: Context) :
             """
             CREATE INDEX IF NOT EXISTS transactions_reference_idx
             ON transactions(reference_id)
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS transactions_card_idx
+            ON transactions(card_issuer, card_last_digits)
             """.trimIndent()
         )
         db.execSQL(
@@ -94,6 +104,16 @@ class NativeFinanceDatabase(context: Context) :
                 """.trimIndent()
             )
         }
+        if (oldVersion < 4) {
+            addColumnIfMissing(db, "transactions", "card_issuer", "TEXT")
+            addColumnIfMissing(db, "transactions", "card_last_digits", "TEXT")
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS transactions_card_idx
+                ON transactions(card_issuer, card_last_digits)
+                """.trimIndent()
+            )
+        }
     }
 
     override fun onOpen(db: SQLiteDatabase) {
@@ -119,6 +139,8 @@ class NativeFinanceDatabase(context: Context) :
             put("account_hint", parsed.accountHint)
             put("merchant", parsed.merchant)
             put("reference_id", parsed.referenceId)
+            put("card_issuer", parsed.cardIssuer)
+            put("card_last_digits", parsed.cardLastDigits)
             put("confidence", parsed.confidence)
             put("created_at_millis", System.currentTimeMillis())
         }
@@ -309,7 +331,7 @@ class NativeFinanceDatabase(context: Context) :
 
     companion object {
         const val DATABASE_NAME = "finance_sms_mvp.db"
-        private const val DATABASE_VERSION = 3
+        private const val DATABASE_VERSION = 4
         val DEFAULT_CATEGORIES = listOf("Food", "Travel", "Lifestyle", "Education", "Bills")
 
         fun normalizeCategoryName(name: String): String {

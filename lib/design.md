@@ -51,3 +51,26 @@ Design decisions:
 - Other is the only notification action that opens the app for the full category list.
 - CSV export includes direction and reference ID so users can audit why a row did or did not affect spend.
 - The first screen remains unchanged structurally; this is an accounting-behavior improvement rather than a new navigation surface.
+
+## 2026-05-19 Theme And Card UI Refresh
+
+Goal: make the dashboard feel closer to a real finance app and support both light and dark mode cleanly.
+
+Design decisions:
+- Use Material 3 theme tokens everywhere instead of hard-coded panel colors.
+- Default to system theme, with explicit light/dark/system selection in the app bar.
+- Keep the screen dense and utility-first: summary card, detected credit cards, classification queue, then recent transactions.
+- Show detected credit cards as horizontal summary cards with issuer, masked ending, this-month spend, SMS count, and confidence.
+- Treat card detection as `issuer + last digits`; card issuer alone is not enough to increase the detected-card count.
+- Mask endings in the UI and never reveal full card numbers.
+
+UI research notes:
+- Material 3 recommends color, cards, lists, and chips as primary building blocks for compact finance dashboards.
+- Mobile finance apps tend to work best when the balance/summary is dominant and the transaction stream stays scan-friendly.
+- Card-like UI makes sense for detected cards because the mental model is already a payment instrument, not a generic list item.
+
+References:
+- Flutter themes: https://docs.flutter.dev/cookbook/design/themes
+- Flutter `MaterialApp.themeMode`: https://api.flutter.dev/flutter/material/MaterialApp/themeMode.html
+- Android dark theme guidance: https://developer.android.com/develop/ui/views/theming/darktheme
+- Material 3 color/cards/lists: https://m3.material.io/styles/color/overview, https://m3.material.io/components/cards/overview, https://m3.material.io/components/lists/overview

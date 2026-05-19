@@ -44,6 +44,8 @@ class ParsedTransaction {
     this.accountOrCardHint,
     this.merchantOrPayee,
     this.referenceId,
+    this.cardIssuer,
+    this.cardLastDigits,
     required this.confidence,
     this.categoryId,
     this.categoryName,
@@ -60,6 +62,8 @@ class ParsedTransaction {
   final String? accountOrCardHint;
   final String? merchantOrPayee;
   final String? referenceId;
+  final String? cardIssuer;
+  final String? cardLastDigits;
   final double confidence;
   final int? categoryId;
   final String? categoryName;
@@ -81,6 +85,8 @@ class ParsedTransaction {
       accountOrCardHint: accountOrCardHint,
       merchantOrPayee: merchantOrPayee,
       referenceId: referenceId,
+      cardIssuer: cardIssuer,
+      cardLastDigits: cardLastDigits,
       confidence: confidence,
       categoryId: categoryId,
       categoryName: categoryName,
@@ -103,6 +109,8 @@ class FinanceTransaction {
     this.accountOrCardHint,
     this.merchantOrPayee,
     this.referenceId,
+    this.cardIssuer,
+    this.cardLastDigits,
     required this.confidence,
     this.categoryId,
     this.categoryName,
@@ -125,6 +133,8 @@ class FinanceTransaction {
       accountOrCardHint: map['account_hint'] as String?,
       merchantOrPayee: map['merchant'] as String?,
       referenceId: map['reference_id'] as String?,
+      cardIssuer: map['card_issuer'] as String?,
+      cardLastDigits: map['card_last_digits'] as String?,
       confidence: (map['confidence'] as num).toDouble(),
       categoryId: map['category_id'] as int?,
       categoryName: map['category_name'] as String?,
@@ -144,6 +154,8 @@ class FinanceTransaction {
   final String? accountOrCardHint;
   final String? merchantOrPayee;
   final String? referenceId;
+  final String? cardIssuer;
+  final String? cardLastDigits;
   final double confidence;
   final int? categoryId;
   final String? categoryName;
@@ -166,6 +178,8 @@ class FinanceTransaction {
       'account_hint': accountOrCardHint,
       'merchant': merchantOrPayee,
       'reference_id': referenceId,
+      'card_issuer': cardIssuer,
+      'card_last_digits': cardLastDigits,
       'confidence': confidence,
       'category_id': categoryId,
       'category_name': categoryName,
@@ -173,6 +187,45 @@ class FinanceTransaction {
       'created_at_millis': createdAtMillis,
     };
   }
+}
+
+class CreditCardSummary {
+  const CreditCardSummary({
+    required this.issuer,
+    required this.lastDigits,
+    required this.firstSeenMillis,
+    required this.lastSeenMillis,
+    required this.monthlySpendPaise,
+    required this.transactionCount,
+    required this.confidence,
+  });
+
+  factory CreditCardSummary.fromMap(Map<String, Object?> map) {
+    return CreditCardSummary(
+      issuer: map['card_issuer'] as String,
+      lastDigits: map['card_last_digits'] as String,
+      firstSeenMillis: map['first_seen_millis'] as int,
+      lastSeenMillis: map['last_seen_millis'] as int,
+      monthlySpendPaise: (map['monthly_spend_paise'] as num).toInt(),
+      transactionCount: (map['transaction_count'] as num).toInt(),
+      confidence: (map['confidence'] as num).toDouble(),
+    );
+  }
+
+  final String issuer;
+  final String lastDigits;
+  final int firstSeenMillis;
+  final int lastSeenMillis;
+  final int monthlySpendPaise;
+  final int transactionCount;
+  final double confidence;
+
+  DateTime get firstSeen =>
+      DateTime.fromMillisecondsSinceEpoch(firstSeenMillis);
+
+  DateTime get lastSeen => DateTime.fromMillisecondsSinceEpoch(lastSeenMillis);
+
+  String get maskedDigits => 'xx$lastDigits';
 }
 
 class ScanResult {

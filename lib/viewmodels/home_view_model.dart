@@ -26,6 +26,7 @@ class HomeViewModel extends ChangeNotifier {
   int _monthlySpendPaise = 0;
   List<FinanceTransaction> _recentTransactions = const [];
   List<FinanceTransaction> _uncategorizedTransactions = const [];
+  List<CreditCardSummary> _creditCardSummaries = const [];
   List<ExpenseCategory> _categories = const [];
 
   SmsPermissionState get permissionState => _permissionState;
@@ -50,6 +51,8 @@ class HomeViewModel extends ChangeNotifier {
 
   List<FinanceTransaction> get uncategorizedTransactions =>
       _uncategorizedTransactions;
+
+  List<CreditCardSummary> get creditCardSummaries => _creditCardSummaries;
 
   List<ExpenseCategory> get categories => _categories;
 
@@ -188,11 +191,15 @@ class HomeViewModel extends ChangeNotifier {
     final uncategorized = await _transactionRepository
         .uncategorizedTransactions(limit: 10);
     final total = await _transactionRepository.monthlySpendPaise(month);
+    final cardSummaries = await _transactionRepository.creditCardSummaries(
+      month,
+    );
     final lastScan = await _transactionRepository.lastScanAt();
     final categories = await _transactionRepository.categories();
 
     _recentTransactions = recent;
     _uncategorizedTransactions = uncategorized;
+    _creditCardSummaries = cardSummaries;
     _monthlySpendPaise = total;
     _lastScanAt = lastScan;
     _categories = categories;

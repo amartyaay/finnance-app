@@ -36,10 +36,26 @@ object NativeSmsParser {
         Regex("(?:rs\\.?|inr|\\u20B9)\\s*([0-9][0-9,]*(?:\\.[0-9]{1,2})?)", RegexOption.IGNORE_CASE)
     private val accountHintPattern =
         Regex("\\b(?:a/?c|acct|account|card|debit card|credit card|ending)\\s*[x*#-]*\\s*([0-9]{2,4})\\b", RegexOption.IGNORE_CASE)
+    private val cardDigitsPattern =
+        Regex("\\b(?:card(?:\\s*ending)?|ending|xx|x)\\s*[x*#-]*\\s*([0-9]{4,6})\\b", RegexOption.IGNORE_CASE)
     private val merchantPattern =
         Regex("\\b(?:at|to|towards|for|on)\\s+([A-Za-z0-9][A-Za-z0-9 .&@_-]{2,50})", RegexOption.IGNORE_CASE)
     private val referencePattern =
         Regex("\\b(?:upi\\s*(?:ref(?:erence)?|txn|transaction)?\\s*(?:no\\.?|id)?|utr|rrn|ref(?:erence)?\\s*(?:no\\.?|id)?|txn\\s*(?:id|no\\.?)|transaction\\s*(?:id|no\\.?))\\s*[:#-]?\\s*([A-Z0-9]{6,24})\\b", RegexOption.IGNORE_CASE)
+    private val issuerPatterns = listOf(
+        "HDFC Bank" to Regex("\\bhdfc\\b", RegexOption.IGNORE_CASE),
+        "ICICI Bank" to Regex("\\bicici\\b", RegexOption.IGNORE_CASE),
+        "SBI Card" to Regex("\\b(?:sbi\\s*card|sbicard)\\b", RegexOption.IGNORE_CASE),
+        "Axis Bank" to Regex("\\baxis\\b", RegexOption.IGNORE_CASE),
+        "Kotak" to Regex("\\bkotak\\b", RegexOption.IGNORE_CASE),
+        "RBL Bank" to Regex("\\brbl\\b", RegexOption.IGNORE_CASE),
+        "IndusInd Bank" to Regex("\\bindusind\\b", RegexOption.IGNORE_CASE),
+        "IDFC FIRST Bank" to Regex("\\bidfc\\b", RegexOption.IGNORE_CASE),
+        "Yes Bank" to Regex("\\byes\\s*bank\\b", RegexOption.IGNORE_CASE),
+        "AU Bank" to Regex("\\bau\\s*(?:small\\s*finance\\s*)?bank\\b", RegexOption.IGNORE_CASE),
+        "American Express" to Regex("\\b(?:american\\s*express|amex)\\b", RegexOption.IGNORE_CASE),
+        "Standard Chartered" to Regex("\\b(?:standard\\s*chartered|stanchart)\\b", RegexOption.IGNORE_CASE)
+    )
 
     fun parse(sender: String, body: String, timestampMillis: Long): NativeParsedTransaction? {
         val trimmedBody = body.trim()
@@ -73,8 +89,10 @@ object NativeSmsParser {
         }
 
         val normalizedSender = normalizeSender(sender)
-        val instrument = detectInstrument(lowerBody)
+        val instrument = detectInstrument(lowerBody, normalizedSender)
         val merchant = extractMerchant(trimmedBody)
+        val cardLastDigits = extractCardLastDigits(trimmedBody, lowerBody, instrument)
+        val cardIssuer = extractCardIssuer(trimmedBody, normalizedSender, lowerBody, instrument, cardLastDigits)
         val confidence = confidenceScore(normalizedSender, lowerBody, instrument, merchant)
 
         return NativeParsedTransaction(
@@ -88,6 +106,8 @@ object NativeSmsParser {
             accountHint = accountHintPattern.find(trimmedBody)?.groupValues?.getOrNull(1),
             merchant = merchant,
             referenceId = referencePattern.find(trimmedBody)?.groupValues?.getOrNull(1)?.uppercase(),
+            cardIssuer = cardIssuer,
+            cardLastDigits = cardLastDigits,
             confidence = confidence
         )
     }
@@ -137,7 +157,7 @@ object NativeSmsParser {
         return if (parts.isEmpty()) cleaned.replace("-", "") else parts.joinToString("-")
     }
 
-    private fun detectInstrument(lowerBody: String): String {
+    private fun detectInstrument(lowerBody: String, normalizedSender: String): String {
         return when {
             lowerBody.contains("upi") ||
                 lowerBody.contains("@upi") ||
@@ -147,17 +167,38 @@ object NativeSmsParser {
             lowerBody.contains("wallet") ||
                 lowerBody.contains("paytm") ||
                 lowerBody.contains("phonepe") ||
-                lowerBody.contains("google pay") ||
+            lowerBody.contains("google pay") ||
                 lowerBody.contains("gpay") ||
                 lowerBody.contains("amazon pay") -> "wallet"
-            lowerBody.contains("credit card") || lowerBody.contains("card used") -> "creditCard"
+            lowerBody.contains("credit card") ||
+                lowerBody.contains("card used") ||
+                (suggestedInstrument(normalizedSender) == "creditCard" && lowerBody.contains("card")) -> "creditCard"
             lowerBody.contains("debit card") ||
                 lowerBody.contains("atm card") ||
                 lowerBody.contains("card ending") ||
                 lowerBody.contains("card xx") ||
                 lowerBody.contains("card x") -> "debitCard"
             lowerBody.contains("account") || lowerBody.contains("a/c") -> "account"
+            else -> suggestedInstrument(normalizedSender)
+        }
+    }
+
+    private fun suggestedInstrument(normalizedSender: String): String {
+        return when (normalizedSender.replace("-", "")) {
+            "ICICIC", "SBICRD", "KOTAKC", "CCARD" -> "creditCard"
+            "DEBITC" -> "debitCard"
+            "SBIUPI", "UPI" -> "upi"
+            "PAYTMB", "PHONEP", "GPAY", "GOOGLEP", "AMZNPAY", "AMAZON" -> "wallet"
             else -> "unknown"
+        }
+    }
+
+    private fun cardIssuerForSender(normalizedSender: String): String? {
+        return when (normalizedSender.replace("-", "")) {
+            "ICICIC" -> "ICICI Bank"
+            "SBICRD" -> "SBI Card"
+            "KOTAKC" -> "Kotak"
+            else -> null
         }
     }
 
@@ -172,6 +213,44 @@ object NativeSmsParser {
         } else {
             "expense"
         }
+    }
+
+    private fun extractCardLastDigits(
+        body: String,
+        lowerBody: String,
+        instrument: String
+    ): String? {
+        val isCreditCardRelated = instrument == "creditCard" ||
+            creditCardBillPaymentPattern.containsMatchIn(lowerBody)
+        if (!isCreditCardRelated) {
+            return null
+        }
+
+        val digits = cardDigitsPattern.find(body)?.groupValues?.getOrNull(1)
+            ?: accountHintPattern.find(body)?.groupValues?.getOrNull(1)
+        return if (!digits.isNullOrBlank() && digits.length >= 4) digits else null
+    }
+
+    private fun extractCardIssuer(
+        body: String,
+        normalizedSender: String,
+        lowerBody: String,
+        instrument: String,
+        cardLastDigits: String?
+    ): String? {
+        val isCreditCardRelated = instrument == "creditCard" ||
+            creditCardBillPaymentPattern.containsMatchIn(lowerBody)
+        if (!isCreditCardRelated || cardLastDigits.isNullOrBlank()) {
+            return null
+        }
+
+        cardIssuerForSender(normalizedSender)?.let { return it }
+        for ((issuer, pattern) in issuerPatterns) {
+            if (pattern.containsMatchIn(body)) {
+                return issuer
+            }
+        }
+        return null
     }
 
     private fun extractMerchant(body: String): String? {

@@ -14,6 +14,8 @@ abstract class TransactionStore {
 
   Future<int> monthlySpendPaise(DateTime month);
 
+  Future<List<CreditCardSummary>> creditCardSummaries(DateTime month);
+
   Future<List<ExpenseCategory>> categories();
 
   Future<ExpenseCategory> addCategory(String name);
