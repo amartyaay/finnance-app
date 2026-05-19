@@ -22,7 +22,7 @@ class DefaultSmsParserService implements SmsParserService {
     caseSensitive: false,
   );
   static final RegExp _promoPattern = RegExp(
-    r'\b(offer|loan|pre-approved|promo|promotion|advertisement|apply now|limited time)\b',
+    r'\b(offer|loan offer|pre-approved|promo|promotion|advertisement|apply now|limited time)\b',
     caseSensitive: false,
   );
   static final RegExp _creditLikePattern = RegExp(
@@ -31,6 +31,25 @@ class DefaultSmsParserService implements SmsParserService {
   );
   static final RegExp _debitLikePattern = RegExp(
     r'\b(debited|debited with|spent|spent on|paid|payment|purchase|purchased|charged|withdrawn|sent|transferred|used|billed)\b',
+    caseSensitive: false,
+  );
+  static final RegExp _creditCardBillPaymentPattern = RegExp(
+    r'\b(?:credit\s*card|cc|card)\s*(?:bill|payment|repayment|dues?|outstanding|statement)\b|'
+    r'\b(?:billpay|billdesk|bbps|bharat\s+bill\s*pay|cred|cheq)\b.{0,80}\b(?:credit\s*card|card\s*bill|cc)\b|'
+    r'\b(?:paid|payment|debited|sent|transferred)\b.{0,80}\b(?:sbi\s*card|hdfc\s*(?:bank\s*)?credit\s*card|icici\s*(?:bank\s*)?credit\s*card|axis\s*(?:bank\s*)?credit\s*card|kotak\s*credit\s*card)\b',
+    caseSensitive: false,
+  );
+  static final RegExp _storedValueLoadPattern = RegExp(
+    r'\b(?:upi\s*lite|wallet)\b.{0,60}\b(?:top\s*up|load(?:ed)?|add(?:ed)?\s+money|recharge)\b|'
+    r'\b(?:top\s*up|load(?:ed)?|add(?:ed)?\s+money|recharge)\b.{0,60}\b(?:upi\s*lite|wallet)\b',
+    caseSensitive: false,
+  );
+  static final RegExp _selfTransferPattern = RegExp(
+    r'\b(?:self\s*transfer|own\s+account|to\s+your\s+(?:own\s+)?a/?c|between\s+your\s+accounts|to\s+self)\b',
+    caseSensitive: false,
+  );
+  static final RegExp _investmentTransferPattern = RegExp(
+    r'\b(?:mutual\s*fund|sip|systematic\s+investment|demat|broker|zerodha|groww|upstox|indmoney|smallcase|nps|ppf|fixed\s+deposit|recurring\s+deposit|fd|rd)\b',
     caseSensitive: false,
   );
   static final RegExp _amountPattern = RegExp(
@@ -43,6 +62,10 @@ class DefaultSmsParserService implements SmsParserService {
   );
   static final RegExp _accountHintPattern = RegExp(
     r'\b(?:a/?c|acct|account|card|debit card|credit card|ending)\s*[x*#-]*\s*([0-9]{2,4})\b',
+    caseSensitive: false,
+  );
+  static final RegExp _referencePattern = RegExp(
+    r'\b(?:upi\s*(?:ref(?:erence)?|txn|transaction)?\s*(?:no\.?|id)?|utr|rrn|ref(?:erence)?\s*(?:no\.?|id)?|txn\s*(?:id|no\.?)|transaction\s*(?:id|no\.?))\s*[:#-]?\s*([A-Z0-9]{6,24})\b',
     caseSensitive: false,
   );
 
@@ -86,6 +109,8 @@ class DefaultSmsParserService implements SmsParserService {
     final instrument = _detectInstrument(lowerBody, senderProfile);
     final merchant = _extractMerchant(body);
     final accountHint = _extractAccountHint(body);
+    final referenceId = _extractReferenceId(body);
+    final direction = _detectDirection(lowerBody);
 
     return ParsedTransaction(
       sourceSmsId: _buildSourceSmsId(record, normalizedSender, amountPaise),
@@ -93,10 +118,11 @@ class DefaultSmsParserService implements SmsParserService {
       normalizedSender: normalizedSender,
       timestampMillis: record.timestampMillis,
       amountPaise: amountPaise,
-      direction: TransactionDirection.expense,
+      direction: direction,
       instrument: instrument,
       accountOrCardHint: accountHint,
       merchantOrPayee: merchant,
+      referenceId: referenceId,
       confidence: _confidenceScore(
         senderProfile: senderProfile,
         lowerBody: lowerBody,
@@ -195,6 +221,16 @@ class DefaultSmsParserService implements SmsParserService {
     return senderProfile?.suggestedInstrument ?? TransactionInstrument.unknown;
   }
 
+  TransactionDirection _detectDirection(String lowerBody) {
+    if (_creditCardBillPaymentPattern.hasMatch(lowerBody) ||
+        _storedValueLoadPattern.hasMatch(lowerBody) ||
+        _selfTransferPattern.hasMatch(lowerBody) ||
+        _investmentTransferPattern.hasMatch(lowerBody)) {
+      return TransactionDirection.transfer;
+    }
+    return TransactionDirection.expense;
+  }
+
   String? _extractMerchant(String body) {
     final matches = _merchantPattern.allMatches(body).toList(growable: false);
     if (matches.isEmpty) {
@@ -247,6 +283,14 @@ class DefaultSmsParserService implements SmsParserService {
       return null;
     }
     return match.group(1);
+  }
+
+  String? _extractReferenceId(String body) {
+    final rawReference = _referencePattern.firstMatch(body)?.group(1);
+    if (rawReference == null) {
+      return null;
+    }
+    return rawReference.toUpperCase();
   }
 
   String _buildSourceSmsId(

@@ -37,3 +37,17 @@ Design decisions:
 - Uncategorized expenses appear above the recent transaction list so notification misses are still recoverable.
 - Export CSV sits beside Scan inbox because it is a utility action on the current local ledger.
 - Transaction rows show the assigned category as a compact chip.
+
+## 2026-05-19 Duplicate-safe spending totals
+
+Goal: prevent monthly spend from double-counting repayment and paired SMS alerts.
+
+Design decisions:
+- Monthly total represents real expenses, not every debit from a bank account.
+- Credit card bill repayment, wallet/UPI Lite top-up, self-transfer, and investment movement are kept in the local ledger as transfers.
+- Transfers appear in recent transactions but do not enter the category prompt queue.
+- Classification notifications are only posted for expense transactions.
+- Food and Travel notification actions classify silently without opening the app.
+- Other is the only notification action that opens the app for the full category list.
+- CSV export includes direction and reference ID so users can audit why a row did or did not affect spend.
+- The first screen remains unchanged structurally; this is an accounting-behavior improvement rather than a new navigation surface.

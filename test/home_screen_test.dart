@@ -187,6 +187,7 @@ class _FakeTransactionRepository implements TransactionRepositoryBase {
       instrument: transaction.instrument,
       accountOrCardHint: transaction.accountOrCardHint,
       merchantOrPayee: transaction.merchantOrPayee,
+      referenceId: transaction.referenceId,
       confidence: transaction.confidence,
       categoryId: category.id,
       categoryName: category.name,
@@ -208,6 +209,7 @@ class _FakeTransactionRepository implements TransactionRepositoryBase {
     return _transactions
         .where(
           (transaction) =>
+              transaction.direction == TransactionDirection.expense &&
               !transaction.timestamp.isBefore(start) &&
               transaction.timestamp.isBefore(end),
         )
@@ -229,7 +231,11 @@ class _FakeTransactionRepository implements TransactionRepositoryBase {
     int limit = 10,
   }) async {
     return _transactions
-        .where((transaction) => transaction.categoryId == null)
+        .where(
+          (transaction) =>
+              transaction.categoryId == null &&
+              transaction.direction == TransactionDirection.expense,
+        )
         .take(limit)
         .toList(growable: false);
   }

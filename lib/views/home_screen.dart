@@ -572,6 +572,10 @@ class _InfoBanner extends StatelessWidget {
 
 extension on FinanceTransaction {
   String get displayLabel {
+    if (direction == TransactionDirection.transfer) {
+      return 'Transfer or repayment';
+    }
+
     switch (instrument) {
       case TransactionInstrument.upi:
         return 'UPI payment';

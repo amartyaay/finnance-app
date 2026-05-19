@@ -23,6 +23,8 @@ class TransactionSmsReceiver : BroadcastReceiver() {
         val parsed = NativeSmsParser.parse(sender, body, timestampMillis) ?: return
         val inserted = NativeFinanceDatabase(context).insertTransaction(parsed) ?: return
 
-        TransactionNotificationHelper.showClassificationNotification(context, inserted)
+        if (inserted.direction == "expense") {
+            TransactionNotificationHelper.showClassificationNotification(context, inserted)
+        }
     }
 }

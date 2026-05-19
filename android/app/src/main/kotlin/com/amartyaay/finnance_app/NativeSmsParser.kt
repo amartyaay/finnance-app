@@ -10,17 +10,36 @@ object NativeSmsParser {
     private val statementPattern =
         Regex("\\b(statement|mini statement|e-statement|account summary)\\b", RegexOption.IGNORE_CASE)
     private val promoPattern =
-        Regex("\\b(offer|loan|pre-approved|promo|promotion|advertisement|apply now|limited time)\\b", RegexOption.IGNORE_CASE)
+        Regex("\\b(offer|loan offer|pre-approved|promo|promotion|advertisement|apply now|limited time)\\b", RegexOption.IGNORE_CASE)
     private val creditLikePattern =
         Regex("\\b(credited|credit received|received|refund|reversal|reversed|cashback|cash back|returned|deposited|failed|declined|unsuccessful)\\b", RegexOption.IGNORE_CASE)
     private val debitLikePattern =
         Regex("\\b(debited|spent|paid|payment|purchase|purchased|charged|withdrawn|sent|transferred|used|billed)\\b", RegexOption.IGNORE_CASE)
+    private val creditCardBillPaymentPattern =
+        Regex(
+            "\\b(?:credit\\s*card|cc|card)\\s*(?:bill|payment|repayment|dues?|outstanding|statement)\\b|" +
+                "\\b(?:billpay|billdesk|bbps|bharat\\s+bill\\s*pay|cred|cheq)\\b.{0,80}\\b(?:credit\\s*card|card\\s*bill|cc)\\b|" +
+                "\\b(?:paid|payment|debited|sent|transferred)\\b.{0,80}\\b(?:sbi\\s*card|hdfc\\s*(?:bank\\s*)?credit\\s*card|icici\\s*(?:bank\\s*)?credit\\s*card|axis\\s*(?:bank\\s*)?credit\\s*card|kotak\\s*credit\\s*card)\\b",
+            RegexOption.IGNORE_CASE
+        )
+    private val storedValueLoadPattern =
+        Regex(
+            "\\b(?:upi\\s*lite|wallet)\\b.{0,60}\\b(?:top\\s*up|load(?:ed)?|add(?:ed)?\\s+money|recharge)\\b|" +
+                "\\b(?:top\\s*up|load(?:ed)?|add(?:ed)?\\s+money|recharge)\\b.{0,60}\\b(?:upi\\s*lite|wallet)\\b",
+            RegexOption.IGNORE_CASE
+        )
+    private val selfTransferPattern =
+        Regex("\\b(?:self\\s*transfer|own\\s+account|to\\s+your\\s+(?:own\\s+)?a/?c|between\\s+your\\s+accounts|to\\s+self)\\b", RegexOption.IGNORE_CASE)
+    private val investmentTransferPattern =
+        Regex("\\b(?:mutual\\s*fund|sip|systematic\\s+investment|demat|broker|zerodha|groww|upstox|indmoney|smallcase|nps|ppf|fixed\\s+deposit|recurring\\s+deposit|fd|rd)\\b", RegexOption.IGNORE_CASE)
     private val amountPattern =
         Regex("(?:rs\\.?|inr|\\u20B9)\\s*([0-9][0-9,]*(?:\\.[0-9]{1,2})?)", RegexOption.IGNORE_CASE)
     private val accountHintPattern =
         Regex("\\b(?:a/?c|acct|account|card|debit card|credit card|ending)\\s*[x*#-]*\\s*([0-9]{2,4})\\b", RegexOption.IGNORE_CASE)
     private val merchantPattern =
         Regex("\\b(?:at|to|towards|for|on)\\s+([A-Za-z0-9][A-Za-z0-9 .&@_-]{2,50})", RegexOption.IGNORE_CASE)
+    private val referencePattern =
+        Regex("\\b(?:upi\\s*(?:ref(?:erence)?|txn|transaction)?\\s*(?:no\\.?|id)?|utr|rrn|ref(?:erence)?\\s*(?:no\\.?|id)?|txn\\s*(?:id|no\\.?)|transaction\\s*(?:id|no\\.?))\\s*[:#-]?\\s*([A-Z0-9]{6,24})\\b", RegexOption.IGNORE_CASE)
 
     fun parse(sender: String, body: String, timestampMillis: Long): NativeParsedTransaction? {
         val trimmedBody = body.trim()
@@ -64,9 +83,11 @@ object NativeSmsParser {
             normalizedSender = normalizedSender,
             timestampMillis = timestampMillis,
             amountPaise = amountPaise,
+            direction = detectDirection(lowerBody),
             instrument = instrument,
             accountHint = accountHintPattern.find(trimmedBody)?.groupValues?.getOrNull(1),
             merchant = merchant,
+            referenceId = referencePattern.find(trimmedBody)?.groupValues?.getOrNull(1)?.uppercase(),
             confidence = confidence
         )
     }
@@ -137,6 +158,19 @@ object NativeSmsParser {
                 lowerBody.contains("card x") -> "debitCard"
             lowerBody.contains("account") || lowerBody.contains("a/c") -> "account"
             else -> "unknown"
+        }
+    }
+
+    private fun detectDirection(lowerBody: String): String {
+        return if (
+            creditCardBillPaymentPattern.containsMatchIn(lowerBody) ||
+            storedValueLoadPattern.containsMatchIn(lowerBody) ||
+            selfTransferPattern.containsMatchIn(lowerBody) ||
+            investmentTransferPattern.containsMatchIn(lowerBody)
+        ) {
+            "transfer"
+        } else {
+            "expense"
         }
     }
 

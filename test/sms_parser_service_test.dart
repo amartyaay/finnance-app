@@ -36,6 +36,7 @@ void main() {
       expect(transaction.instrument, TransactionInstrument.upi);
       expect(transaction.accountOrCardHint, '1234');
       expect(transaction.merchantOrPayee, 'Zomato');
+      expect(transaction.referenceId, '123456');
     });
 
     test('parses credit card spend without treating credit card as income', () {
@@ -131,6 +132,64 @@ void main() {
       expect(transaction, isNotNull);
       expect(transaction!.amountPaise, 45000);
       expect(transaction.instrument, TransactionInstrument.upi);
+    });
+
+    test('classifies credit card bill payments as transfers', () {
+      final transaction = parser.parse(
+        const SmsMessageRecord(
+          id: 'sms-9',
+          sender: 'SBIUPI',
+          body:
+              'A/c XX9988 debited by INR 5,000.00 via UPI to SBI Card for credit card bill payment. UPI Ref 987654321012.',
+          timestampMillis: 1779177600000,
+        ),
+      );
+
+      expect(transaction, isNotNull);
+      expect(transaction!.amountPaise, 500000);
+      expect(transaction.direction, TransactionDirection.transfer);
+      expect(transaction.instrument, TransactionInstrument.upi);
+      expect(transaction.referenceId, '987654321012');
+    });
+
+    test('classifies wallet and UPI Lite loads as transfers', () {
+      final walletTopUp = parser.parse(
+        const SmsMessageRecord(
+          id: 'sms-10',
+          sender: 'HDFCBK',
+          body:
+              'Rs.1000 debited from A/c XX1234 for wallet top up on PhonePe. UPI Ref 111222333444.',
+          timestampMillis: 1779177600000,
+        ),
+      );
+      final upiLiteTopUp = parser.parse(
+        const SmsMessageRecord(
+          id: 'sms-11',
+          sender: 'ICICIB',
+          body:
+              'INR 500 debited from A/c XX4321 for UPI Lite top up. Ref No 555666777888.',
+          timestampMillis: 1779177600000,
+        ),
+      );
+
+      expect(walletTopUp?.direction, TransactionDirection.transfer);
+      expect(upiLiteTopUp?.direction, TransactionDirection.transfer);
+    });
+
+    test('does not discard real loan EMI debit as promotion', () {
+      final transaction = parser.parse(
+        const SmsMessageRecord(
+          id: 'sms-12',
+          sender: 'HDFCBK',
+          body:
+              'INR 12,345.00 debited from A/c XX1234 towards loan EMI payment. Ref No 123456789000.',
+          timestampMillis: 1779177600000,
+        ),
+      );
+
+      expect(transaction, isNotNull);
+      expect(transaction!.amountPaise, 1234500);
+      expect(transaction.direction, TransactionDirection.expense);
     });
   });
 }

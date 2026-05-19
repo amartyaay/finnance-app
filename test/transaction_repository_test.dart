@@ -71,6 +71,104 @@ void main() {
     );
     expect(exportService.lastCsv, contains('Food'));
   });
+
+  test(
+    'scanInbox dedupes paired bank and payment app alerts by reference',
+    () async {
+      final timestampMillis = DateTime(
+        2026,
+        5,
+        19,
+        9,
+        0,
+      ).millisecondsSinceEpoch;
+      final store = _MemoryTransactionStore();
+      final repository = TransactionRepository(
+        smsReaderService: _FakeSmsReaderService(
+          messages: [
+            SmsMessageRecord(
+              id: 'bank-sms',
+              sender: 'HDFCBK',
+              body:
+                  'Rs.500.00 debited from A/c XX1234 via UPI to Cafe. UPI Ref 123456789012.',
+              timestampMillis: timestampMillis,
+            ),
+            SmsMessageRecord(
+              id: 'app-sms',
+              sender: 'PHONEP',
+              body:
+                  'Paid INR 500.00 to Cafe via UPI. UPI transaction ID 123456789012.',
+              timestampMillis: timestampMillis + 30000,
+            ),
+          ],
+        ),
+        smsParserService: DefaultSmsParserService(),
+        transactionStore: store,
+        csvExportService: _FakeCsvExportService(),
+        now: () => DateTime(2026, 5, 19, 9, 30),
+      );
+
+      final scan = await repository.scanInbox();
+
+      expect(scan.parsedTransactions, 2);
+      expect(scan.insertedTransactions, 1);
+      expect(await repository.monthlySpendPaise(DateTime(2026, 5)), 50000);
+      expect(await repository.recentTransactions(), hasLength(1));
+    },
+  );
+
+  test(
+    'scanInbox stores credit card repayment but excludes it from spend',
+    () async {
+      final timestampMillis = DateTime(
+        2026,
+        5,
+        19,
+        9,
+        0,
+      ).millisecondsSinceEpoch;
+      final store = _MemoryTransactionStore();
+      final repository = TransactionRepository(
+        smsReaderService: _FakeSmsReaderService(
+          messages: [
+            SmsMessageRecord(
+              id: 'card-spend',
+              sender: 'ICICIC',
+              body:
+                  'Your ICICI Bank Credit Card ending 4321 was used for INR 5,000.00 at Amazon.',
+              timestampMillis: timestampMillis,
+            ),
+            SmsMessageRecord(
+              id: 'card-bill-payment',
+              sender: 'SBIUPI',
+              body:
+                  'A/c XX9988 debited by INR 5,000.00 via UPI to SBI Card for credit card bill payment. UPI Ref 987654321012.',
+              timestampMillis: timestampMillis + 86400000,
+            ),
+          ],
+        ),
+        smsParserService: DefaultSmsParserService(),
+        transactionStore: store,
+        csvExportService: _FakeCsvExportService(),
+        now: () => DateTime(2026, 5, 20, 9, 30),
+      );
+
+      final scan = await repository.scanInbox();
+      final transactions = await repository.recentTransactions();
+
+      expect(scan.parsedTransactions, 2);
+      expect(scan.insertedTransactions, 2);
+      expect(await repository.monthlySpendPaise(DateTime(2026, 5)), 500000);
+      expect(
+        transactions.where(
+          (transaction) =>
+              transaction.direction == TransactionDirection.transfer,
+        ),
+        hasLength(1),
+      );
+      expect(await repository.uncategorizedTransactions(), hasLength(1));
+    },
+  );
 }
 
 class _FakeSmsReaderService implements SmsReaderService {
@@ -149,6 +247,7 @@ class _MemoryTransactionStore implements TransactionStore {
       instrument: transaction.instrument,
       accountOrCardHint: transaction.accountOrCardHint,
       merchantOrPayee: transaction.merchantOrPayee,
+      referenceId: transaction.referenceId,
       confidence: transaction.confidence,
       categoryId: category.id,
       categoryName: category.name,
@@ -170,6 +269,7 @@ class _MemoryTransactionStore implements TransactionStore {
     return _transactions.values
         .where(
           (transaction) =>
+              transaction.direction == TransactionDirection.expense &&
               !transaction.timestamp.isBefore(start) &&
               transaction.timestamp.isBefore(end),
         )
@@ -188,7 +288,11 @@ class _MemoryTransactionStore implements TransactionStore {
     int limit = 10,
   }) async {
     return _transactions.values
-        .where((transaction) => transaction.categoryId == null)
+        .where(
+          (transaction) =>
+              transaction.categoryId == null &&
+              transaction.direction == TransactionDirection.expense,
+        )
         .take(limit)
         .toList(growable: false);
   }
@@ -205,7 +309,7 @@ class _MemoryTransactionStore implements TransactionStore {
   }) async {
     var inserted = 0;
     for (final transaction in transactions) {
-      if (_transactions.containsKey(transaction.sourceSmsId)) {
+      if (_hasDuplicateTransaction(transaction)) {
         continue;
       }
       _transactions[transaction.sourceSmsId] = transaction.toFinanceTransaction(
@@ -216,6 +320,69 @@ class _MemoryTransactionStore implements TransactionStore {
     }
     return inserted;
   }
+
+  bool _hasDuplicateTransaction(ParsedTransaction transaction) {
+    if (_transactions.containsKey(transaction.sourceSmsId)) {
+      return true;
+    }
+
+    final referenceId = transaction.referenceId;
+    if (referenceId != null && referenceId.length >= 6) {
+      final hasReferenceMatch = _transactions.values.any(
+        (existing) =>
+            existing.referenceId == referenceId &&
+            existing.amountPaise == transaction.amountPaise,
+      );
+      if (hasReferenceMatch) {
+        return true;
+      }
+    }
+
+    final merchantKey = _normalizeMatchText(transaction.merchantOrPayee);
+    if (merchantKey.length < 3) {
+      return false;
+    }
+
+    const duplicateWindowMillis = 2 * 60 * 1000;
+    return _transactions.values.any((existing) {
+      if (existing.normalizedSender == transaction.normalizedSender ||
+          existing.amountPaise != transaction.amountPaise ||
+          existing.direction != transaction.direction) {
+        return false;
+      }
+
+      final timeDelta = (existing.timestampMillis - transaction.timestampMillis)
+          .abs();
+      if (timeDelta > duplicateWindowMillis) {
+        return false;
+      }
+
+      return _similarMatchText(
+        merchantKey,
+        _normalizeMatchText(existing.merchantOrPayee),
+      );
+    });
+  }
+}
+
+String _normalizeMatchText(String? value) {
+  if (value == null) {
+    return '';
+  }
+  return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '').trim();
+}
+
+bool _similarMatchText(String left, String right) {
+  if (left.isEmpty || right.isEmpty) {
+    return false;
+  }
+  if (left == right) {
+    return true;
+  }
+  if (left.length < 5 || right.length < 5) {
+    return false;
+  }
+  return left.contains(right) || right.contains(left);
 }
 
 class _FakeCsvExportService implements CsvExportService {

@@ -44,9 +44,10 @@ Stored transaction fields:
 - `sender` and `normalized_sender`.
 - `timestamp_millis`.
 - `amount_paise`.
-- `direction` currently `expense`.
+- `direction`: `expense` for real spending and `transfer` for non-expense money movement such as credit-card bill repayment, wallet/UPI Lite top-up, self-transfer, and investment movement.
 - `instrument`: `upi`, `debitCard`, `creditCard`, `account`, `wallet`, or `unknown`.
 - `account_hint` and `merchant` when safely inferred.
+- `reference_id` when a UPI/UTR/RRN/transaction/reference ID is safely inferred.
 - `confidence`.
 - `category_id`, `category_name`, and `classified_at_millis`.
 - `created_at_millis`.
@@ -58,6 +59,38 @@ Categories:
 - Users can add custom categories.
 - Notification quick actions classify as Food or Travel.
 - The Other notification action opens the app so the user can pick any category or add a new one.
+- Only `expense` transactions appear in the uncategorized classification queue.
+
+## Duplicate And Non-Expense Transfer Strategy
+
+Monthly spend is intended to mean consumption spend, not every cash outflow. Some SMS pairs describe the same economic event from two sides, and some debit SMS are liability or stored-value movements rather than new expenses.
+
+Handled now:
+- Credit card bill repayment is stored as `transfer`, not `expense`, so a Rs.5,000 card purchase plus a later Rs.5,000 UPI card bill payment remains Rs.5,000 of monthly spend.
+- Card issuer "payment received" / credit acknowledgement messages stay excluded because they are the receiving side of the repayment.
+- Wallet and UPI Lite loads are stored as `transfer`, because the later wallet/UPI Lite payment is the spend event when an alert exists.
+- Self-transfers between own accounts are `transfer`.
+- Mutual funds, SIPs, demat/broker transfers, fixed deposits, recurring deposits, NPS, and PPF are `transfer`.
+- Paired bank and payment-app alerts are deduped first by `reference_id + amount`, then by amount + two-minute time window + similar merchant across different senders.
+
+Known ambiguous cases:
+- EMI and loan repayments can be either bills/cashflow or principal repayment. The MVP does not auto-exclude every EMI because users often expect EMIs in monthly bills, and SMS rarely splits principal from interest.
+- ATM withdrawals are cash movement. If the app has no manual cash expense tracking, counting withdrawal can be useful; if manual cash tracking is added later, withdrawals should become transfer-to-cash to avoid duplicates.
+- FASTag, transit card, and prepaid recharge can be top-ups or final travel spend depending on whether later usage alerts are available.
+- Refunds, reversals, chargebacks, and cashback are currently excluded from gross spend. A later net-spend mode should store them as adjustments and subtract them from matching expenses.
+- Split bills and reimbursements cannot be fully resolved from SMS alone; user review or merchant/contact context will be needed.
+
+Research notes:
+- UPI, BBPS/Bharat Connect, UPI Lite, and RuPay credit-card-on-UPI make it normal for one real-world payment to produce multiple bank/payment/biller messages.
+- Credit-card bill payment is a repayment of a prior card liability, so counting both the original card spend SMS and the repayment debit SMS doubles consumption.
+- Transaction/reference IDs are the strongest duplicate signal when present; sender IDs remain weaker because Indian DLT headers vary by operator and route.
+
+Sources:
+- NPCI UPI: https://www.npci.org.in/what-we-do/upi/product-overview
+- NPCI RuPay credit card on UPI: https://www.npci.org.in/what-we-do/rupay/rupay-credit-card-on-upi
+- NPCI Bharat BillPay / Bharat Connect: https://www.npci.org.in/who-we-are/group-companies/npci-bharat-billpay-ltd/bharat-connect-overview/
+- NPCI UPI Lite: https://www.npci.org.in/what-we-do/upi-lite/product-overview
+- RBI credit/debit card directions: https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=12300&Mode=0
 
 ## Parser Rules
 
@@ -66,6 +99,13 @@ Primary rule: transaction wording is stronger than sender ID.
 Included as expenses:
 - Debit messages: debited, spent, paid, purchase, charged, withdrawn, sent, transferred, used, billed.
 - UPI spends and wallet/card/account debit alerts with a rupee amount.
+
+Stored as transfers, excluded from monthly spend:
+- Credit-card bill payment/repayment/dues/outstanding messages.
+- BBPS/Bharat BillPay/BillDesk/CRED/Cheq card bill payments.
+- Wallet and UPI Lite top-ups or loads.
+- Self-transfers between own accounts.
+- Investments and deposits such as mutual funds, SIP, demat/broker transfers, FD/RD, NPS, and PPF.
 
 Excluded:
 - OTP or verification messages.
@@ -115,6 +155,8 @@ Native Android:
 - `CategoryActionReceiver`: handles Food/Travel notification actions.
 - `NativeFinanceDatabase`: keeps native inserts aligned with the Flutter SQLite schema.
 - `MainActivity` export channel: writes CSV to Downloads/Finance SMS on Android 10+ and app documents on older Android versions.
+- Food/Travel notification actions use a broadcast `PendingIntent`, so choosing them does not open the app. The transaction is already stored by `TransactionSmsReceiver`; `CategoryActionReceiver` only updates `category_id`, `category_name`, and `classified_at_millis` on that existing row.
+- Manual inbox scans use the same source fingerprint/reference/merchant-window dedupe path, so a transaction classified from notification is not inserted again when the user later opens the app and scans.
 
 References:
 - Flutter architecture guide: https://docs.flutter.dev/app-architecture/guide
