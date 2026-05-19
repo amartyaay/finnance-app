@@ -53,7 +53,7 @@ class DefaultSmsParserService implements SmsParserService {
     caseSensitive: false,
   );
   static final RegExp _amountPattern = RegExp(
-    r'(?:rs\.?|inr|₹)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)',
+    r'(?:rs\.?|inr|\u20B9)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)',
     caseSensitive: false,
   );
   static final RegExp _merchantPattern = RegExp(

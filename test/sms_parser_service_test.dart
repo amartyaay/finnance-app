@@ -152,6 +152,21 @@ void main() {
       expect(transaction.instrument, TransactionInstrument.upi);
     });
 
+    test('parses rupee symbol amount alerts', () {
+      final transaction = parser.parse(
+        const SmsMessageRecord(
+          id: 'sms-8b',
+          sender: 'HDFCBK',
+          body: '₹250.75 debited from A/c XX1234 via UPI to Cafe.',
+          timestampMillis: 1779177600000,
+        ),
+      );
+
+      expect(transaction, isNotNull);
+      expect(transaction!.amountPaise, 25075);
+      expect(transaction.instrument, TransactionInstrument.upi);
+    });
+
     test('classifies credit card bill payments as transfers', () {
       final transaction = parser.parse(
         const SmsMessageRecord(

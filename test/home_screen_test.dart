@@ -208,11 +208,38 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.brightness_6_rounded));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Dark').last);
+    await tester.tap(
+      find.byType(CheckedPopupMenuItem<AppThemePreference>).at(2),
+    );
     await tester.pumpAndSettle();
 
     expect(themeViewModel.preference, AppThemePreference.dark);
     expect(themeStore.savedPreference, AppThemePreference.dark);
+  });
+
+  testWidgets('renders dashboard in light theme', (tester) async {
+    final viewModel = HomeViewModel(
+      transactionRepository: _FakeTransactionRepository(),
+      permissionService: _FakePermissionService(
+        initialState: SmsPermissionState.granted,
+      ),
+      now: () => DateTime(2026, 5, 19, 9, 0),
+    );
+    final themeViewModel = ThemeViewModel(
+      initialPreference: AppThemePreference.light,
+      preferenceStore: _FakeThemePreferenceStore(
+        initialPreference: AppThemePreference.light,
+      ),
+    );
+
+    await tester.pumpWidget(
+      FinanceApp(homeViewModel: viewModel, themeViewModel: themeViewModel),
+    );
+    await tester.pumpAndSettle();
+
+    final theme = Theme.of(tester.element(find.byType(Scaffold)));
+    expect(theme.brightness, Brightness.light);
+    expect(find.text('No masked credit cards detected yet'), findsOneWidget);
   });
 
   testWidgets('renders dashboard in dark theme', (tester) async {
