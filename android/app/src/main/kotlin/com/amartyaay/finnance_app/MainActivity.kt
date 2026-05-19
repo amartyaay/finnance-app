@@ -1,21 +1,29 @@
 package com.amartyaay.finnance_app
 
 import android.Manifest
+import android.app.Activity
 import android.content.ContentValues
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.BaseColumns
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import android.provider.Telephony
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.ByteArrayOutputStream
 import java.io.File
 
 class MainActivity : FlutterActivity() {
     private val smsReaderChannel = "finnance_app/sms_reader"
     private val exportChannel = "finnance_app/export"
+    private val importFileChannel = "finnance_app/import_file"
+    private val importFileRequestCode = 4107
+    private var pendingImportResult: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -58,11 +66,110 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, importFileChannel)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "pickImportFile" -> pickImportFile(result)
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != importFileRequestCode) {
+            return
+        }
+
+        val result = pendingImportResult ?: return
+        pendingImportResult = null
+
+        if (resultCode != Activity.RESULT_OK) {
+            result.success(null)
+            return
+        }
+
+        val uri = data?.data
+        if (uri == null) {
+            result.success(null)
+            return
+        }
+
+        try {
+            result.success(readImportFile(uri))
+        } catch (error: Exception) {
+            result.error("import_file_read_failed", error.message, null)
+        }
     }
 
     private fun hasReadSmsPermission(): Boolean {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
             checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun pickImportFile(result: MethodChannel.Result) {
+        if (pendingImportResult != null) {
+            result.error("picker_active", "Another import picker is already open.", null)
+            return
+        }
+
+        pendingImportResult = result
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(
+                Intent.EXTRA_MIME_TYPES,
+                arrayOf(
+                    "text/csv",
+                    "text/comma-separated-values",
+                    "application/pdf",
+                    "image/png",
+                    "image/jpeg",
+                    "image/webp"
+                )
+            )
+        }
+
+        try {
+            startActivityForResult(intent, importFileRequestCode)
+        } catch (error: Exception) {
+            pendingImportResult = null
+            result.error("picker_unavailable", error.message, null)
+        }
+    }
+
+    private fun readImportFile(uri: Uri): Map<String, Any?> {
+        val name = displayNameFor(uri) ?: "import-file"
+        val bytes = contentResolver.openInputStream(uri)?.use { input ->
+            val output = ByteArrayOutputStream()
+            input.copyTo(output)
+            output.toByteArray()
+        } ?: ByteArray(0)
+
+        return mapOf(
+            "name" to name,
+            "bytes" to bytes
+        )
+    }
+
+    private fun displayNameFor(uri: Uri): String? {
+        contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (index >= 0) {
+                    return cursor.getString(index)
+                }
+            }
+        }
+
+        return uri.lastPathSegment
     }
 
     private fun readInbox(limit: Int, sinceMillis: Long?): List<Map<String, Any?>> {

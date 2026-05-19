@@ -15,7 +15,7 @@ class WebAccountScreen extends StatefulWidget {
 }
 
 class _WebAccountScreenState extends State<WebAccountScreen> {
-  final ImportFileService _fileService = const FilePickerImportFileService();
+  final ImportFileService _fileService = const UnsupportedImportFileService();
   final ImportParserRegistry _parserRegistry = const ImportParserRegistry();
   ImportBatchPreview? _preview;
   String? _importMessage;
@@ -129,6 +129,10 @@ class _WebAccountScreenState extends State<WebAccountScreen> {
         _importMessage = preview.transactions.isEmpty
             ? preview.warnings.firstOrNull ?? 'No transactions found.'
             : '${preview.transactions.length} rows ready for account sync later.';
+      });
+    } on UnsupportedError {
+      setState(() {
+        _importMessage = 'Web file import is UI-only for now.';
       });
     } finally {
       setState(() {

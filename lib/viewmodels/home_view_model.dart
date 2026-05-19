@@ -12,7 +12,7 @@ class HomeViewModel extends ChangeNotifier {
     ImportFileService? importFileService,
     DateTime Function()? now,
   }) : _importFileService =
-           importFileService ?? const FilePickerImportFileService(),
+           importFileService ?? const NativeImportFileService(),
        _now = now ?? DateTime.now;
 
   final TransactionRepositoryBase _transactionRepository;
