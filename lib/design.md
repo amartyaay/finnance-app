@@ -65,7 +65,6 @@ Design decisions:
 - Mask endings in the UI and never reveal full card numbers.
 
 UI research notes:
-<<<<<<< HEAD
 - Flutter theming guidance supports app-wide `ThemeData`, while `MaterialApp.themeMode` is the right switch for system/light/dark behavior.
 - Android dark-theme guidance favors system-aware dark mode and avoiding one-off hard-coded colors, so all dashboard surfaces use `ColorScheme`.
 - Material 3 cards are appropriate for grouped financial objects; lists remain better for transaction streams because users scan merchant, source, date, amount, and category repeatedly.
@@ -73,10 +72,6 @@ UI research notes:
 - Google Pay also surfaces monthly total expenses minus money received, which supports our decision to exclude credits and transfers from spend totals.
 - PhonePe presents payments, bill payments, credit cards, wallet, RuPay credit card on UPI, UPI Lite, and travel/commute as distinct financial surfaces. This supports separating instruments and showing detected credit cards as their own section.
 - CRED centers credit-card bill payment around selecting a card, entering the amount, and choosing UPI/debit/net-banking payment. This reinforces the accounting rule that card repayment is not a new expense after the original card spend has been recorded.
-=======
-- Material 3 recommends color, cards, lists, and chips as primary building blocks for compact finance dashboards.
-- Mobile finance apps tend to work best when the balance/summary is dominant and the transaction stream stays scan-friendly.
->>>>>>> c56a561f46aece35209894ab9964dffedf88c3d3
 - Card-like UI makes sense for detected cards because the mental model is already a payment instrument, not a generic list item.
 
 References:
@@ -84,9 +79,19 @@ References:
 - Flutter `MaterialApp.themeMode`: https://api.flutter.dev/flutter/material/MaterialApp/themeMode.html
 - Android dark theme guidance: https://developer.android.com/develop/ui/views/theming/darktheme
 - Material 3 color/cards/lists: https://m3.material.io/styles/color/overview, https://m3.material.io/components/cards/overview, https://m3.material.io/components/lists/overview
-<<<<<<< HEAD
 - Google Pay transaction history filters: https://support.google.com/pay/india/answer/7430307/view-transaction-history-android
 - PhonePe payments and cards surface: https://www.phonepe.com/payments/
 - CRED credit-card bill payment flow: https://cred.club/credit-card-bill-payment-online
-=======
->>>>>>> c56a561f46aece35209894ab9964dffedf88c3d3
+
+## 2026-05-19 Login And Web Account UI
+
+Goal: add the first account-facing surfaces without enabling authentication or cloud sync yet.
+
+Design decisions:
+- The app starts with a Google-only login UI. Email/password and phone login are intentionally absent.
+- The current Google button is UI-only and moves into the app shell; no OAuth, backend, or account state is wired yet.
+- Android/mobile continues into the SMS tracker after the Google UI.
+- Web continues into an account dashboard and analysis UI, not SMS scanning.
+- Web copy explicitly says there is no SMS scanning on web.
+- Web dashboard uses finance-oriented panels: account overview, category metrics, analysis bars, detected credit cards, and recent activity.
+- All new surfaces use the existing Material 3 light/dark theme and 8 px component radius.

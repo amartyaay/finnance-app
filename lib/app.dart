@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -13,17 +14,25 @@ import 'theme/app_theme.dart';
 import 'viewmodels/home_view_model.dart';
 import 'viewmodels/theme_view_model.dart';
 import 'views/home_screen.dart';
+import 'views/login_screen.dart';
+import 'views/web_account_screen.dart';
+
+enum AppInitialScreen { login, home }
 
 class FinanceApp extends StatefulWidget {
   const FinanceApp({
     super.key,
     this.homeViewModel,
     this.themeViewModel,
+    this.initialScreen = AppInitialScreen.login,
+    this.isWebOverride,
     this.autoInitialize = true,
   });
 
   final HomeViewModel? homeViewModel;
   final ThemeViewModel? themeViewModel;
+  final AppInitialScreen initialScreen;
+  final bool? isWebOverride;
   final bool autoInitialize;
 
   @override
@@ -46,6 +55,7 @@ class _FinanceAppState extends State<FinanceApp> {
 
   @override
   Widget build(BuildContext context) {
+    final isWeb = widget.isWebOverride ?? kIsWeb;
     final providers = [
       if (widget.themeViewModel != null)
         ChangeNotifierProvider<ThemeViewModel>.value(
@@ -65,7 +75,7 @@ class _FinanceAppState extends State<FinanceApp> {
         ChangeNotifierProvider<HomeViewModel>.value(
           value: widget.homeViewModel!,
         )
-      else
+      else if (!isWeb)
         ChangeNotifierProvider<HomeViewModel>(
           create: (_) {
             final viewModel = _createHomeViewModel();
@@ -87,7 +97,10 @@ class _FinanceAppState extends State<FinanceApp> {
             theme: buildLightTheme(),
             darkTheme: buildDarkTheme(),
             themeMode: themeViewModel.themeMode,
-            home: const HomeScreen(),
+            home: AppEntryScreen(
+              initialScreen: widget.initialScreen,
+              isWeb: isWeb,
+            ),
           );
         },
       ),
@@ -110,5 +123,41 @@ class _FinanceAppState extends State<FinanceApp> {
 
   ThemeViewModel _createThemeViewModel() {
     return ThemeViewModel();
+  }
+}
+
+class AppEntryScreen extends StatefulWidget {
+  const AppEntryScreen({
+    super.key,
+    required this.initialScreen,
+    required this.isWeb,
+  });
+
+  final AppInitialScreen initialScreen;
+  final bool isWeb;
+
+  @override
+  State<AppEntryScreen> createState() => _AppEntryScreenState();
+}
+
+class _AppEntryScreenState extends State<AppEntryScreen> {
+  late bool _showAccount = widget.initialScreen == AppInitialScreen.home;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_showAccount) {
+      return LoginScreen(
+        onGooglePressed: () {
+          setState(() {
+            _showAccount = true;
+          });
+        },
+      );
+    }
+
+    if (widget.isWeb) {
+      return const WebAccountScreen();
+    }
+    return const HomeScreen();
   }
 }

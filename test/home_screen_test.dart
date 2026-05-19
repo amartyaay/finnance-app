@@ -26,6 +26,7 @@ void main() {
           initialPreference: AppThemePreference.system,
           preferenceStore: _FakeThemePreferenceStore(),
         ),
+        initialScreen: AppInitialScreen.home,
       ),
     );
     await tester.pumpAndSettle();
@@ -52,6 +53,7 @@ void main() {
           initialPreference: AppThemePreference.system,
           preferenceStore: _FakeThemePreferenceStore(),
         ),
+        initialScreen: AppInitialScreen.home,
       ),
     );
     await tester.pumpAndSettle();
@@ -96,6 +98,7 @@ void main() {
           initialPreference: AppThemePreference.system,
           preferenceStore: _FakeThemePreferenceStore(),
         ),
+        initialScreen: AppInitialScreen.home,
       ),
     );
     await tester.pumpAndSettle();
@@ -147,6 +150,7 @@ void main() {
           initialPreference: AppThemePreference.system,
           preferenceStore: _FakeThemePreferenceStore(),
         ),
+        initialScreen: AppInitialScreen.home,
       ),
     );
     await tester.pumpAndSettle();
@@ -175,6 +179,7 @@ void main() {
           initialPreference: AppThemePreference.system,
           preferenceStore: _FakeThemePreferenceStore(),
         ),
+        initialScreen: AppInitialScreen.home,
       ),
     );
     await tester.pumpAndSettle();
@@ -202,7 +207,11 @@ void main() {
     );
 
     await tester.pumpWidget(
-      FinanceApp(homeViewModel: viewModel, themeViewModel: themeViewModel),
+      FinanceApp(
+        homeViewModel: viewModel,
+        themeViewModel: themeViewModel,
+        initialScreen: AppInitialScreen.home,
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -233,7 +242,11 @@ void main() {
     );
 
     await tester.pumpWidget(
-      FinanceApp(homeViewModel: viewModel, themeViewModel: themeViewModel),
+      FinanceApp(
+        homeViewModel: viewModel,
+        themeViewModel: themeViewModel,
+        initialScreen: AppInitialScreen.home,
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -258,12 +271,70 @@ void main() {
     );
 
     await tester.pumpWidget(
-      FinanceApp(homeViewModel: viewModel, themeViewModel: themeViewModel),
+      FinanceApp(
+        homeViewModel: viewModel,
+        themeViewModel: themeViewModel,
+        initialScreen: AppInitialScreen.home,
+      ),
     );
     await tester.pumpAndSettle();
 
     final theme = Theme.of(tester.element(find.byType(Scaffold)));
     expect(theme.brightness, Brightness.dark);
+  });
+
+  testWidgets('shows Google-only login before account UI', (tester) async {
+    final viewModel = HomeViewModel(
+      transactionRepository: _FakeTransactionRepository(),
+      permissionService: _FakePermissionService(
+        initialState: SmsPermissionState.granted,
+      ),
+      now: () => DateTime(2026, 5, 19, 9, 0),
+    );
+
+    await tester.pumpWidget(
+      FinanceApp(
+        homeViewModel: viewModel,
+        themeViewModel: ThemeViewModel(
+          initialPreference: AppThemePreference.system,
+          preferenceStore: _FakeThemePreferenceStore(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Continue with Google'), findsOneWidget);
+    expect(
+      find.text('No email/password login is available in this UI.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Continue with Google'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('This month'), findsOneWidget);
+  });
+
+  testWidgets('shows web account dashboard after Google login', (tester) async {
+    await tester.pumpWidget(
+      FinanceApp(
+        isWebOverride: true,
+        themeViewModel: ThemeViewModel(
+          initialPreference: AppThemePreference.system,
+          preferenceStore: _FakeThemePreferenceStore(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Continue with Google'), findsOneWidget);
+
+    await tester.tap(find.text('Continue with Google'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Account overview'), findsOneWidget);
+    expect(find.text('Analysis'), findsOneWidget);
+    expect(find.text('No SMS on web'), findsOneWidget);
   });
 }
 
