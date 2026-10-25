@@ -17,7 +17,7 @@ Judged against `docs/eval/rubric.md` (F1–F6), scoring the **delta** from round
 | `flutter test test/widget_smoke_test.dart` | **2/2 passed** (4 s) — and green *while the app overflows* (§3) |
 | Device screenshots | Regenerated. The two existing `device-*-dark.png` were **stale** (22:58, an older build: hero read "Came in ₹0 / 13 to confirm", insight copy was the pre-fix wording). Recaptured at 23:40 from the installed build after switching the in-app theme to Dark, then back to Light. |
 | New shots I added | `device-{home,activity,cards,insights}-dark.png` (replacing the two stale ones), `device-home-dark-scroll.png`, `device-insights-dark-scroll.png`, `device-inbox.png` (the All-messages screen, which had no shot) |
-| My own sweep | Throwaway probe in `.review_tmp/` (not in `test/`): 360×800 @1.0 and @1.3, light and dark, all four tabs scrolled to the end, Settings, All messages, plus an empty-state pass; 412×915 @1.0. Two self-consistency probes, §3. |
+| My own sweep | Throwaway probe in `.review_tmp/` (not in `test/`): 360×800 @1.0 and @1.3, light and dark, all four tabs scrolled to the end, Settings, All messages, plus an empty-state pass; 412×915 @1.0. Two attribution re-runs to pin each error to a screen (§3). |
 | Contrast | Computed from token values (WCAG 2.1 sRGB), 33 pairs (§5). |
 
 **Two things a reviewer must state plainly.**
@@ -41,7 +41,7 @@ I modified no application code. Changed paths: `docs/shots/*` (captures only), `
 | F6 | Performance | 15 | 6.5 | **7.1** | +0.6 | 106.5 |
 | | **Total** | 100 | **6.4** | **7.1** | **+0.7** | **712.0** |
 
-Anchor check: 7.1 sits at the top of *"works, but feels like a first version"* and just under *"genuinely good"*. That is the honest read of the pictures — Home and Cards look like a shipped app now — but the number barely moves because the one criterion that gave round 1 its floor (F3) was traded for the wins, and an automatic fail now fires. **The redesign bought +4.5 points of craft and motion and spent 2.0 of them on layout robustness.**
+Anchor check: 7.1 sits at the top of *"works, but feels like a first version"* and just under *"genuinely good"*. That is the honest read of the pictures — Home and Cards look like a shipped app now — but the number barely moves because the redesign gave back 2.0 on the one criterion where round 1 was strong, and an automatic fail now fires. **The redesign bought +6.3 points across craft, motion, accessibility and performance and spent 2.0 of them on layout robustness.**
 
 To be explicit about the shape of the delta: F1+F2+F5+F6 gained **+6.3 raw points**; F3 lost **−2.0**; and the automatic fail is a separate, score-independent gate that currently blocks. The visual transformation is much larger than +0.7; the *shippability* transformation is not.
 
@@ -182,7 +182,7 @@ Beyond that:
 
 ### F5 — Accessibility: 5.0 → **7.2**
 
-Measured, 33 pairs, both themes:
+Measured from the token values (WCAG 2.1 sRGB), 33 pairs; the rows that changed:
 
 | Pair | Round 1 | Round 2 |
 |---|---|---|
@@ -223,7 +223,7 @@ The brief's list of what landed, checked:
 |---|---|
 | Gradient hero with money typography | **Yes**, and it is the best-executed thing in the build |
 | Pace chart with today marker | **Yes**, marker + average rule + `Today · ₹1.9k` label; scale defeats the purpose (§5 F1 #2) |
-| Category donut | **Yes**, ranked ramp, direct labels, animated; legend overflows at 1.0× on 360 dp |
+| Category donut | **Yes**, ranked ramp, direct labels, animated; legend row is 5.5 px over at 1.0× on 360 dp *with the test font* (§3.1) |
 | Issuer card faces | **Yes**, six issuer tones + house default |
 | Neutral insight cards | **Yes**, tone-tinted border only for warning/caution |
 | Day-grouped activity | **Yes**, per-day outflow header |
@@ -254,7 +254,7 @@ The brief's list of what landed, checked:
 1. One money precision policy (§3.3): `inrWhole` for every derived, averaged, projected or aggregated figure — `home_screen.dart:397`, `insights_screen.dart:192` + engine copy, `card_gauge.dart:65,136`, `transactions_screen.dart:150-161`.
 2. Hero `Out this month ₹33k` vs Activity `−₹20,313 out` (§5 F1 #3) — reconcile or rename one.
 3. One countdown phrase, used everywhere; today there are five, two on screen at once, one ungrammatical (§5 F1 #4).
-4. Insights counts all-time entries under a month label: `4 signals from 268 entries` (`insights_screen.dart:490`, `data.transactions.length`) vs Activity's `36 entries` for October.
+4. Insights counts every *loaded* entry under a month label: `4 signals from 268 entries` (`insights_screen.dart:490`, `data.transactions.length`) beside an "October 2026" eyebrow, while Activity reports `36 entries` for October.
 
 **F3 / automatic fail**
 5. `Pill` cannot shrink → 63 px overflow on Insights at 360 dp @1.3; **~20 dp with Roboto**, so this is real, not a test-font artifact (`kit.dart:372-389`).
@@ -310,11 +310,11 @@ The brief's list of what landed, checked:
 **A. Make the suite see the app it ships, then fix the two overflows — ~1.5 h, ≈ 7.1 → 7.6.**
 Move the probe into `test/` (four tabs × 360×800 @1.0 and @1.3 × light/dark, Settings, All messages, an empty-repo pass). It goes red immediately on the 63 px and 24 px `Pill` overflows. Then: wrap the `Pill` label in `Flexible` with `overflow: ellipsis` (`kit.dart:372-389`) and give `_LegendRow`'s amount column a `Flexible` or a 12 sp variant at 1.0× (`charts.dart:196-235`). F3 6.0 → 8.5 (+50 weighted, +0.5 on the score) **and it clears the automatic fail**, which is worth more than every other line here. No other hour in this document buys a gate *and* a fix.
 
-**B. One money format, one countdown — ~1 h, ≈ 7.6 → 7.75.**
+**B. One money format, one countdown — ~1 h, ≈ 7.6 → 7.8.**
 Add `inrWhole()` (or `precision:` on `inr`) and use it for derived figures (#1); single-source the due phrase through `billDuePhrase`/`_tidyTitle` and, while in the file, delete `_InsightPreview` in favour of `InsightTile` (#3, #22). One pass removes the biggest trust defect, the "1 days" grammar bug, the 2-days-vs-1-days contradiction and ~90 lines of duplicate widget. F1 8.0 → 8.6, F4 7.0 → 7.4.
 
-**C. Make the primary objects actionable — ~2 h, ≈ 7.75 → 7.95.**
-`CardFace(onTap:)` on Cards → a card sheet (cycle spend, the bill, that card's transactions); consume `Insight.action` in `InsightTile` (→ Activity filtered); make `CategoryBreakdownRow` open Activity filtered; `HapticFeedback.selectionClick()` on tab change and `lightImpact()` on scan start. Four dead ends closed and the haptic surface grows from 2 points to 4. F2 7.5 → 8.3, F5 +0.3.
+**C. Make the primary objects actionable — ~2 h, ≈ 7.8 → 8.0.**
+`CardFace(onTap:)` on Cards → a card sheet (cycle spend, the bill, that card's transactions); consume `Insight.action` in `InsightTile` (→ Activity filtered); make `CategoryBreakdownRow` open Activity filtered; `HapticFeedback.selectionClick()` on tab change and `lightImpact()` on scan start. Four dead ends closed and the haptic surface grows from 2 points to 4. F2 7.5 → 8.3, F5 7.2 → 7.5.
 
 **Cheapest fourth, if there is half an hour:** `dart format lib test` and delete the light-only `T.ink*` aliases (`design_tokens.dart:265-289`) so dark mode cannot regress by omission. F4 +0.3.
 

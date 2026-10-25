@@ -7,16 +7,50 @@ import '../app/widgets/kit.dart';
 import '../domain/enums.dart';
 import '../domain/money.dart';
 import '../domain/transaction.dart';
+import '../engine/monthly_summary.dart';
 import '../state/app_state.dart';
 import 'widgets/charts.dart';
+import 'widgets/money_in_breakdown.dart';
 import 'widgets/txn_common.dart';
 import 'widgets/txn_detail_sheet.dart';
 import 'widgets/txn_row.dart';
 
+/// A request another screen sends to Activity: switch tab and land on a slice.
+///
+/// [serial] makes a repeated request distinguishable from the previous one (two
+/// taps on the same insight must both apply), and every field is a filter the
+/// ledger already understands.
+class ActivityRequest {
+  const ActivityRequest({
+    this.serial = 0,
+    this.category,
+    this.transfersOnly = false,
+    this.needsReviewOnly = false,
+  });
+
+  final int serial;
+  final SpendCategoryKind? category;
+  final bool transfersOnly;
+  final bool needsReviewOnly;
+
+  ActivityRequest withSerial(int value) => ActivityRequest(
+    serial: value,
+    category: category,
+    transfersOnly: transfersOnly,
+    needsReviewOnly: needsReviewOnly,
+  );
+}
+
 /// Activity: the month's ledger, grouped by day, with search and one-tap
 /// filtering. Amounts are never coloured red — spending is normal, not an error.
 class TransactionsScreen extends StatefulWidget {
-  const TransactionsScreen({super.key});
+  const TransactionsScreen({
+    super.key,
+    this.request = const ActivityRequest(),
+  });
+
+  /// Applied on arrival and again when [AppShell] sends a new one.
+  final ActivityRequest request;
 
   @override
   State<TransactionsScreen> createState() => _TransactionsScreenState();
