@@ -149,8 +149,12 @@ class DedupeEngine {
     if (a.amountPaise != b.amountPaise) return false;
     if ((b.occurredAtMs - a.occurredAtMs).abs() > 120 * 1000) return false;
     if (_refsDistinguish(a, b)) return false;
-    final aOut = a.kind == TxnKind.spend || a.kind == TxnKind.cash;
-    final bOut = b.kind == TxnKind.spend || b.kind == TxnKind.cash;
+    // A transfer counts as the outgoing leg: a TD debit parses as `transfer`
+    // while its credit leg parses as `income`, and they are one event.
+    bool out(TxnKind kind) =>
+        kind == TxnKind.spend || kind == TxnKind.cash || kind == TxnKind.transfer;
+    final aOut = out(a.kind);
+    final bOut = out(b.kind);
     return (aOut && b.kind == TxnKind.income) || (bOut && a.kind == TxnKind.income);
   }
 
