@@ -204,20 +204,28 @@ class DedupeEngine {
     if (sameSender && _refsDistinguish(a, b)) return false;
     if (a.kind != b.kind) return false;
 
+    final merchantSame = _merchantSimilarity(a.merchant, b.merchant) >= 0.6 ||
+        _tokenOverlap(a.merchant, b.merchant);
+    final oneMissingMerchant =
+        (a.merchant?.isNotEmpty != true) != (b.merchant?.isNotEmpty != true);
+    // Same amount is never enough on its own. Two genuine ₹500 buys at two
+    // different shops seconds apart must both survive — silently deleting the
+    // second is the double-charge failure this app exists to catch.
+    final merchantOk = merchantSame || oneMissingMerchant;
+
     final debitLike = a.kind == TxnKind.spend || a.kind == TxnKind.cash;
 
     if (sameSender && debitLike) {
+      if (!merchantOk) return false;
       // A repeated debit alert from the same sender, for the same amount, with
-      // the same account tail and no distinguishing reference, is a duplicate
-      // notification of one payment (Pluxee ₹408 ×2, 173 s apart), not a real
-      // double charge. Two different references keep both rows.
+      // the same account tail and the same merchant is a duplicate notification
+      // of one payment (Pluxee ₹408 ×2, 173 s apart), not a real double charge.
       if (a.last4 != null && a.last4 == b.last4) return true;
       // Benefit / wallet / merchant senders only send notifications; they are
-      // not authoritative for a second debit.
+      // not authoritative for a second debit — but only at the same merchant.
       if (_notificationSender(a) || _notificationSender(b)) return true;
       // No account tail on either alert: a bank repeating the same debit is the
-      // one case that might be a genuine double charge (HDFCBK test), so keep
-      // the historical exemption rather than guess.
+      // one case that might be a genuine double charge, so keep both rows.
       if (a.last4 == null && b.last4 == null) return false;
       // Different tails (bank account vs card) can still be the two views of
       // one payment, so fall through to the merchant/card checks below.
@@ -230,9 +238,8 @@ class DedupeEngine {
     if (sameRail && _refsDistinguish(a, b)) return false;
 
     final sameCard = a.cardKey != null && a.cardKey == b.cardKey;
-    if (sameCard || sameRail) return true;
-    if (_merchantSimilarity(a.merchant, b.merchant) >= 0.6) return true;
-    if (_tokenOverlap(a.merchant, b.merchant)) return true;
+    if (sameCard || sameRail) return merchantOk;
+    if (merchantSame) return true;
 
     // A card-bill payment is reported twice — by the bank (account debited) and
     // by the issuer (limit restored). The same amount inside the window is one
@@ -243,8 +250,6 @@ class DedupeEngine {
     }
 
     // Bank view + card/wallet view of one payment: same amount, one side richer.
-    final oneMissingMerchant =
-        (a.merchant?.isNotEmpty != true) != (b.merchant?.isNotEmpty != true);
     return oneMissingMerchant && a.instrument != b.instrument;
   }
 

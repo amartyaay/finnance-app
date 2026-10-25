@@ -17,17 +17,19 @@ class TxnRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final accent = categoryColor(txn.categoryKind);
+    final p = T.of(context);
+    final accent = categoryColor(context, txn.categoryKind);
     final amountColor = switch (txn.kind) {
-      TxnKind.income => T.primary,
-      TxnKind.spend => scheme.onSurface,
-      TxnKind.transfer => scheme.onSurfaceVariant,
-      TxnKind.cash => scheme.onSurfaceVariant,
+      TxnKind.income => p.primary,
+      TxnKind.spend => p.ink,
+      TxnKind.transfer => p.inkMuted,
+      TxnKind.cash => p.inkMuted,
     };
-    final amountText = txn.kind == TxnKind.income
-        ? '+${inr(txn.amount)}'
-        : inr(txn.amount);
+    final prefix = txn.kind == TxnKind.income
+        ? '+'
+        : txn.kind == TxnKind.spend
+        ? '−'
+        : null;
     final categoryLabel = txn.categoryName?.trim().isNotEmpty == true
         ? txn.categoryName!.trim()
         : categoryKindLabel(txn.categoryKind);
@@ -47,7 +49,7 @@ class TxnRow extends StatelessWidget {
     final semantics = [
       txn.title,
       details,
-      amountText,
+      '${prefix == '+' ? 'plus ' : prefix == '−' ? 'minus ' : ''}${inr(txn.amount)}',
       if (merged) 'Merged duplicate',
       if (!merged && txn.needsReview) 'Needs review',
     ].join('. ');
@@ -55,32 +57,25 @@ class TxnRow extends StatelessWidget {
     return Semantics(
       button: true,
       label: semantics,
+      excludeSemantics: true,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(T.r2),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 56),
+            constraints: const BoxConstraints(minHeight: 60),
             child: Padding(
               padding: const EdgeInsets.symmetric(
-                horizontal: T.s1,
-                vertical: T.s2,
+                horizontal: T.s3,
+                vertical: T.s2 + 2,
               ),
               child: Row(
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(T.r2),
-                    ),
-                    child: Icon(
-                      categoryIcon(txn.categoryKind),
-                      size: 20,
-                      color: accent,
-                    ),
+                  IconBadge(
+                    icon: categoryIcon(txn.categoryKind),
+                    color: accent,
+                    size: 40,
+                    iconSize: 20,
                   ),
                   const SizedBox(width: T.s3),
                   Expanded(
@@ -91,16 +86,14 @@ class TxnRow extends StatelessWidget {
                           txn.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: T.cardTitle.copyWith(color: scheme.onSurface),
+                          style: T.cardTitle.copyWith(color: p.ink),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           details,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: T.bodySmall.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
+                          style: T.bodySmall.copyWith(color: p.inkMuted),
                         ),
                       ],
                     ),
@@ -110,9 +103,11 @@ class TxnRow extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        amountText,
-                        style: T.money.copyWith(color: amountColor),
+                      MoneyText(
+                        txn.amount,
+                        prefix: prefix,
+                        style: T.money.copyWith(fontSize: 14),
+                        color: amountColor,
                       ),
                       if (pill != null) ...[
                         const SizedBox(height: T.s1),
@@ -130,7 +125,7 @@ class TxnRow extends StatelessWidget {
   }
 }
 
-/// Day separator inside the Activity list: the day name on the left, what left
+/// Day separator above a grouped day card: the day name on the left, what left
 /// the account that day on the right.
 class TxnDayHeader extends StatelessWidget {
   const TxnDayHeader({
@@ -146,7 +141,7 @@ class TxnDayHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final p = T.of(context);
     final hasOutflow = outflow.isPositive;
     final total = hasOutflow
         ? inr(outflow)
@@ -154,23 +149,26 @@ class TxnDayHeader extends StatelessWidget {
         ? '+${inr(inflow)}'
         : null;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(T.s1, T.s4, T.s1, T.s2),
+      padding: const EdgeInsets.fromLTRB(T.s2, T.s5, T.s2, T.s2),
       child: Row(
         children: [
           Expanded(
             child: Text(
               dayHeading(day, DateTime.now()),
-              style: T.label.copyWith(
-                color: scheme.onSurfaceVariant,
-                letterSpacing: 0.6,
+              style: T.cardTitle.copyWith(
+                color: p.ink,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
           if (total != null)
             Text(
               total,
-              style: T.bodySmall.copyWith(
-                color: hasOutflow ? scheme.onSurfaceVariant : T.primary,
+              maxLines: 1,
+              softWrap: false,
+              style: T.money.copyWith(
+                color: hasOutflow ? p.inkSecondary : p.primary,
+                fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
             ),

@@ -144,10 +144,52 @@ class SmsClassifier {
     r'join now|multibagger|bonus)\b',
     caseSensitive: false,
   );
+  /// KYC / account-pressure wording. Deliberately narrow: a bare "expires" or
+  /// "complete your" is ordinary English (a Jio plan expires, a cart needs
+  /// completing) and used to flag 151 messages of which none was fraud.
   static final RegExp _kycLure = RegExp(
-    r'\b(?:kyc|k\.y\.c|re-?kyc|pan card|aadhaar|aadhar|update your|link your|'
-    r'expire[sd]?|expiring|block(?:ed)?|suspend(?:ed)?|deactivat(?:e|ed)|'
-    r'frozen|reactivate|verify your|verification pending|complete your)\b',
+    r'\b(?:kyc|k\.y\.c|re-?kyc)\b|'
+    r'\b(?:pan\s*card|aadhaar|aadhar|pan)\b.{0,40}'
+    r'\b(?:link(?:ed)?|update|verify|block(?:ed)?|freeze|frozen|deactivat\w*|'
+    r'expir\w*|not\s+linked)\b|'
+    r'\b(?:update|link|verify|complete|re-?verify)\b.{0,24}'
+    r'\b(?:kyc|pan|aadhaar|aadhar)\b|'
+    r'\b(?:account|card|net\s*banking|sim|wallet|a/?c)\b.{0,40}'
+    r'\b(?:block(?:ed)?|suspend(?:ed)?|deactivat\w*|frozen|locked|freeze|'
+    r'verify\s+your|restricted)\b|'
+    r'\b(?:verify|update)\s+your\b.{0,24}\b(?:account|identity|details|card)\b',
+    caseSensitive: false,
+  );
+
+  /// A real *request to the user* to hand over a credential: `share/send/tell
+  /// us your OTP`, `confirm your CVV`. A bank OTP message that says "enter the
+  /// OTP" is telling the user where to type the code it just sent, not asking
+  /// for it, so [enter] is handled separately in [_credentialEnterAsk].
+  static final RegExp _credentialShareAsk = RegExp(
+    r'\b(?:share|send|tell(?:\s+us)?|provide|reply\s+with|forward|confirm|'
+    r're-?send)\b.{0,40}\b(?:your|the)\b.{0,16}'
+    r'\b(?:otp|o\.t\.p|pin|cvv|password|passcode|card\s*number|'
+    r'aadhaar\s*number|net\s*banking\s*(?:id|password))\b|'
+    r'\b(?:share|send|tell(?:\s+us)?)\b.{0,24}\botp\b',
+    caseSensitive: false,
+  );
+
+  /// "Enter **your** OTP" is an ask; "enter the OTP" inside a message that
+  /// already delivered a code is not. The OTP-shape gate lives in
+  /// [_isCredentialAsk].
+  static final RegExp _credentialEnterAsk = RegExp(
+    r'\b(?:enter|submit|type|input)\s+(?:your\s+|the\s+)?'
+    r'(?:otp|o\.t\.p|pin|cvv|password|passcode|upi\s*pin)\b',
+    caseSensitive: false,
+  );
+
+  /// A credible threat of loss — the second half of every KYC/utility scam.
+  static final RegExp _threatWording = RegExp(
+    r'\b(?:will be|has been|is being)\s+(?:blocked|suspended|deactivated|'
+    r'debited|charged|disconnected|frozen|locked|closed)\b|'
+    r'\bwithin\s+\d+\s*(?:hrs?|hours?|minutes?)\b|'
+    r'\bavoid\s+(?:late|penalty|disconnection|charges?|service\s+disconnection)\b|'
+    r'\b(?:frozen|suspended|deactivated|blocked)\b',
     caseSensitive: false,
   );
 
@@ -177,12 +219,27 @@ class SmsClassifier {
   );
 
   /// Any ask for credentials overrides sender trust — banks never do this.
-  static final RegExp _credentialAsk = RegExp(
-    r'\b(?:share|send|tell|confirm|enter|provide)\b.{0,24}'
-    r'\b(?:otp|o\.t\.p|cvv|pin|password|upi\s*pin|debit\s*card\s*number|'
-    r'card\s*number|aadhaar\s*number|net\s*banking\s*(?:id|password))\b',
-    caseSensitive: false,
-  );
+  /// Split in two so a genuine OTP message ("enter the OTP to proceed") cannot
+  /// be read as a request to hand the code over.
+  bool _isCredentialAsk(String lower) {
+    final negated = SmsGuards.shareIsNegated(lower);
+    if (negated) return false;
+    // A delivery handover code ("share OTP 3823 with the delivery agent") is a
+    // receipt token, not a bank credential: parcel/pickup contexts are exempt.
+    final handover = RegExp(
+      r'\b(?:deliver(?:y|ed)?|rider|delivery\s+agent|technician|collect|pickup|'
+      r'pick\s*up|parcel|package|courier|order)\b',
+    ).hasMatch(lower) &&
+        !RegExp(r'\b(?:bank|credit\s*card|debit\s*card|account|kyc|cvv)\b')
+            .hasMatch(lower);
+    if (_credentialShareAsk.hasMatch(lower) && !handover) return true;
+    // A message that already delivered a 4–8 digit code is a genuine OTP; the
+    // "enter the OTP" sentence in it points at the bank's own screen.
+    final deliveredCode =
+        _otpWord.hasMatch(lower) && RegExp(r'\b\d{4,8}\b').hasMatch(lower);
+    if (deliveredCode || handover) return false;
+    return _credentialEnterAsk.hasMatch(lower);
+  }
 
   /// Wallet/UPI-Lite top-ups: money moves, but nothing is spent.
   static final RegExp _addMoneyVerb = RegExp(
@@ -208,7 +265,7 @@ class SmsClassifier {
   /// Secondary fraud vocabulary: strong evidence, but not enough to override a
   /// known-good bank header on its own (G06 is a real cashback credit).
   static final RegExp _fraudTemplate = RegExp(
-    r'\b(?:won|winner|lucky draw|lottery|prize|gift card|'
+    r'\b(?:won|winner|lucky draw|lottery|prize|'
     r'refund is pending|you have received a refund|scan this qr to receive|'
     r'electricity bill.*disconnect|electricity.*will be disconnected|'
     r'your sim (?:will|is)|account will be (?:blocked|suspended))\b',
@@ -307,7 +364,7 @@ class SmsClassifier {
     }
 
     final negatedShare = SmsGuards.shareIsNegated(lower);
-    final credentialAsk = !negatedShare && _credentialAsk.hasMatch(lower);
+    final credentialAsk = _isCredentialAsk(lower);
     if (credentialAsk) {
       phish += 8;
       signals.add(const SmsSignal('credential_ask', -8, detail: 'Asks for an OTP/PIN/password'));
@@ -317,7 +374,8 @@ class SmsClassifier {
       phish += 5;
       signals.add(const SmsSignal('scam_template', -5, detail: 'Matches a known scam template'));
     }
-    if (!negatedShare && _fraudTemplate.hasMatch(lower)) {
+    final fraudTemplate = _fraudTemplate.hasMatch(lower);
+    if (!negatedShare && fraudTemplate) {
       phish += 5;
       signals.add(const SmsSignal('fraud_template', -5, detail: 'Matches a known social-engineering template'));
     }
@@ -333,16 +391,24 @@ class SmsClassifier {
     }
 
     final safeContext = _safeContext.hasMatch(lower);
-    if (!safeContext && _kycLure.hasMatch(lower)) {
+    final kycLure = !safeContext && _kycLure.hasMatch(lower);
+    if (kycLure) {
       phish += 4;
       signals.add(const SmsSignal('kyc_lure', -4, detail: 'KYC / block / expiry pressure wording'));
     }
 
-    final url = _url.firstMatch(lower)?.group(0);
-    final suspiciousUrl = url != null && _isSuspiciousUrl(url, sender);
-    if (suspiciousUrl) {
-      phish += 5;
-      signals.add(SmsSignal('suspicious_link', -5, detail: url));
+    final url = _firstUrl(lower);
+    final risk = url == null
+        ? (suspicious: false, impersonation: false)
+        : _urlRisk(url);
+    final suspiciousUrl = risk.suspicious;
+    final impersonation = risk.impersonation;
+    if (impersonation) {
+      phish += 6;
+      signals.add(SmsSignal('brand_impersonation', -6, detail: url));
+    } else if (suspiciousUrl) {
+      phish += 3;
+      signals.add(SmsSignal('suspicious_link', -3, detail: url));
     } else if (url != null) {
       info += 1;
       signals.add(SmsSignal('bank_link', -1, detail: url));
@@ -350,9 +416,11 @@ class SmsClassifier {
     // `visit` / `call` only count as a call to action next to a link: a genuine
     // advisory says "visit your home branch" with no URL (info-05).
     final linkCta = url != null && RegExp(r'\b(?:visit|click|call)\b').hasMatch(lower);
-    if (_phishCta.hasMatch(lower) || linkCta) {
-      phish += 3;
-      signals.add(const SmsSignal('call_to_action', -3));
+    final callToAction = _phishCta.hasMatch(lower) || linkCta;
+    final threat = _threatWording.hasMatch(lower);
+    if (callToAction) {
+      phish += 2;
+      signals.add(const SmsSignal('call_to_action', -2));
     }
 
     final notMoved = SmsGuards.notMovedYet(lower);
@@ -360,10 +428,25 @@ class SmsClassifier {
         amountFinder.balanceAfter(body) == null &&
         amountFinder.availableLimit(body) == null;
 
-    // Decisive fraud evidence: a credential ask or a known scam template beats a
-    // perfect transaction template (fraud-02/05/06/15). A suspicious link alone
-    // is not decisive — a promo on a cheap TLD stays promo (promo-07/09).
-    final strongPhish = credentialAsk || scamTemplate;
+    // Decisive fraud evidence. Deliberately *not* a score threshold: a link
+    // plus a call to action is an advertisement far more often than a scam, and
+    // treating it as fraud flagged 151 real messages with no true positive.
+    // Fraud needs one of: a credential request, a known scam template, a
+    // domain impersonating the issuer, a KYC/threat pretext (with a bad channel
+    // or an explicit loss threat), or an unregistered sender asking for money.
+    final badChannel = suspiciousUrl || impersonation;
+    final preciousPretext = kycLure || fraudTemplate;
+    final strongPhish =
+        credentialAsk ||
+        scamTemplate ||
+        impersonation ||
+        (preciousPretext && badChannel) ||
+        (kycLure && threat) ||
+        (fraudTemplate && threat) ||
+        (sender.trust == SenderTrust.suspicious &&
+            callToAction &&
+            badChannel) ||
+        (sender.trust == SenderTrust.suspicious && _requestMoney.hasMatch(lower));
     // No spam-as-spend: an amount plus a trusted header is not enough. Offer /
     // eligibility / limit wording ("Loan of INR 36,000 available for you") never
     // books a row; only a completed movement of money does.
@@ -371,6 +454,9 @@ class SmsClassifier {
     final genuineTransaction = tx >= 6 &&
         hasAmount &&
         moved &&
+        // A `-P` DLT header is marketing by definition: "Salary credited, game
+        // upgraded. Buy cultpass…" is a promo, not a salary.
+        sender.dltCategory != 'P' &&
         sender.trust != SenderTrust.suspicious;
     // The merchant's own receipt (Swiggy, Zepto, …) is not the user's account.
     final merchantSender = registry.isMerchantReceiptSender(sender);
@@ -381,18 +467,12 @@ class SmsClassifier {
     } else if (notMoved || receipt || merchantSender) {
       // Nothing has moved yet: bill due, decline, collect request, mandate set-up.
       cls = SmsClass.informational;
-    } else if (phish >= 6) {
-      // Heavy phishing evidence is never booked, even when the debit template is
-      // perfect (fraud-02: lookalike header + non-bank domain).
-      cls = SmsClass.phishing;
     } else if (genuineTransaction) {
       cls = SmsClass.transaction;
     } else if (info >= 4 && info >= promo) {
       cls = SmsClass.informational;
     } else if (promo >= 4) {
       cls = SmsClass.promo;
-    } else if (phish >= 4) {
-      cls = SmsClass.phishing;
     } else if (tx >= 4 && hasAmount && moved) {
       cls = SmsClass.transaction;
     } else {
@@ -417,27 +497,116 @@ class SmsClassifier {
     );
   }
 
-  bool _isSuspiciousUrl(String url, SenderId sender) {
-    final host = url
-        .replaceFirst(RegExp(r'^https?://'), '')
-        .split('/')
-        .first
-        .toLowerCase();
-    const shorteners = {
-      'bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly', 'is.gd', 'cutt.ly',
-      'rb.gy', 'shorturl.at', 'rebrand.ly', 't.ly', 'bit.do',
-    };
-    if (shorteners.contains(host)) return true;
-    if (RegExp(r'^\d{1,3}(?:\.\d{1,3}){3}$').hasMatch(host)) return true;
-    const oddTlds = {'.xyz', '.top', '.club', '.live', '.icu', '.biz', '.vip', '.link', '.online', '.shop', '.site', '.me'};
-    if (oddTlds.any(host.endsWith)) return true;
-    // A genuine bank domain usually contains the entity we already recognise.
-    final entity = sender.entity?.toLowerCase().split(' ').first;
-    if (entity != null && entity.length >= 4 && !host.contains(entity)) {
-      final looksBanky = RegExp(r'bank|kyc|verify|secure|update|alert|card').hasMatch(host);
-      if (looksBanky) return true;
+  /// The first URL that is not part of a VPA / email handle.
+  ///
+  /// `Never share OTP @mycards.hdfc.bank.in` is an *email-style handle*, and
+  /// matching its `bank.in` tail as a link was one of the two reasons every HDFC
+  /// OTP was labelled fraud.
+  String? _firstUrl(String lower) {
+    for (final match in _url.allMatches(lower)) {
+      final start = match.start;
+      if (start > 0) {
+        final before = lower[start - 1];
+        if (RegExp(r'[a-z0-9@._%-]').hasMatch(before)) continue;
+      }
+      return match.group(0)!.replaceAll(RegExp(r'[)\],.;:]+$'), '');
     }
-    return false;
+    return null;
+  }
+
+  /// Registrable domains that genuinely belong to a brand. A host that *claims*
+  /// a brand but is not on the list is impersonation — the one strong link-only
+  /// fraud signal, and what the lookalike-header fixtures rely on.
+  static const Map<String, List<String>> _brandDomains = {
+    'hdfc': ['hdfcbank.com', 'hdfc.bank.in'],
+    'icici': ['icicibank.com', 'icici.bank.in', 'icicipruamc.com', 'iciciprumf.com'],
+    'sbi': [
+      'sbi.co.in', 'sbicard.com', 'onlinesbi.sbi', 'sbi.bank.in', 'sbiyono.sbi',
+      'onlinesbi.com',
+    ],
+    'axis': ['axisbank.com', 'axisbank.co.in', 'axbk.io'],
+    'kotak': ['kotak.com', 'kotak.bank.in'],
+    'idfc': ['idfcfirstbank.com', 'idfc.bank.in'],
+    'rbl': ['rblbank.com', 'rbl.bank.in'],
+    'yes': ['yesbank.in', 'yes.bank.in'],
+    'indusind': ['indusind.com'],
+    'amex': ['americanexpress.com', 'amex.in', 'amex.com'],
+    'phonepe': ['phonepe.com'],
+    'paytm': ['paytm.com', 'paytmbank.com', 'paytm.me'],
+    'cred': ['cred.club'],
+    'onecard': ['getonecard.app', 'onecard.app'],
+    'uidai': ['uidai.gov.in'],
+    'irctc': ['irctc.co.in'],
+    'indiapost': ['indiapost.gov.in'],
+  };
+
+  /// Suffixes governed by a real institution (RBI's `.bank.in`, the government
+  /// domains). A host under one of these is never a lookalike.
+  static const Set<String> _trustedSuffixes = {
+    '.bank.in', '.gov.in', '.nic.in', '.rbi.org.in', '.sbi', '.amex',
+  };
+
+  static const Set<String> _shorteners = {
+    'bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly', 'is.gd', 'cutt.ly',
+    'rb.gy', 'shorturl.at', 'rebrand.ly', 't.ly', 'bit.do',
+  };
+
+  static const Set<String> _oddTlds = {
+    '.xyz', '.top', '.club', '.live', '.icu', '.biz', '.vip', '.link',
+    '.online', '.shop', '.site', '.me', '.co',
+  };
+
+  String _hostOf(String url) => url
+      .replaceFirst(RegExp(r'^https?://'), '')
+      .split('/')
+      .first
+      .toLowerCase();
+
+  /// `kyc-review.top` / `hdfcbank.com` — the last two labels, keeping India's
+  /// `co.in` / `com.au` style second-level suffixes intact.
+  String _registrableDomain(String host) {
+    final labels = host.split('.').where((l) => l.isNotEmpty).toList();
+    if (labels.length <= 2) return host;
+    final tld = labels.last;
+    final secondLast = labels[labels.length - 2];
+    const secondLevel = {'co', 'com', 'net', 'org', 'ac', 'gov', 'nic', 'edu'};
+    if (secondLast.length <= 3 && secondLevel.contains(secondLast)) {
+      return labels.sublist(labels.length - 3).join('.');
+    }
+    if (tld == 'in' && secondLevel.contains(secondLast)) {
+      return labels.sublist(labels.length - 3).join('.');
+    }
+    return labels.sublist(labels.length - 2).join('.');
+  }
+
+  ({bool suspicious, bool impersonation}) _urlRisk(String url) {
+    final host = _hostOf(url);
+    if (_trustedSuffixes.any(host.endsWith)) {
+      return (suspicious: false, impersonation: false);
+    }
+    final registrable = _registrableDomain(host);
+    // A host that names a brand must be that brand's own domain.
+    for (final entry in _brandDomains.entries) {
+      final claimsBrand = RegExp(
+        '(^|[.\\-])${RegExp.escape(entry.key)}',
+      ).hasMatch(host);
+      if (!claimsBrand) continue;
+      final trusted = entry.value.any(
+        (domain) => registrable == domain || host.endsWith('.$domain'),
+      );
+      if (!trusted) return (suspicious: true, impersonation: true);
+      return (suspicious: false, impersonation: false);
+    }
+    if (_shorteners.contains(host)) {
+      return (suspicious: true, impersonation: false);
+    }
+    if (RegExp(r'^\d{1,3}(?:\.\d{1,3}){3}$').hasMatch(host)) {
+      return (suspicious: true, impersonation: false);
+    }
+    if (_oddTlds.any(registrable.endsWith)) {
+      return (suspicious: true, impersonation: false);
+    }
+    return (suspicious: false, impersonation: false);
   }
 
   double _confidenceFor({

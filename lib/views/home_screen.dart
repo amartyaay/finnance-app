@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 import '../app/design_tokens.dart';
 import '../app/widgets/kit.dart';
 import '../data/finance_repository.dart';
-import '../domain/enums.dart';
 import '../domain/money.dart';
 import '../domain/transaction.dart';
 import '../engine/card_metrics.dart';
@@ -16,6 +15,8 @@ import '../state/app_state.dart';
 import 'widgets/card_face.dart';
 import 'widgets/charts.dart';
 import 'widgets/txn_common.dart';
+import 'widgets/txn_detail_sheet.dart';
+import 'widgets/txn_row.dart';
 
 /// The dashboard. Answers three questions in one screen, in this order:
 /// how much have I spent, is anything wrong, and where did it go.
@@ -190,6 +191,34 @@ class HomeScreen extends StatelessWidget {
     if (hour < 17) return 'Good afternoon';
     return 'Good evening';
   }
+
+  /// Truncate on a word boundary, so a warning never ends mid-URL.
+  static String _clipWords(String text, int max) {
+    final clean = text.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (clean.length <= max) return clean;
+    final window = clean.substring(0, max);
+    final space = window.lastIndexOf(' ');
+    final cut = space > max ~/ 2 ? window.substring(0, space) : window;
+    return '${cut.trimRight()}…';
+  }
+
+  static String _monthShort(DateTime month) {
+    const names = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return names[month.month - 1];
+  }
 }
 
 class _HeroCard extends StatelessWidget {
@@ -213,13 +242,13 @@ class _HeroCard extends StatelessWidget {
     final net = summary.net;
 
     final stats = <({String label, String value})>[
-      (label: 'Came in', value: inrCompact(summary.income)),
-      (
-        label: net.value < 0 ? 'Over' : 'Left',
-        // "Over" is a magnitude, so it never carries a minus sign.
-        value: inrCompact(Paise(net.value.abs())),
-      ),
-      (label: 'Per day', value: inrCompact(summary.dailyAverage)),
+                      (label: 'Came in', value: inrCompact(summary.income)),
+                      (
+                        label: net.value < 0 ? 'Over' : 'Left over',
+                        // "Over" is a magnitude, so it never carries a minus sign.
+                        value: inrCompact(Paise(net.value.abs())),
+                      ),
+                      (label: 'Spend / day', value: inrCompact(summary.dailyAverage)),
     ];
 
     final provenance = <String>[
@@ -227,6 +256,14 @@ class _HeroCard extends StatelessWidget {
       needsReview > 0 ? '$needsReview to confirm' : 'all clear',
       if (lastScanAt != null) 'as of ${clockTime(lastScanAt!)}',
     ].join(' · ');
+
+    final previousMonth = DateTime(
+      summary.monthStart.year,
+      summary.monthStart.month - 1,
+    );
+    final deltaLabel =
+        '${(change.abs() * 100).round()}% vs '
+        '${MediaQuery.textScalerOf(context).scale(12) / 12 >= 1.2 ? HomeScreen._monthShort(previousMonth) : 'last month'}';
 
     final spoken =
         '${monthYearLabel(summary.monthStart)}. Spent ${_spoken(summary.spend)}. '
@@ -270,11 +307,11 @@ class _HeroCard extends StatelessWidget {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(
-                          'SPENT THIS MONTH',
+                          'Spent this month',
                           maxLines: 1,
                           style: T.label.copyWith(
-                            color: Colors.white.withValues(alpha: 0.74),
-                            letterSpacing: 1.3,
+                            color: p.heroMuted,
+                            letterSpacing: 0.4,
                             fontSize: 12,
                           ),
                         ),
@@ -299,13 +336,16 @@ class _HeroCard extends StatelessWidget {
                                   color: Colors.white,
                                 ),
                                 const SizedBox(width: 4),
-                                Text(
-                                  '${(change.abs() * 100).round()}% vs last month',
-                                  maxLines: 1,
-                                  style: T.label.copyWith(
-                                    color: Colors.white,
-                                    letterSpacing: 0,
-                                    fontSize: 12,
+                                Flexible(
+                                  child: Text(
+                                    deltaLabel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: T.label.copyWith(
+                                      color: Colors.white,
+                                      letterSpacing: 0,
+                                      fontSize: 12,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -330,7 +370,7 @@ class _HeroCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: T.body.copyWith(
-                        color: Colors.white.withValues(alpha: 0.84),
+                        color: p.heroInk,
                         fontSize: 13.5,
                       ),
                     ),
@@ -340,7 +380,7 @@ class _HeroCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: T.bodySmall.copyWith(
-                        color: Colors.white.withValues(alpha: 0.62),
+                        color: p.heroMuted,
                         fontSize: 12,
                       ),
                     ),
@@ -397,7 +437,7 @@ class _HeroCard extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: T.bodySmall.copyWith(
-                          color: Colors.white.withValues(alpha: 0.6),
+                          color: p.heroMuted,
                           fontSize: 12,
                           height: 1.35,
                         ),
@@ -434,7 +474,7 @@ class _HeroStat extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: T.label.copyWith(
-            color: Colors.white.withValues(alpha: 0.66),
+            color: T.of(context).heroMuted,
             fontSize: 12,
             letterSpacing: 0.3,
           ),
@@ -604,7 +644,7 @@ class _Attention extends StatelessWidget {
             icon: Icons.gpp_maybe_rounded,
             title: 'Possible fraud message',
             body:
-                '${alert.sender} · ${alert.preview.length > 90 ? '${alert.preview.substring(0, 90)}…' : alert.preview}',
+                '${alert.sender} · ${HomeScreen._clipWords(alert.preview, 90)}',
             actionLabel: 'Check',
             onAction: () => _showPhishing(context, alert),
           ),
@@ -672,7 +712,10 @@ class _Attention extends StatelessWidget {
                   icon: Icons.gpp_bad_rounded,
                 ),
                 const Spacer(),
-                Text(clockTime(alert.receivedAt), style: T.bodySmall),
+                Text(
+                  clockTime(alert.receivedAt),
+                  style: T.bodySmall.copyWith(color: p.inkMuted),
+                ),
               ],
             ),
             const SizedBox(height: T.s4),
@@ -690,7 +733,7 @@ class _Attention extends StatelessWidget {
               ),
               child: Text(
                 alert.preview,
-                style: T.body.copyWith(fontSize: 13.5),
+                style: T.body.copyWith(fontSize: 13.5, color: p.inkSecondary),
               ),
             ),
             const SizedBox(height: T.s4),
@@ -706,12 +749,12 @@ class _Attention extends StatelessWidget {
               'This message uses the wording and links typical of KYC, refund or '
               'parcel scams. Your bank never asks you to confirm details or share an '
               'OTP through a link.',
-              style: T.body,
+              style: T.body.copyWith(color: p.inkSecondary),
             ),
             const SizedBox(height: T.s3),
             Text(
               'It was kept out of your spending totals, and no link was opened.',
-              style: T.bodySmall,
+              style: T.bodySmall.copyWith(color: p.inkMuted),
             ),
             const SizedBox(height: T.s5),
             SizedBox(
@@ -929,6 +972,7 @@ class _InsightPreview extends StatelessWidget {
                         const SizedBox(height: 6),
                         MoneyText(
                           Paise(insight.amountPaise!),
+                          compact: true,
                           style: T.money.copyWith(fontSize: 13),
                           color: T.of(context).ink,
                         ),
@@ -974,110 +1018,30 @@ class _RecentList extends StatelessWidget {
     final p = T.of(context);
     final recent = transactions.take(5).toList(growable: false);
     return AppCard(
-      padding: const EdgeInsets.fromLTRB(T.s4, T.s3, T.s4, T.s2),
+      padding: const EdgeInsets.fromLTRB(T.s2, T.s3, T.s2, T.s1),
       child: Column(
         children: [
-          SectionHeader(
-            title: 'Recent',
-            action: 'See all',
-            onAction: onSeeAll,
-            padding: EdgeInsets.zero,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: T.s2),
+            child: SectionHeader(
+              title: 'Recent',
+              action: 'See all',
+              onAction: onSeeAll,
+              padding: EdgeInsets.zero,
+            ),
           ),
+          const SizedBox(height: T.s1),
           for (var i = 0; i < recent.length; i++) ...[
-            _RecentRow(txn: recent[i]),
+            TxnRow(
+              txn: recent[i],
+              onTap: () => showTransactionDetail(context, recent[i]),
+            ),
             if (i != recent.length - 1)
-              Divider(height: 1, color: p.outlineVariant),
+              Divider(height: 1, indent: 64, color: p.outlineVariant),
           ],
         ],
       ),
     );
-  }
-}
-
-class _RecentRow extends StatelessWidget {
-  const _RecentRow({required this.txn});
-
-  final Txn txn;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = T.of(context);
-    final color = categoryColor(context, txn.categoryKind);
-    final isIncome = txn.kind == TxnKind.income;
-    final isTransfer = txn.kind == TxnKind.transfer;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: T.s2 + 2),
-      child: Row(
-        children: [
-          IconBadge(
-            icon: categoryIcon(txn.categoryKind),
-            color: color,
-            size: 38,
-            iconSize: 19,
-          ),
-          const SizedBox(width: T.s3),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  txn.title,
-                  style: T.body.copyWith(
-                    color: p.ink,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  _subtitle(txn),
-                  style: T.bodySmall.copyWith(color: p.inkMuted),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: T.s2),
-          MoneyText(
-            txn.amount,
-            prefix: isIncome
-                ? '+'
-                : isTransfer
-                ? null
-                : '−',
-            style: T.money.copyWith(fontSize: 14),
-            color: isIncome
-                ? p.primary
-                : isTransfer
-                ? p.inkMuted
-                : p.ink,
-          ),
-        ],
-      ),
-    );
-  }
-
-  static String _subtitle(Txn txn) {
-    final parts = <String>[
-      if (txn.categoryName != null) txn.categoryName!,
-      if (txn.instrument != Instrument.unknown) txn.instrument.label,
-      if (txn.last4 != null) '••${txn.last4}',
-      _time(txn.occurredAt),
-    ];
-    return parts.join(' · ');
-  }
-
-  static String _time(DateTime date) {
-    final today = DateTime.now();
-    final isToday =
-        date.year == today.year &&
-        date.month == today.month &&
-        date.day == today.day;
-    if (isToday) return clockTime(date);
-    return shortDate(date);
   }
 }
 

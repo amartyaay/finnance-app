@@ -1,4 +1,6 @@
 import '../domain/enums.dart';
+import '../domain/merchant_rule.dart';
+import '../domain/money.dart';
 import '../domain/sms_message.dart';
 import '../domain/transaction.dart';
 import '../engine/card_metrics.dart';
@@ -22,7 +24,8 @@ class HomeData {
     required this.smsMessagesRead,
     required this.isDemo,
     required this.categories,
-  });
+    int? needsReviewCount,
+  }) : _needsReviewCount = needsReviewCount;
 
   final List<Txn> transactions;
   final MonthlySummary summary;
@@ -34,6 +37,13 @@ class HomeData {
   /// Messages the classifier flagged as phishing/fraud, newest first.
   final List<PhishingAlert> phishingAlerts;
   final List<Txn> needsReview;
+
+  final int? _needsReviewCount;
+
+  /// Total flagged rows, which may exceed the capped [needsReview] list (the UI
+  /// shows at most 20 at a time but the badge can still say "27").
+  int get needsReviewCount => _needsReviewCount ?? needsReview.length;
+
   final DateTime? lastScanAt;
   final int smsMessagesRead;
   final bool isDemo;
@@ -55,6 +65,29 @@ class HomeData {
   );
 
   bool get isEmpty => transactions.isEmpty && smsMessagesRead == 0;
+
+  /// Money that actually left the accounts this month (spend + cash + card
+  /// bill payments). "Left"/"Over" is measured against this, not against
+  /// category spend alone.
+  Paise get moneyOut => summary.moneyOut;
+
+  /// True income minus money out. Negative means the user is down this month.
+  Paise get left => summary.left;
+
+  /// What is still unpaid across the latest card bills.
+  Paise get stillDue => Paise(
+    cards.fold<int>(0, (sum, card) => sum + card.billDuePaise),
+  );
+
+  /// Cards that still owe something on their latest bill.
+  int get unpaidBillCount => cards.where((c) => c.billDuePaise > 0).length;
+
+  /// False when no salary/interest credit was seen: the UI must say so rather
+  /// than claim a savings rate.
+  bool get hasTrueIncome => summary.hasTrueIncome;
+
+  /// Refunds booked this month (reported separately from income).
+  Paise get refunds => summary.refunds;
 
   List<CardMetrics> get cardsWithLimit =>
       cards.where((c) => c.card.creditLimitPaise != null).toList(growable: false);
@@ -124,11 +157,31 @@ abstract class FinanceRepository {
   /// Reads new SMS (Android) and turns them into transactions.
   Future<IngestResult> ingest();
 
+  /// Re-derives the whole ledger from the stored raw messages.
+  ///
+  /// Used when the parser rules or the schema change: an existing install must
+  /// never keep showing numbers an older parser produced. User category
+  /// overrides and learned merchant rules are preserved.
+  Future<IngestResult> reparseAll();
+
+  /// Removes one card the user (or an old parser) created by mistake.
+  Future<void> deleteCard(String issuer, String last4);
+
   Future<void> assignCategory({
     required String txnKey,
     required String categoryName,
     required SpendCategoryKind kind,
   });
+
+  /// Deletes a row the user says is not a transaction and stores a negative
+  /// rule (sender + merchant + amount band) so a re-scan cannot add it back.
+  Future<void> excludeTxn(String txnKey);
+
+  /// Learned merchant rules, most used first. Backs the Settings "undo" list.
+  Future<List<MerchantRule>> merchantRules();
+
+  /// Deletes a learned rule; future alerts fall back to the bundled categoriser.
+  Future<void> forgetMerchantRule(String signature);
 
   Future<void> saveCard(CardAccount card);
 
@@ -177,6 +230,7 @@ class HomeDataBuilder {
     required DateTime? lastScanAt,
     required int smsRead,
     required List<Txn> needsReview,
+    int? needsReviewCount,
   }) {
     // Ledger admission, applied to every data source (real, demo, import).
     // Dedupe already ran in the repository that owns the storage; this only
@@ -198,7 +252,16 @@ class HomeDataBuilder {
           card: card,
           transactions: counted,
           now: now,
-          latestBill: _latestBillFor(card, bills),
+          latestBill: _latestBillFor(
+            card,
+            bills,
+            allowUnkeyed: cards.where((c) => c.issuer == card.issuer).length == 1,
+          ),
+          // A bill payment without a card mask can only be attributed when the
+          // issuer has exactly one card; otherwise guessing would move money
+          // between cards.
+          attributeUnkeyedPayments:
+              cards.where((c) => c.issuer == card.issuer).length == 1,
         ),
     ]..sort((a, b) => b.outstandingPaise.compareTo(a.outstandingPaise));
 
@@ -242,13 +305,22 @@ class HomeDataBuilder {
       smsMessagesRead: smsRead,
       isDemo: isDemo,
       categories: categories,
+      needsReviewCount: needsReviewCount,
     );
   }
 
-  CardBillNotice? _latestBillFor(CardAccount card, List<CardBillNotice> bills) {
+  /// A bill whose SMS printed no card mask (`issuer|`) belongs to the issuer's
+  /// only card. With more than one card of that issuer it cannot be attributed.
+  CardBillNotice? _latestBillFor(
+    CardAccount card,
+    List<CardBillNotice> bills, {
+    bool allowUnkeyed = false,
+  }) {
     CardBillNotice? latest;
     for (final bill in bills) {
-      if (bill.cardKey != card.key) continue;
+      final keyed = bill.cardKey == card.key;
+      final unkeyed = allowUnkeyed && bill.cardKey == '${card.issuer}|';
+      if (!keyed && !unkeyed) continue;
       if (latest == null || (bill.receivedAtMs ?? 0) > (latest.receivedAtMs ?? 0)) {
         latest = bill;
       }

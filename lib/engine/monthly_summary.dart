@@ -17,10 +17,18 @@ class MonthlySummary {
     required this.previousSpendPaise,
     required this.daysElapsed,
     required this.daysInMonth,
+    this.refundPaise = 0,
+    this.cashbackPaise = 0,
+    this.cardBillPaymentPaise = 0,
+    this.otherInflowPaise = 0,
   });
 
   final DateTime monthStart;
   final int spendPaise;
+
+  /// **True income only**: salary, interest and other genuine income credits.
+  /// Refunds, cashback, card-bill credits, wallet loads and self transfers are
+  /// never counted here — that was the fictional "Came in ₹37k" number.
   final int incomePaise;
   final int cashPaise;
   final int transferPaise;
@@ -37,18 +45,61 @@ class MonthlySummary {
   final int daysElapsed;
   final int daysInMonth;
 
+  /// Money returned for earlier purchases this month.
+  final int refundPaise;
+
+  /// Reward credits this month.
+  final int cashbackPaise;
+
+  /// Card bill payments made this month — money that actually left the bank
+  /// account and went to a card issuer.
+  final int cardBillPaymentPaise;
+
+  /// Inflows that are real money but not income: refunds, cashback, wallet
+  /// loads, P2P receipts, redeemals and self transfers.
+  final int otherInflowPaise;
+
   Paise get spend => Paise(spendPaise);
   Paise get income => Paise(incomePaise);
   Paise get projectedSpend => Paise(projectedSpendPaise);
   Paise get previousSpend => Paise(previousSpendPaise);
   Paise get cash => Paise(cashPaise);
+  Paise get refunds => Paise(refundPaise);
+  Paise get cashback => Paise(cashbackPaise);
+  Paise get cardBillPayments => Paise(cardBillPaymentPaise);
 
-  /// Net money left after real spending (transfers excluded — they are not
-  /// consumption, and counting them would double-count card bills).
+  /// Accrual spend: what the month cost, net of refunds (doc §5.5).
+  Paise get netSpend => Paise(spendPaise - refundPaise);
+
+  /// **Money out of the accounts this month**: consumption, ATM cash and card
+  /// bill payments. This is what "Left"/"Over" must be measured against.
+  int get moneyOutPaise => spendPaise + cashPaise + cardBillPaymentPaise;
+
+  Paise get moneyOut => Paise(moneyOutPaise);
+
+  /// What is actually left this month: true income minus money out. Negative
+  /// means the user is down — shown as "Over", never as a positive "Left".
+  int get leftPaise => incomePaise - moneyOutPaise;
+
+  Paise get left => Paise(leftPaise);
+
+  /// Older consumers used `income − spend`; kept so nothing silently breaks,
+  /// but the hero uses [left].
   Paise get net => Paise(incomePaise - spendPaise);
 
-  double get savingsRate =>
-      incomePaise <= 0 ? 0 : (incomePaise - spendPaise) / incomePaise;
+  /// True when at least one genuine income credit was seen. Without it there is
+  /// no honest savings rate.
+  bool get hasTrueIncome => incomePaise > 0;
+
+  /// Share of income kept after **accrual** spend (refunds reduce spend).
+  /// Null when no income was seen — the caller must say so rather than invent
+  /// a rate.
+  double? get savingsRateOrNull {
+    if (incomePaise <= 0) return null;
+    return (incomePaise - netSpend.value) / incomePaise;
+  }
+
+  double get savingsRate => savingsRateOrNull ?? 0;
 
   /// Month-over-month change, e.g. 0.18 for +18%.
   double get monthOverMonth {
@@ -131,6 +182,10 @@ class SummaryCalculator {
     var income = 0;
     var cash = 0;
     var transfer = 0;
+    var refunds = 0;
+    var cashback = 0;
+    var cardBills = 0;
+    var otherInflow = 0;
     var count = 0;
     var prevSpend = 0;
     final byKind = <SpendCategoryKind, _Acc>{};
@@ -148,6 +203,7 @@ class SummaryCalculator {
         continue;
       }
       count++;
+      final moneyIn = txn.moneyInKind;
       switch (txn.kind) {
         case TxnKind.spend:
           spend += txn.amountPaise;
@@ -165,9 +221,28 @@ class SummaryCalculator {
         case TxnKind.cash:
           cash += txn.amountPaise;
         case TxnKind.income:
-          income += txn.amountPaise;
+          // "Came in" is true income only. `none` is a legacy/CSV row that has
+          // no taxonomy yet; a reparsed SMS row always carries one.
+          final trueIncome =
+              moneyIn.isTrueIncome || moneyIn == MoneyInKind.none;
+          if (trueIncome) {
+            income += txn.amountPaise;
+          } else {
+            otherInflow += txn.amountPaise;
+          }
         case TxnKind.transfer:
           transfer += txn.amountPaise;
+          if (txn.transferReason == TransferReason.creditCardBill) {
+            cardBills += txn.amountPaise;
+          }
+      }
+      switch (moneyIn) {
+        case MoneyInKind.refund:
+          refunds += txn.amountPaise;
+        case MoneyInKind.cashback:
+          cashback += txn.amountPaise;
+        default:
+          break;
       }
     }
 
@@ -220,6 +295,10 @@ class SummaryCalculator {
       previousSpendPaise: prevSpend,
       daysElapsed: daysElapsed,
       daysInMonth: daysInMonth,
+      refundPaise: refunds,
+      cashbackPaise: cashback,
+      cardBillPaymentPaise: cardBills,
+      otherInflowPaise: otherInflow,
     );
   }
 }

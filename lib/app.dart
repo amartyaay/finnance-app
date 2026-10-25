@@ -10,7 +10,17 @@ import 'views/home_screen.dart';
 import 'views/insights_screen.dart';
 import 'views/onboarding_screen.dart';
 import 'views/settings_screen.dart';
+import 'views/sms_inbox_screen.dart';
 import 'views/transactions_screen.dart';
+
+/// Route name of the optional "All messages" review screen. Nothing in the
+/// shell opens it on its own; any screen can call [openSmsInbox].
+const String smsInboxRouteName = SmsInboxScreen.routeName;
+
+/// Pushes the optional review screen. Its only entry points are an explicit
+/// call (or, in the web build, `?tab=messages` for screenshots/deep links); it
+/// never interrupts the app and always has a working Skip.
+Future<void> openSmsInbox(BuildContext context) => SmsInboxScreen.open(context);
 
 class FinanceApp extends StatefulWidget {
   const FinanceApp({
@@ -87,6 +97,19 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   late int _index = _initialTab(widget.initialIndex);
+
+  @override
+  void initState() {
+    super.initState();
+    // `?tab=messages` opens the optional review screen after the first frame;
+    // it is a route push, never a launch modal, and Back/Skip dismiss it.
+    if (kIsWeb && Uri.base.queryParameters['tab'] == 'messages') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).push(SmsInboxScreen.route());
+      });
+    }
+  }
 
   /// `?tab=2` lets screenshots and deep links land on a specific tab.
   static int _initialTab(int fallback) {

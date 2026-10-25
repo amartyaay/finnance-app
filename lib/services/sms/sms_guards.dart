@@ -82,7 +82,7 @@ class SmsGuards {
   static final RegExp _moneyMoved = RegExp(
     r'\b(?:debited|debit(?:ed)?|spent|paid|payment of|sent|withdrawn|withdrew|'
     r'charged|credited|refund(?:ed)?|deposited|deposit|reversed|deducted|billed|'
-    r'transferred|received)\b',
+    r'transferred|received|purchase[sd]?|invested|allotted)\b',
     caseSensitive: false,
   );
 

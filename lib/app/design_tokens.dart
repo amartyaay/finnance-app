@@ -15,6 +15,7 @@ class FinanceColors {
     required this.inkMuted,
     required this.inkOnPrimary,
     required this.heroInk,
+    required this.heroMuted,
     required this.primary,
     required this.primaryPressed,
     required this.primarySoft,
@@ -52,6 +53,10 @@ class FinanceColors {
 
   /// Ink for text sitting on [heroGradient] and card faces. Always near-white.
   final Color heroInk;
+
+  /// Secondary ink on the hero. Solid, not translucent, so it clears 4.5:1 on
+  /// every stop of the gradient.
+  final Color heroMuted;
 
   final Color primary;
   final Color primaryPressed;
@@ -105,9 +110,10 @@ class FinanceColors {
     surfaceSunken: Color(0xFFE4EADF),
     ink: Color(0xFF101A14),
     inkSecondary: Color(0xFF4B5B51),
-    inkMuted: Color(0xFF73847A),
+    inkMuted: Color(0xFF5A6A60),
     inkOnPrimary: Color(0xFFF7FBF8),
     heroInk: Color(0xFFF4FBF7),
+    heroMuted: Color(0xFFCBE5DB),
     primary: Color(0xFF0C7257),
     primaryPressed: Color(0xFF085642),
     primarySoft: Color(0xFFDFF1E8),
@@ -145,7 +151,7 @@ class FinanceColors {
     heroGradient: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFF0D7A5D), Color(0xFF0A666C), Color(0xFF074E5C)],
+      colors: [Color(0xFF0B6650), Color(0xFF085862), Color(0xFF064450)],
       stops: [0.0, 0.52, 1.0],
     ),
     tintGradient: LinearGradient(
@@ -169,9 +175,10 @@ class FinanceColors {
     surfaceSunken: Color(0xFF183024),
     ink: Color(0xFFEDF5EF),
     inkSecondary: Color(0xFFB3C6B9),
-    inkMuted: Color(0xFF8AA192),
+    inkMuted: Color(0xFF9AB0A2),
     inkOnPrimary: Color(0xFF04211A),
     heroInk: Color(0xFFF2FBF6),
+    heroMuted: Color(0xFFBFE3D7),
     primary: Color(0xFF5FD3AC),
     primaryPressed: Color(0xFF7EE3C0),
     primarySoft: Color(0xFF113A2C),
@@ -259,7 +266,7 @@ class T {
   static const surface = Color(0xFFFFFFFF);
   static const ink = Color(0xFF101A14);
   static const inkSecondary = Color(0xFF4B5B51);
-  static const inkMuted = Color(0xFF73847A);
+  static const inkMuted = Color(0xFF5A6A60);
   static const inkOnPrimary = Color(0xFFF7FBF8);
   static const primary = Color(0xFF0C7257);
   static const primaryPressed = Color(0xFF085642);
@@ -277,9 +284,23 @@ class T {
   static const heroGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF0D7A5D), Color(0xFF0A666C), Color(0xFF074E5C)],
+    colors: [Color(0xFF0B6650), Color(0xFF085862), Color(0xFF064450)],
     stops: [0.0, 0.52, 1.0],
   );
+
+  /// The first-run surface is always deep brand green, in either theme.
+  static const onboardingGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF0A4A3C), Color(0xFF07363F), Color(0xFF04262E)],
+    stops: [0.0, 0.55, 1.0],
+  );
+
+  /// Deep green used for ink on a cream button.
+  static const brandDeep = Color(0xFF06352B);
+
+  /// Mint highlight used sparingly on brand surfaces.
+  static const mintGlow = Color(0xFF6FE3C2);
 
   static const List<Color> chart = [
     Color(0xFF0E7A5F),

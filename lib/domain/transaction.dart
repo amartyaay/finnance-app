@@ -19,6 +19,7 @@ class Txn {
     this.categorySource = CategorySource.none,
     this.categoryKind = SpendCategoryKind.other,
     this.transferReason = TransferReason.none,
+    this.moneyInKind = MoneyInKind.none,
     this.cardKey,
     this.last4,
     this.issuer,
@@ -26,6 +27,7 @@ class Txn {
     this.balanceAfterPaise,
     this.availableLimitPaise,
     this.confidence = 0.5,
+    this.amountScore,
     this.sourceType = TxnSourceType.sms,
     this.isDuplicateOfKey,
     this.needsReview = false,
@@ -54,6 +56,12 @@ class Txn {
   final SpendCategoryKind categoryKind;
   final TransferReason transferReason;
 
+  /// Why this row is money *in* (see `MoneyInKind`). `none` for rows that are
+  /// not inflows. Only [MoneyInKind.isTrueIncome] values may feed "Came in" or
+  /// the savings rate; a refund, card payment, wallet load or self transfer is
+  /// reported on its own line.
+  final MoneyInKind moneyInKind;
+
   /// `issuer|last4`, e.g. `HDFC Bank|1234`.
   final String? cardKey;
   final String? last4;
@@ -66,6 +74,14 @@ class Txn {
   final int? availableLimitPaise;
 
   final double confidence;
+
+  /// Score of the `AmountFinder` candidate that produced [amountPaise]
+  /// (`null` for CSV/manual rows and rows written before schema v8).
+  ///
+  /// Kept so the review queue can still tell "the parser preferred this rupee
+  /// figure over a rival" after the message body is gone.
+  final int? amountScore;
+
   final TxnSourceType sourceType;
 
   /// Set when this row was the loser of a duplicate merge.
@@ -101,6 +117,7 @@ class Txn {
     SpendCategoryKind? categoryKind,
     TxnKind? kind,
     TransferReason? transferReason,
+    MoneyInKind? moneyInKind,
     String? isDuplicateOfKey,
     bool? needsReview,
   }) {
@@ -120,6 +137,7 @@ class Txn {
       categorySource: categorySource ?? this.categorySource,
       categoryKind: categoryKind ?? this.categoryKind,
       transferReason: transferReason ?? this.transferReason,
+      moneyInKind: moneyInKind ?? this.moneyInKind,
       cardKey: cardKey,
       last4: last4,
       issuer: issuer,
@@ -127,6 +145,7 @@ class Txn {
       balanceAfterPaise: balanceAfterPaise,
       availableLimitPaise: availableLimitPaise,
       confidence: confidence,
+      amountScore: amountScore,
       sourceType: sourceType,
       isDuplicateOfKey: isDuplicateOfKey ?? this.isDuplicateOfKey,
       needsReview: needsReview ?? this.needsReview,

@@ -34,6 +34,12 @@ class CategoryDonut extends StatelessWidget {
     if (slices.isEmpty || total.value <= 0) return const SizedBox.shrink();
     final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
     final summary = _summary(slices);
+    final colors = [
+      for (final slice in slices)
+        slice.category == null
+            ? p.inkMuted
+            : categoryColor(context, slice.category!.kind),
+    ];
     final donut = Semantics(
       label: summary,
       child: SizedBox(
@@ -51,7 +57,7 @@ class CategoryDonut extends StatelessWidget {
                   size: Size.square(diameter),
                   painter: _DonutPainter(
                     fractions: [for (final s in slices) s.total.share / _sum(slices)],
-                    colors: [for (var i = 0; i < slices.length; i++) p.ramp[i % p.ramp.length]],
+                    colors: colors,
                     track: p.surfaceSunken,
                     stroke: stroke,
                     progress: value,
@@ -90,8 +96,8 @@ class CategoryDonut extends StatelessWidget {
           Padding(
             padding: EdgeInsets.only(bottom: i == slices.length - 1 ? 0 : 8),
             child: _LegendRow(
-              total: slices[i],
-              color: p.ramp[i % p.ramp.length],
+              total: slices[i].total,
+              color: colors[i],
               share: slices[i].total.share / _sum(slices),
             ),
           ),
@@ -396,20 +402,24 @@ class _DailyBarsState extends State<DailyBars>
                   style: T.bodySmall.copyWith(color: p.inkMuted, fontSize: 12),
                 ),
                 const Spacer(),
-                Text(
-                  today == null
-                      ? shortDate(
-                          DateTime(
-                            widget.month.year,
-                            widget.month.month,
-                            values.length,
-                          ),
-                        )
-                      : 'Today · ${inr(Paise(todayValue ?? 0))}',
-                  style: T.bodySmall.copyWith(
-                    color: today == null ? p.inkMuted : p.inkSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                Flexible(
+                  child: Text(
+                    today == null
+                        ? shortDate(
+                            DateTime(
+                              widget.month.year,
+                              widget.month.month,
+                              values.length,
+                            ),
+                          )
+                        : 'Today · ${inrCompact(Paise(todayValue ?? 0))}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: T.bodySmall.copyWith(
+                      color: today == null ? p.inkMuted : p.inkSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
@@ -573,7 +583,7 @@ class PaceBars extends StatelessWidget {
                 ),
                 const SizedBox(width: T.s2),
                 Text(
-                  inr(rows[i].amount),
+                  inrCompact(rows[i].amount),
                   maxLines: 1,
                   softWrap: false,
                   style: T.money.copyWith(
@@ -649,7 +659,7 @@ class UtilizationArc extends StatelessWidget {
               ),
             ),
           ),
-          if (center != null) center!,
+          ?center,
         ],
       ),
     );

@@ -3,33 +3,61 @@ import 'package:sqflite/sqflite.dart';
 
 /// Schema owner for the whole app.
 ///
-/// v6 is a deliberate break from the original MVP: the Dart side now owns
+/// v6 was a deliberate break from the original MVP: the Dart side now owns
 /// `transactions` and the Kotlin receiver only appends raw messages to
 /// `sms_messages`, so there is exactly **one** parser (this one) and no
 /// Kotlin/Dart drift.
+///
+/// v8 adds the learning loop without a destructive migration:
+///   * `transactions.amount_score` — the score of the amount candidate that was
+///     chosen, so the review rule survives after the body is gone;
+///   * `merchant_rules` metadata (`sample_merchant`, `created_at`,
+///     `last_used_at`) next to the existing `hits`;
+///   * `excluded_shapes` — the "not a transaction" negative rules.
+///
+/// Every column is added through [_addColumnIfMissing] and every table through
+/// `IF NOT EXISTS`, and [ensureSchema] re-runs on **every open**, so a database
+/// from v6, v7 or a partially-upgraded build heals itself instead of leaving
+/// the app half-working.
 class AppDatabase {
-  AppDatabase({this.fileName = 'finance_sms.db'});
+  AppDatabase({
+    this.fileName = 'finance_sms.db',
+    DatabaseFactory? factory,
+    String? directory,
+  }) : _factory = factory,
+       _directory = directory;
 
   final String fileName;
+
+  /// Injected by tests (sqflite FFI); the app uses the global plugin factory.
+  final DatabaseFactory? _factory;
+
+  /// Injected by tests. The app resolves the platform databases directory.
+  final String? _directory;
+
+  static const int schemaVersion = 9;
 
   Database? _db;
 
   Future<Database> get database async {
     final existing = _db;
     if (existing != null) return existing;
-    final dir = await getDatabasesPath();
-    final db = await openDatabase(
+    final factory = _factory ?? databaseFactory;
+    final dir = _directory ?? await factory.getDatabasesPath();
+    final db = await factory.openDatabase(
       p.join(dir, fileName),
-      version: 7,
-      onCreate: _create,
-      onUpgrade: _upgrade,
-      onOpen: (db) async {
-        // Re-assert every table on open: a database created by an older build
-        // must never leave the app half-working. Journal mode is left to
-        // Android (WAL is the default for sqflite); PRAGMA cannot go through
-        // `execute` because it returns a row.
-        await _createCore(db);
-      },
+      options: OpenDatabaseOptions(
+        version: schemaVersion,
+        onCreate: _create,
+        onUpgrade: _upgrade,
+        onOpen: (db) async {
+          // Re-assert every table and every v8 column on open: a database
+          // created by an older build must never leave the app half-working.
+          // Journal mode is left to Android (WAL is the default for sqflite);
+          // PRAGMA cannot go through `execute` because it returns a row.
+          await ensureSchema(db);
+        },
+      ),
     );
     _db = db;
     return db;
@@ -41,11 +69,17 @@ class AppDatabase {
   }
 
   Future<void> _create(Database db, int version) async {
-    await _createCore(db);
+    await ensureSchema(db);
     await _seedCategories(db);
   }
 
-  Future<void> _createCore(Database db) async {
+  /// Creates or heals the whole schema.
+  ///
+  /// Public so the migration contract can be exercised by a test without a
+  /// device: it only issues `CREATE ... IF NOT EXISTS` and guarded
+  /// `ALTER TABLE ... ADD COLUMN`, so running it against any older shape is
+  /// safe and repeatable. [database] calls it on every open.
+  Future<void> ensureSchema(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS sms_messages (
         id TEXT PRIMARY KEY,
@@ -80,6 +114,7 @@ class AppDatabase {
         category_source TEXT NOT NULL DEFAULT 'none',
         category_kind TEXT NOT NULL DEFAULT 'other',
         transfer_reason TEXT NOT NULL DEFAULT 'none',
+        money_in_kind TEXT NOT NULL DEFAULT 'none',
         card_key TEXT,
         last4 TEXT,
         issuer TEXT,
@@ -87,6 +122,7 @@ class AppDatabase {
         balance_after INTEGER,
         available_limit INTEGER,
         confidence REAL NOT NULL DEFAULT 0.5,
+        amount_score INTEGER,
         source_type TEXT NOT NULL DEFAULT 'sms',
         duplicate_of TEXT,
         needs_review INTEGER NOT NULL DEFAULT 0,
@@ -102,6 +138,17 @@ class AppDatabase {
     );
     await db.execute(
       'CREATE INDEX IF NOT EXISTS txn_card_idx ON transactions(card_key)',
+    );
+    // v8 column: older rows keep NULL, which the review rule reads as "unknown
+    // amount evidence" rather than as a weak candidate.
+    await _addColumnIfMissing(db, 'transactions', 'amount_score', 'INTEGER');
+    // v9 column: the money-in taxonomy (`MoneyInKind`). Rows written before it
+    // read as `none` and are re-derived by the reparse path.
+    await _addColumnIfMissing(
+      db,
+      'transactions',
+      'money_in_kind',
+      "TEXT NOT NULL DEFAULT 'none'",
     );
 
     await db.execute('''
@@ -130,6 +177,15 @@ class AppDatabase {
         created_at INTEGER NOT NULL
       )
     ''');
+    // One statement, one row: the same bill can arrive as a statement SMS and a
+    // due reminder, and both must not double the "still due" figure.
+    await db.execute('''
+      CREATE UNIQUE INDEX IF NOT EXISTS card_bills_dedupe_idx
+      ON card_bills(
+        card_key, total_due,
+        COALESCE(due_date, 0), COALESCE(statement_date, 0)
+      )
+    ''');
 
     await db.execute('''
       CREATE TABLE IF NOT EXISTS pending_categories (
@@ -149,12 +205,41 @@ class AppDatabase {
       )
     ''');
 
+    // `pattern` is the normalised merchant signature (see
+    // `MerchantSignature`) — the key the learning loop looks up on ingest.
     await db.execute('''
       CREATE TABLE IF NOT EXISTS merchant_rules (
         pattern TEXT PRIMARY KEY,
         category_name TEXT NOT NULL,
         category_kind TEXT NOT NULL,
         hits INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+    await _addColumnIfMissing(
+      db,
+      'merchant_rules',
+      'sample_merchant',
+      'TEXT',
+    );
+    await _addColumnIfMissing(
+      db,
+      'merchant_rules',
+      'created_at',
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _addColumnIfMissing(db, 'merchant_rules', 'last_used_at', 'INTEGER');
+
+    // Negative rules: "this alert shape is not a transaction". Additive table,
+    // so v6/v7 databases gain it on open.
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS excluded_shapes (
+        signature TEXT PRIMARY KEY,
+        sender TEXT,
+        merchant TEXT,
+        amount_band TEXT NOT NULL DEFAULT 'unknown',
+        amount_paise INTEGER,
+        hits INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL DEFAULT 0
       )
     ''');
 
@@ -166,8 +251,16 @@ class AppDatabase {
     ''');
   }
 
+  /// Applies only additive migrations, then recomputes the v8 review flags.
+  ///
+  /// Exposed for the "a v7 database opens cleanly" contract test. There is no
+  /// `DROP`, `DELETE` or column removal anywhere in here: an old ledger keeps
+  /// every row it had.
+  Future<void> upgradeSchema(Database db, int oldVersion, int newVersion) =>
+      _upgrade(db, oldVersion, newVersion);
+
   Future<void> _upgrade(Database db, int oldVersion, int newVersion) async {
-    await _createCore(db);
+    await ensureSchema(db);
     if (oldVersion < 7) {
       await _addColumnIfMissing(db, 'transactions', 'sender', 'TEXT');
     }
@@ -196,6 +289,26 @@ class AppDatabase {
           );
         }
       }
+    }
+    if (oldVersion < 8) {
+      // Recompute the review flag with the v8 rule for rows written by older
+      // builds. Only ever raises the flag — a row the user already cleared
+      // stays cleared because `category_source = user` rows were resolved by
+      // the action that cleared them. `amount_score` stays NULL for old rows
+      // (the candidate score cannot be reconstructed), so that clause is
+      // skipped rather than guessed.
+      await db.execute('''
+        UPDATE transactions SET needs_review = 1
+        WHERE needs_review = 0 AND (
+          confidence < 0.6 OR (
+            kind = 'spend' AND (
+              merchant IS NULL OR merchant = ''
+            ) AND (
+              vpa IS NULL OR vpa = ''
+            )
+          )
+        )
+      ''');
     }
     await _seedCategories(db);
   }

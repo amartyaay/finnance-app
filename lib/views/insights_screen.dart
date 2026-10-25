@@ -20,13 +20,15 @@ class InsightsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final data = state.data;
-    final scheme = Theme.of(context).colorScheme;
+    final p = T.of(context);
 
     final Widget body;
-    if (data.isEmpty) {
+    if (state.isLoading && data.isEmpty) {
+      body = const _InsightsSkeleton();
+    } else if (data.isEmpty) {
       body = ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(T.s5, T.s8, T.s5, 96),
+        padding: const EdgeInsets.fromLTRB(T.s5, T.s6, T.s5, 96),
         children: [
           EmptyState(
             icon: Icons.insights_rounded,
@@ -56,115 +58,150 @@ class InsightsScreen extends StatelessWidget {
                 insight.tone == InsightTone.neutral,
           )
           .toList(growable: false);
+      final categories = data.summary.byCategory;
 
-      body = ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(T.s5, T.s2, T.s5, 96),
-        children: [
-          Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(
-                  text: '${monthYearLabel(data.summary.monthStart)}  ·  ',
-                  style: T.body.copyWith(color: scheme.onSurfaceVariant),
-                ),
-                TextSpan(
-                  text: inr(data.summary.spend),
-                  style: T.money.copyWith(color: scheme.onSurface),
-                ),
-                TextSpan(
-                  text: ' spent',
-                  style: T.body.copyWith(color: scheme.onSurfaceVariant),
-                ),
-              ],
+      body = RefreshIndicator(
+        onRefresh: state.scanInbox,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(T.s5, T.s2, T.s5, 96),
+          children: [
+            _Header(data: data, attentionCount: attention.length),
+            const SizedBox(height: T.s5),
+            const SectionHeader(
+              title: 'Needs attention',
+              padding: EdgeInsets.only(bottom: T.s3, left: T.s1),
             ),
-          ),
-          const SizedBox(height: T.s5),
-          const SectionHeader(title: 'Needs attention'),
-          if (data.phishingAlerts.isEmpty && attention.isEmpty)
-            Text(
-              'Nothing needs your attention right now.',
-              style: T.body.copyWith(color: scheme.onSurfaceVariant),
-            ),
-          for (final alert in data.phishingAlerts)
-            Padding(
-              padding: const EdgeInsets.only(bottom: T.s3),
-              child: NoticeBanner(
-                title: 'Possible fraud message',
-                body: _preview(alert.preview),
-                icon: Icons.gpp_maybe_rounded,
-                tone: PillTone.danger,
-                actionLabel: 'View',
-                onAction: () => _showAlert(context, alert),
-              ),
-            ),
-          for (final insight in attention)
-            Padding(
-              padding: const EdgeInsets.only(bottom: T.s3),
-              child: InsightTile(insight: insight),
-            ),
-          for (final insight in other)
-            Padding(
-              padding: const EdgeInsets.only(bottom: T.s3),
-              child: InsightTile(insight: insight),
-            ),
-          if (attention.isEmpty && other.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: T.s2),
-              child: Text(
-                'No insights yet — a few more messages will give this screen '
-                'something to work with.',
-                style: T.bodySmall.copyWith(color: scheme.onSurfaceVariant),
-              ),
-            ),
-          const SizedBox(height: T.s4),
-          const SectionHeader(title: 'Recurring payments'),
-          if (data.recurring.isEmpty)
-            Text(
-              'Nothing recurring detected yet (needs 3 similar charges).',
-              style: T.bodySmall.copyWith(color: scheme.onSurfaceVariant),
-            )
-          else
-            AppCard(
-              padding: const EdgeInsets.fromLTRB(T.s4, T.s1, T.s4, T.s1),
-              child: Column(
-                children: [
-                  for (var i = 0; i < data.recurring.length; i++) ...[
-                    if (i > 0) const Divider(height: 1),
-                    RecurringRow(series: data.recurring[i]),
-                  ],
-                ],
-              ),
-            ),
-          const SizedBox(height: T.s6),
-          const SectionHeader(title: 'Where the money went'),
-          if (data.summary.byCategory.isEmpty)
-            Text(
-              'No spending recorded this month yet.',
-              style: T.bodySmall.copyWith(color: scheme.onSurfaceVariant),
-            )
-          else
-            AppCard(
-              padding: const EdgeInsets.fromLTRB(T.s4, T.s3, T.s4, T.s3),
-              child: Column(
-                children: [
-                  for (
-                    var i = 0;
-                    i < data.summary.byCategory.length;
-                    i++
-                  ) ...[
-                    if (i > 0) const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: T.s3),
-                      child: CategoryBreakdownRow(
-                        total: data.summary.byCategory[i],
+            if (data.phishingAlerts.isEmpty && attention.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: T.s1),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.check_circle_rounded,
+                      size: 18,
+                      color: p.positive,
+                    ),
+                    const SizedBox(width: T.s2),
+                    Expanded(
+                      child: Text(
+                        'Nothing needs your attention right now.',
+                        style: T.body.copyWith(color: p.inkSecondary),
                       ),
                     ),
                   ],
-                ],
+                ),
+              ),
+            for (final alert in data.phishingAlerts)
+              Padding(
+                padding: const EdgeInsets.only(bottom: T.s3),
+                child: NoticeBanner(
+                  title: 'Possible fraud message',
+                  body: _preview(alert.preview),
+                  icon: Icons.gpp_maybe_rounded,
+                  tone: PillTone.danger,
+                  actionLabel: 'View',
+                  onAction: () => _showAlert(context, alert),
+                ),
+              ),
+            for (final insight in attention)
+              Padding(
+                padding: const EdgeInsets.only(bottom: T.s3),
+                child: InsightTile(insight: insight),
+              ),
+            if (other.isNotEmpty) ...[
+              const SizedBox(height: T.s4),
+              const SectionHeader(
+                title: 'Worth a look',
+                padding: EdgeInsets.only(bottom: T.s3, left: T.s1),
+              ),
+              for (final insight in other)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: T.s3),
+                  child: InsightTile(insight: insight),
+                ),
+            ],
+            if (attention.isEmpty && other.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: T.s2, left: T.s1),
+                child: Text(
+                  'No insights yet — a few more messages will give this screen '
+                  'something to work with.',
+                  style: T.bodySmall.copyWith(color: p.inkMuted),
+                ),
+              ),
+            const SizedBox(height: T.s4),
+            const SectionHeader(
+              title: 'Recurring payments',
+              padding: EdgeInsets.only(bottom: T.s2, left: T.s1),
+            ),
+            if (data.recurring.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: T.s1),
+                child: Row(
+                  children: [
+                    Icon(Icons.autorenew_rounded, size: 18, color: p.inkMuted),
+                    const SizedBox(width: T.s2),
+                    Expanded(
+                      child: Text(
+                        'Nothing recurring detected yet — we need three similar charges.',
+                        style: T.bodySmall.copyWith(color: p.inkMuted),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              AppCard(
+                padding: const EdgeInsets.fromLTRB(T.s4, T.s1, T.s4, T.s1),
+                child: Column(
+                  children: [
+                    for (var i = 0; i < data.recurring.length; i++) ...[
+                      if (i > 0)
+                        Divider(height: 1, color: p.outlineVariant),
+                      RecurringRow(series: data.recurring[i]),
+                    ],
+                  ],
+                ),
+              ),
+            const SizedBox(height: T.s5),
+            SectionHeader(
+              title: 'Where the money went',
+              subtitle:
+                  '${inr(data.summary.spend)} across ${categories.length} '
+                  '${categories.length == 1 ? 'category' : 'categories'}',
+              padding: const EdgeInsets.only(bottom: T.s2, left: T.s1),
+            ),
+            if (categories.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: T.s1),
+                child: Text(
+                  'No spending recorded this month yet.',
+                  style: T.bodySmall.copyWith(color: p.inkMuted),
+                ),
+              )
+            else
+              AppCard(
+                padding: const EdgeInsets.fromLTRB(T.s4, T.s1, T.s4, T.s2),
+                child: Column(
+                  children: [
+                    for (var i = 0; i < categories.length; i++) ...[
+                      if (i > 0)
+                        Divider(height: 1, color: p.outlineVariant),
+                      CategoryBreakdownRow(total: categories[i], index: i),
+                    ],
+                  ],
+                ),
+              ),
+            const SizedBox(height: T.s5),
+            Center(
+              child: Text(
+                'Calculated on this phone from your messages.',
+                style: T.bodySmall.copyWith(color: p.inkMuted, fontSize: 12),
               ),
             ),
-        ],
+          ],
+        ),
       );
     }
 
@@ -175,10 +212,10 @@ class InsightsScreen extends StatelessWidget {
   }
 
   void _showAlert(BuildContext context, PhishingAlert alert) {
+    final p = T.of(context);
     showDialog<void>(
       context: context,
       builder: (context) {
-        final scheme = Theme.of(context).colorScheme;
         return AlertDialog(
           title: const Text('Possible fraud message'),
           content: SingleChildScrollView(
@@ -189,7 +226,7 @@ class InsightsScreen extends StatelessWidget {
                 Text(
                   'From ${alert.sender}',
                   style: T.body.copyWith(
-                    color: scheme.onSurface,
+                    color: p.ink,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -197,26 +234,22 @@ class InsightsScreen extends StatelessWidget {
                 Text(
                   '${shortDateWithYear(alert.receivedAt)} · '
                   '${clockTime(alert.receivedAt)}',
-                  style: T.bodySmall.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
+                  style: T.bodySmall.copyWith(color: p.inkMuted),
                 ),
                 const SizedBox(height: T.s3),
                 Text(
                   alert.preview,
-                  style: T.body.copyWith(color: scheme.onSurface),
+                  style: T.body.copyWith(color: p.ink),
                 ),
                 const SizedBox(height: T.s4),
                 Text(
                   'Why we flagged it',
-                  style: T.label.copyWith(color: scheme.onSurfaceVariant),
+                  style: T.label.copyWith(color: p.inkSecondary),
                 ),
                 const SizedBox(height: T.s1),
                 Text(
                   _humanSignals(alert.reason),
-                  style: T.bodySmall.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
+                  style: T.bodySmall.copyWith(color: p.inkMuted),
                 ),
               ],
             ),
@@ -229,6 +262,88 @@ class InsightsScreen extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({required this.data, required this.attentionCount});
+
+  final HomeData data;
+  final int attentionCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = T.of(context);
+    final summary = data.summary;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    monthYearLabel(summary.monthStart),
+                    style: T.label.copyWith(
+                      color: p.inkMuted,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'What changed',
+                    style: T.title.copyWith(color: p.ink, fontSize: 26),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${data.insights.length} signals from ${data.transactions.length} entries',
+                    style: T.bodySmall.copyWith(color: p.inkMuted),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: T.s2),
+            IconBadge(
+              icon: Icons.insights_rounded,
+              color: p.primary,
+              size: 48,
+              iconSize: 24,
+            ),
+          ],
+        ),
+        if (attentionCount > 0) ...[
+          const SizedBox(height: T.s3),
+          Pill(
+            '$attentionCount ${attentionCount == 1 ? 'needs' : 'need'} a look',
+            tone: PillTone.caution,
+            icon: Icons.priority_high_rounded,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _InsightsSkeleton extends StatelessWidget {
+  const _InsightsSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(T.s5, T.s2, T.s5, 96),
+      children: const [
+        SkeletonBox(height: 72, radius: T.r2),
+        SizedBox(height: T.s5),
+        SkeletonBox(height: 130, radius: T.r3),
+        SizedBox(height: T.s3),
+        SkeletonBox(height: 130, radius: T.r3),
+        SizedBox(height: T.s5),
+        SkeletonBox(height: 180, radius: T.r3),
+      ],
     );
   }
 }

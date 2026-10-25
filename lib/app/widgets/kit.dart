@@ -216,13 +216,15 @@ class _MoneyTextState extends State<MoneyText>
     duration: T.medium,
     value: 1,
   );
-  late int _from = widget.amount.value;
-  late int _to = widget.amount.value;
-  int _value = widget.amount.value;
+  late int _from;
+  late int _to;
+  late int _value;
 
   @override
   void initState() {
     super.initState();
+    _from = widget.amount.value;
+    _to = widget.amount.value;
     _value = widget.amount.value;
     _controller.addListener(_tick);
   }
@@ -614,25 +616,30 @@ class NoticeBanner extends StatelessWidget {
                   ),
                 ),
                 if (actionLabel != null) ...[
-                  const SizedBox(height: T.s2),
-                  GestureDetector(
-                    onTap: onAction,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: T.s1),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            actionLabel!,
-                            style: T.bodySmall.copyWith(
-                              color: fg,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12.5,
-                            ),
-                          ),
-                          Icon(Icons.arrow_forward_rounded, size: 14, color: fg),
-                        ],
+                  const SizedBox(height: T.s1),
+                  TextButton(
+                    onPressed: onAction,
+                    style: TextButton.styleFrom(
+                      foregroundColor: fg,
+                      minimumSize: const Size(0, 48),
+                      padding: const EdgeInsets.symmetric(horizontal: T.s1),
+                      alignment: Alignment.centerLeft,
+                      textStyle: T.bodySmall.copyWith(
+                        color: fg,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12.5,
                       ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(actionLabel!),
+                        Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 14,
+                          color: fg,
+                        ),
+                      ],
                     ),
                   ),
                 ],

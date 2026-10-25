@@ -11,13 +11,17 @@ class SettingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = T.of(context);
     final rows = <Widget>[];
     for (var i = 0; i < children.length; i++) {
-      if (i > 0) rows.add(const Divider(height: 1, indent: T.s4));
+      if (i > 0) {
+        rows.add(Divider(height: 1, indent: 64, color: p.outlineVariant));
+      }
       rows.add(children[i]);
     }
     return AppCard(
       padding: EdgeInsets.zero,
+      radius: T.r3,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(T.r3),
         child: Column(children: rows),
@@ -49,35 +53,21 @@ class SettingsTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final p = T.of(context);
     final foreground = danger
-        ? T.danger
+        ? p.danger
         : enabled
-        ? scheme.onSurface
-        : scheme.onSurfaceVariant;
+        ? p.ink
+        : p.inkMuted;
     final row = Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: T.s4,
-        vertical: T.s3,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: T.s4, vertical: T.s3),
       child: Row(
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: danger ? T.dangerSoft : scheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(T.r2),
-            ),
-            child: Icon(
-              icon,
-              size: 19,
-              color: danger
-                  ? T.danger
-                  : enabled
-                  ? scheme.onSurfaceVariant
-                  : scheme.outline,
-            ),
+          IconBadge(
+            icon: icon,
+            color: danger ? p.danger : p.inkSecondary,
+            size: 36,
+            iconSize: 19,
           ),
           const SizedBox(width: T.s3),
           Expanded(
@@ -95,7 +85,8 @@ class SettingsTile extends StatelessWidget {
                   Text(
                     subtitle!,
                     style: T.bodySmall.copyWith(
-                      color: scheme.onSurfaceVariant,
+                      color: p.inkMuted,
+                      height: 1.4,
                     ),
                   ),
                 ],
@@ -130,18 +121,18 @@ Future<void> showParsingSheet(BuildContext context) {
     isScrollControlled: true,
     useSafeArea: true,
     builder: (context) {
-      final scheme = Theme.of(context).colorScheme;
+      final p = T.of(context);
       return SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(T.s5, 0, T.s5, T.s5),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('How parsing works', style: T.title),
+            Text('How parsing works', style: T.title.copyWith(color: p.ink)),
             const SizedBox(height: T.s1),
             Text(
               'Three checks run on every message before a rupee reaches your '
               'totals.',
-              style: T.body.copyWith(color: scheme.onSurfaceVariant),
+              style: T.body.copyWith(color: p.inkSecondary),
             ),
             const SizedBox(height: T.s5),
             const _ParsingPoint(
@@ -169,7 +160,7 @@ Future<void> showParsingSheet(BuildContext context) {
             const SizedBox(height: T.s2),
             Text(
               'Nothing leaves the phone at any step.',
-              style: T.bodySmall.copyWith(color: scheme.onSurfaceVariant),
+              style: T.bodySmall.copyWith(color: p.inkMuted),
             ),
           ],
         ),
@@ -191,24 +182,24 @@ class _ParsingPoint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final p = T.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: T.s4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 26,
-            height: 26,
+            width: 28,
+            height: 28,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: T.primarySoft,
-              borderRadius: BorderRadius.circular(T.r1),
+              color: p.primarySoft,
+              borderRadius: BorderRadius.circular(T.r2),
             ),
             child: Text(
               number,
               style: T.label.copyWith(
-                color: T.primary,
+                color: p.primary,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -220,12 +211,12 @@ class _ParsingPoint extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: T.cardTitle.copyWith(color: scheme.onSurface),
+                  style: T.cardTitle.copyWith(color: p.ink),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   body,
-                  style: T.body.copyWith(color: scheme.onSurfaceVariant),
+                  style: T.body.copyWith(color: p.inkSecondary),
                 ),
               ],
             ),

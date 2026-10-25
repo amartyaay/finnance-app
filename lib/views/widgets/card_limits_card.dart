@@ -17,7 +17,7 @@ class CardLimitsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final p = T.of(context);
     return AppCard(
       padding: const EdgeInsets.fromLTRB(T.s4, T.s4, T.s4, T.s2),
       child: Column(
@@ -25,16 +25,15 @@ class CardLimitsCard extends StatelessWidget {
         children: [
           Text(
             'Card limits & dates',
-            style: T.cardTitle.copyWith(color: scheme.onSurface),
-          ),
-          const SizedBox(height: T.s2),
-          Text(
-            'Utilisation is only accurate when we know the limit.',
-            style: T.bodySmall.copyWith(color: scheme.onSurfaceVariant),
+            style: T.cardTitle.copyWith(color: p.ink, fontSize: 16),
           ),
           const SizedBox(height: T.s1),
+          Text(
+            'Utilisation is only accurate when we know the limit.',
+            style: T.bodySmall.copyWith(color: p.inkMuted),
+          ),
           for (var i = 0; i < cards.length; i++) ...[
-            if (i > 0) const Divider(height: 1),
+            if (i > 0) Divider(height: 1, color: p.outlineVariant),
             _CardLimitRow(metrics: cards[i]),
           ],
         ],
@@ -50,7 +49,7 @@ class _CardLimitRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final p = T.of(context);
     final card = metrics.card;
     final limit = card.creditLimitPaise;
     final facts = <String>[
@@ -64,7 +63,7 @@ class _CardLimitRow extends StatelessWidget {
       children: [
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: T.s2),
+            padding: const EdgeInsets.symmetric(vertical: T.s3),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -73,7 +72,7 @@ class _CardLimitRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: T.body.copyWith(
-                    color: scheme.onSurface,
+                    color: p.ink,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -82,7 +81,8 @@ class _CardLimitRow extends StatelessWidget {
                   '${card.masked} · ${facts.join(' · ')}',
                   maxLines: 2,
                   style: T.bodySmall.copyWith(
-                    color: scheme.onSurfaceVariant,
+                    color: p.inkMuted,
+                    height: 1.4,
                   ),
                 ),
               ],
@@ -92,8 +92,8 @@ class _CardLimitRow extends StatelessWidget {
         IconButton(
           tooltip: 'Edit ${card.displayName} limit and dates',
           onPressed: () => showCardEditSheet(context, card),
-          icon: const Icon(Icons.edit_outlined),
-          color: scheme.onSurfaceVariant,
+          icon: const Icon(Icons.edit_rounded),
+          color: p.inkSecondary,
         ),
       ],
     );
@@ -174,7 +174,7 @@ class _CardEditSheetState extends State<_CardEditSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final p = T.of(context);
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.viewInsetsOf(context).bottom,
@@ -184,11 +184,14 @@ class _CardEditSheetState extends State<_CardEditSheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Card limits & dates', style: T.title),
+            Text(
+              'Card limits & dates',
+              style: T.title.copyWith(color: p.ink),
+            ),
             const SizedBox(height: T.s1),
             Text(
               '${widget.card.issuer} · ${widget.card.masked}',
-              style: T.bodySmall.copyWith(color: scheme.onSurfaceVariant),
+              style: T.bodySmall.copyWith(color: p.inkMuted),
             ),
             const SizedBox(height: T.s4),
             TextField(
@@ -255,7 +258,7 @@ class _CardEditSheetState extends State<_CardEditSheet> {
             const SizedBox(height: T.s3),
             Text(
               'We only use these to work out utilisation and due dates.',
-              style: T.bodySmall.copyWith(color: scheme.onSurfaceVariant),
+              style: T.bodySmall.copyWith(color: p.inkMuted),
             ),
             const SizedBox(height: T.s4),
             SizedBox(

@@ -18,33 +18,79 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final scheme = Theme.of(context).colorScheme;
+    final p = T.of(context);
     final data = state.data;
     final themeController = _themeController(context);
     final chevron = Icon(
       Icons.chevron_right_rounded,
-      color: scheme.onSurfaceVariant,
+      color: p.inkMuted,
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings'), titleSpacing: T.s5),
+      appBar: AppBar(
+        title: const Text('Settings'),
+        titleSpacing: T.s5,
+        leading: IconButton(
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).maybePop(),
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+      ),
       body: SafeArea(
         top: false,
         bottom: false,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(T.s5, T.s2, T.s5, 96),
           children: [
-            Text(
-              'Everything here stays on this phone. There is no account, no '
-              'upload and no analytics.',
-              style: T.body.copyWith(color: scheme.onSurfaceVariant),
+            SoftSection(
+              padding: const EdgeInsets.all(T.s4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  IconBadge(
+                    icon: Icons.lock_rounded,
+                    color: p.primary,
+                    size: 42,
+                    iconSize: 21,
+                    radius: T.r3,
+                  ),
+                  const SizedBox(width: T.s3),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Private by construction',
+                          style: T.cardTitle.copyWith(
+                            color: p.ink,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'No account, no upload and no analytics. Everything '
+                          'here is read and kept on this phone.',
+                          style: T.bodySmall.copyWith(
+                            color: p.inkSecondary,
+                            height: 1.45,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: T.s6),
-            const SectionHeader(title: 'Data'),
+            const SizedBox(height: T.s5),
+            const SectionHeader(
+              title: 'Data',
+              padding: EdgeInsets.only(bottom: T.s2, left: T.s1),
+            ),
             SettingsCard(
               children: [
                 SettingsTile(
-                  icon: Icons.sms_outlined,
+                  icon: Icons.sms_rounded,
                   title: 'Scan SMS inbox',
                   subtitle: _lastScanLabel(data.lastScanAt),
                   trailing: state.isScanning
@@ -57,21 +103,21 @@ class SettingsScreen extends StatelessWidget {
                   onTap: state.isScanning ? null : state.scanInbox,
                 ),
                 const SettingsTile(
-                  icon: Icons.file_upload_outlined,
+                  icon: Icons.file_upload_rounded,
                   title: 'Import CSV',
                   subtitle: 'Coming soon',
                   enabled: false,
                   trailing: Pill('Soon', dense: true),
                 ),
                 const SettingsTile(
-                  icon: Icons.file_download_outlined,
+                  icon: Icons.file_download_rounded,
                   title: 'Export CSV',
                   subtitle: 'Coming soon',
                   enabled: false,
                   trailing: Pill('Soon', dense: true),
                 ),
                 SettingsTile(
-                  icon: Icons.delete_outline_rounded,
+                  icon: Icons.delete_rounded,
                   title: 'Clear all data',
                   subtitle: 'Removes parsed alerts and card settings',
                   danger: true,
@@ -81,11 +127,14 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: T.s5),
-            const SectionHeader(title: 'Demo'),
+            const SectionHeader(
+              title: 'Demo',
+              padding: EdgeInsets.only(bottom: T.s2, left: T.s1),
+            ),
             SettingsCard(
               children: [
                 SettingsTile(
-                  icon: Icons.science_outlined,
+                  icon: Icons.science_rounded,
                   title: 'Demo data',
                   subtitle:
                       'Generated on-device. Turn it off any time; your real '
@@ -103,7 +152,10 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: T.s5),
-            const SectionHeader(title: 'Privacy'),
+            const SectionHeader(
+              title: 'Privacy',
+              padding: EdgeInsets.only(bottom: T.s2, left: T.s1),
+            ),
             const SettingsCard(
               children: [
                 SettingsTile(
@@ -114,7 +166,7 @@ class SettingsScreen extends StatelessWidget {
                       'account is required.',
                 ),
                 SettingsTile(
-                  icon: Icons.admin_panel_settings_outlined,
+                  icon: Icons.admin_panel_settings_rounded,
                   title: 'Permissions',
                   subtitle: 'READ_SMS is used only to read bank alerts.',
                 ),
@@ -124,7 +176,10 @@ class SettingsScreen extends StatelessWidget {
             // settings loses the control instead of crashing the screen.
             if (themeController != null) ...[
               const SizedBox(height: T.s5),
-              const SectionHeader(title: 'Appearance'),
+              const SectionHeader(
+                title: 'Appearance',
+                padding: EdgeInsets.only(bottom: T.s2, left: T.s1),
+              ),
               AppCard(
                 padding: const EdgeInsets.all(T.s4),
                 child: Column(
@@ -132,15 +187,13 @@ class SettingsScreen extends StatelessWidget {
                   children: [
                     Text(
                       'Theme',
-                      style: T.cardTitle.copyWith(color: scheme.onSurface),
+                      style: T.cardTitle.copyWith(color: p.ink),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'System follows your phone. Light and dark apply '
-                      'everywhere.',
-                      style: T.bodySmall.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+                      'System follows your phone. Light and dark are both '
+                      'designed for this app.',
+                      style: T.bodySmall.copyWith(color: p.inkMuted),
                     ),
                     const SizedBox(height: T.s3),
                     SegmentedButton<AppThemePreference>(
@@ -169,7 +222,10 @@ class SettingsScreen extends StatelessWidget {
               ),
             ],
             const SizedBox(height: T.s5),
-            const SectionHeader(title: 'About'),
+            const SectionHeader(
+              title: 'About',
+              padding: EdgeInsets.only(bottom: T.s2, left: T.s1),
+            ),
             SettingsCard(
               children: [
                 SettingsTile(
@@ -178,7 +234,7 @@ class SettingsScreen extends StatelessWidget {
                   subtitle: 'Offline by design',
                   trailing: Text(
                     '1.0.0',
-                    style: T.body.copyWith(color: scheme.onSurface),
+                    style: T.body.copyWith(color: p.ink),
                   ),
                 ),
                 SettingsTile(
@@ -190,11 +246,11 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: T.s5),
+            const SizedBox(height: T.s6),
             Center(
               child: Text(
                 'No account. No upload. No analytics.',
-                style: T.bodySmall.copyWith(color: scheme.onSurfaceVariant),
+                style: T.bodySmall.copyWith(color: p.inkMuted, fontSize: 12),
               ),
             ),
           ],
@@ -205,6 +261,7 @@ class SettingsScreen extends StatelessWidget {
 
   Future<void> _confirmClear(BuildContext context) async {
     final state = context.read<AppState>();
+    final p = T.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -214,9 +271,7 @@ class SettingsScreen extends StatelessWidget {
             'This removes parsed alerts, card settings and demo data from '
             'this phone. Nothing has ever been uploaded, and there is no '
             'account to delete.',
-            style: T.body.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+            style: T.body.copyWith(color: p.inkSecondary),
           ),
           actions: [
             TextButton(
@@ -225,8 +280,8 @@ class SettingsScreen extends StatelessWidget {
             ),
             FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: T.danger,
-                foregroundColor: Colors.white,
+                backgroundColor: p.danger,
+                foregroundColor: p.isDark ? T.brandDeep : Colors.white,
               ),
               onPressed: () => Navigator.of(context).pop(true),
               child: const Text('Clear'),
@@ -239,7 +294,7 @@ class SettingsScreen extends StatelessWidget {
     await state.clearAll();
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Local data stays on this phone.')),
+      const SnackBar(content: Text('Local data cleared.')),
     );
   }
 

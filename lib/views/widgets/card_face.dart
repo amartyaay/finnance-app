@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../app/design_tokens.dart';
-import '../../app/widgets/kit.dart';
 import '../../domain/money.dart';
 import '../../engine/card_metrics.dart';
 import 'txn_common.dart';
@@ -13,8 +12,8 @@ import 'txn_common.dart';
 /// text settings rather than clip.
 double cardFaceHeight(BuildContext context, {bool compact = false}) {
   final scale = MediaQuery.textScalerOf(context).scale(10) / 10;
-  return (compact ? 138.0 : 206.0) +
-      (scale - 1).clamp(0.0, 0.6) * (compact ? 34 : 86);
+  return (compact ? 146.0 : 222.0) +
+      (scale - 1).clamp(0.0, 0.6) * (compact ? 40 : 90);
 }
 
 /// One credit card, drawn as a card: tonal by issuer, masked number in tracked
@@ -168,7 +167,7 @@ class _FullFace extends StatelessWidget {
                 style: T.label.copyWith(
                   color: mutedInk,
                   letterSpacing: 1.4,
-                  fontSize: 11.5,
+                  fontSize: 12,
                 ),
               ),
             ),
@@ -221,12 +220,12 @@ class _FullFace extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    hasBill ? 'TOTAL DUE' : 'SPENT THIS CYCLE',
+                    hasBill ? 'Total due' : 'Spent this cycle',
                     maxLines: 1,
                     style: T.label.copyWith(
                       color: mutedInk,
-                      fontSize: 11.5,
-                      letterSpacing: 1.1,
+                      fontSize: 12,
+                      letterSpacing: 0.4,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -258,9 +257,6 @@ class _FullFace extends StatelessWidget {
               color: glow,
               ink: ink,
               mutedInk: mutedInk,
-              caption: metrics.limit.value > 0
-                  ? 'of ${inrCompact(metrics.limit)}'
-                  : 'no limit',
             ),
           ],
         ),
@@ -399,28 +395,33 @@ class _DueChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: T.s2, vertical: 4),
-        decoration: BoxDecoration(
-          color: ink.withValues(alpha: 0.14),
-          borderRadius: BorderRadius.circular(T.r5),
-          border: Border.all(color: ink.withValues(alpha: 0.16)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.event_rounded, size: 13, color: glow),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              maxLines: 1,
-              style: T.bodySmall.copyWith(
-                color: ink,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: T.s2, vertical: 4),
+          decoration: BoxDecoration(
+            color: ink.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(T.r5),
+            border: Border.all(color: ink.withValues(alpha: 0.16)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.event_rounded, size: 13, color: glow),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                maxLines: 1,
+                softWrap: false,
+                style: T.bodySmall.copyWith(
+                  color: ink,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -433,14 +434,12 @@ class _FaceGauge extends StatelessWidget {
     required this.color,
     required this.ink,
     required this.mutedInk,
-    required this.caption,
   });
 
   final int? percent;
   final Color color;
   final Color ink;
   final Color mutedInk;
-  final String caption;
 
   @override
   Widget build(BuildContext context) {
@@ -448,8 +447,8 @@ class _FaceGauge extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
-          width: 62,
-          height: 62,
+          width: 70,
+          height: 70,
           child: Stack(
             alignment: Alignment.center,
             children: [
@@ -459,7 +458,7 @@ class _FaceGauge extends StatelessWidget {
                   duration: T.chartDraw,
                   curve: T.curveOut,
                   builder: (context, value, _) => CustomPaint(
-                    size: const Size.square(62),
+                    size: const Size.square(70),
                     painter: _MiniArcPainter(
                       value: value,
                       color: color,
@@ -473,18 +472,18 @@ class _FaceGauge extends StatelessWidget {
                 maxLines: 1,
                 style: T.money.copyWith(
                   color: ink,
-                  fontSize: 14.5,
+                  fontSize: 15,
                   fontWeight: FontWeight.w700,
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 1),
         Text(
-          caption,
+          'used',
           maxLines: 1,
-          style: T.bodySmall.copyWith(color: mutedInk, fontSize: 11.5),
+          style: T.bodySmall.copyWith(color: mutedInk, fontSize: 12),
         ),
       ],
     );
@@ -595,4 +594,14 @@ class _PressableState extends State<_Pressable> {
     return AnimatedScale(
       scale: _pressed ? 0.985 : 1,
       duration: const Duration(milliseconds: 120),
-     
+      curve: Curves.easeOut,
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTap: widget.onTap,
+        child: widget.child,
+      ),
+    );
+  }
+}

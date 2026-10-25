@@ -5,6 +5,8 @@ import '../data/demo_repository.dart';
 import '../data/finance_repository.dart';
 import '../data/sqlite_finance_repository.dart';
 import '../domain/enums.dart';
+import '../domain/inbox_store.dart';
+import '../domain/merchant_rule.dart';
 import '../domain/transaction.dart';
 import '../engine/card_metrics.dart';
 import '../services/sms_reader.dart';
@@ -47,6 +49,18 @@ class AppState extends ChangeNotifier {
   FinanceRepository get _active => _demoMode
       ? (_demoRepository ??= DemoFinanceRepository(now: _now()))
       : _realRepository;
+
+  /// The stored-SMS surface, when the active source really has an inbox.
+  ///
+  /// Demo data and generated repositories have no `sms_messages` table, so this
+  /// is null there and the optional "All messages" screen shows its explanatory
+  /// empty state instead of pretending to list messages.
+  InboxStore? get inboxStore {
+    if (_demoMode) return null;
+    final Object repository = _realRepository;
+    if (repository is InboxStore) return repository;
+    return null;
+  }
 
   Future<void> init() async {
     _isLoading = true;
@@ -129,6 +143,35 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Re-derives the whole ledger from the stored messages.
+  ///
+  /// Used after a parser upgrade (also triggered automatically when
+  /// `parserVersion` changes) and available to Settings as a repair action.
+  /// User category choices and learned merchant rules are preserved.
+  Future<void> reparse() async {
+    if (_isScanning) return;
+    _isScanning = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      await _active.reparseAll();
+      _data = await _active.load();
+    } catch (error) {
+      _errorMessage = _friendly(error);
+    } finally {
+      _isScanning = false;
+      notifyListeners();
+    }
+  }
+
+  /// Removes a card the user says is not theirs (e.g. an account mask an older
+  /// build mistook for plastic).
+  Future<void> deleteCard(String issuer, String last4) async {
+    await _active.deleteCard(issuer, last4);
+    _data = await _active.load();
+    notifyListeners();
+  }
+
   Future<void> setCategory(
     Txn txn,
     String categoryName,
@@ -139,6 +182,25 @@ class AppState extends ChangeNotifier {
       categoryName: categoryName,
       kind: kind,
     );
+    _data = await _active.load();
+    notifyListeners();
+  }
+
+  /// "Not a transaction": removes the row and teaches the repository the shape
+  /// of the alert so the next scan does not add it back.
+  Future<void> notATransaction(Txn txn) async {
+    await _active.excludeTxn(txn.key);
+    _data = await _active.load();
+    notifyListeners();
+  }
+
+  /// The merchant rules the user has taught, most used first (Settings).
+  Future<List<MerchantRule>> merchantRules() => _active.merchantRules();
+
+  /// Undoes a learned merchant rule. Existing rows keep their category; future
+  /// scans fall back to the bundled categoriser.
+  Future<void> forgetMerchantRule(String signature) async {
+    await _active.forgetMerchantRule(signature);
     _data = await _active.load();
     notifyListeners();
   }

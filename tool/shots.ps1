@@ -38,6 +38,22 @@ iframe{border:0;display:block;width:${width}px;height:${height}px}
       --virtual-time-budget=30000 --screenshot=$out $url 2>&1 | Out-Null
     Write-Output "captured $out"
   }
+
+  # One designed dark-mode capture. The default run above stays light.
+  $darkFrame = @"
+<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;padding:0;background:#07110D}
+iframe{border:0;display:block;width:${width}px;height:${height}px}
+</style></head><body>
+<iframe src="index.html?demo=1&theme=dark&v=$((Get-Date).Ticks)&tab=0"></iframe>
+</body></html>
+"@
+  $darkPath = Join-Path $web 'shot-home-dark.html'
+  [System.IO.File]::WriteAllText($darkPath, $darkFrame, (New-Object System.Text.UTF8Encoding($false)))
+  $darkOut = Join-Path $outDir 'home-dark.png'
+  & $chrome --headless=new --incognito --disable-gpu --hide-scrollbars --window-size=$width,$height `
+    --virtual-time-budget=30000 --screenshot=$darkOut 'http://127.0.0.1:8123/shot-home-dark.html' 2>&1 | Out-Null
+  Write-Output "captured $darkOut"
 } finally {
   Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
 }

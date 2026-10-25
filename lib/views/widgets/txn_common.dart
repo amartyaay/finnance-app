@@ -5,9 +5,14 @@ import '../../domain/enums.dart';
 import '../../domain/transaction.dart';
 
 /// One colour and icon per spend category, so a category looks the same on
-/// Activity, Cards and Insights without each screen re-picking a hue.
-Color categoryColor(SpendCategoryKind kind) =>
-    T.chart[kind.index % T.chart.length];
+/// Activity, Cards and Insights without each screen re-picking a hue. This is a
+/// single-hue ramp keyed by kind (never by rank), so a category keeps its shade
+/// as the month reorders, and a red-green colour-blind reader still sees
+/// luminance steps. Every chart also prints names and amounts.
+Color categoryColor(BuildContext context, SpendCategoryKind kind) {
+  final palette = T.of(context).ramp;
+  return palette[kind.index % palette.length];
+}
 
 IconData categoryIcon(SpendCategoryKind kind) => switch (kind) {
   SpendCategoryKind.food => Icons.restaurant_rounded,

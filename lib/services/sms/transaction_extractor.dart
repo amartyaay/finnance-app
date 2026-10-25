@@ -2,6 +2,7 @@ import '../../domain/enums.dart';
 import '../../domain/hashing.dart';
 import '../../domain/sms_message.dart';
 import '../../domain/transaction.dart';
+import '../../engine/review_queue.dart';
 import 'amount_finder.dart';
 import 'sender_registry.dart';
 import 'sms_guards.dart';
@@ -54,7 +55,89 @@ class TransactionExtractor {
     r'\b(?:mutual\s*fund|sip|systematic\s+investment|demat|broker|zerodha|groww|'
     r'upstox|indmoney|smallcase|nps|ppf|fixed\s+deposit|recurring\s+deposit|'
     r'\bfd\b|\brd\b|stock|equity|ipo|'
-    r'prudential|amc|asset\s*manag\w*|mf(?![-*])|nav)\b',
+    r'prudential|amc|asset\s*manag\w*|mf(?![-*])|nav|'
+    // Real debit-mandate SIPs print the AMC's *name + folio code*, never the
+    // word "SIP": `via Debit Mandate for NIPPONMUTUA_REL261124_…`.
+    r'nippon|bandhan|kfin|motilal|white\s*oak|whiteoak|franklin|hdfc\s*mf|'
+    r'icici\s*pru|debit\s*mandate|nach\s*mandate)\b',
+    caseSensitive: false,
+  );
+
+  /// A loan/EMI debit is repayment of principal, not consumption.
+  static final RegExp _loanEmi = RegExp(
+    r'\b(?:emi|loan\s*(?:emi|repayment|instal?ment|a/?c|account)|'
+    r'(?:car|home|personal|two[- ]wheeler|education)\s*loan)\b',
+    caseSensitive: false,
+  );
+
+  // ---- money-in taxonomy -------------------------------------------------
+
+  /// Salary / wages. The only inflow that makes a savings rate meaningful.
+  static final RegExp _salaryWord = RegExp(
+    r'\b(?:salary|sal\s*cr|wages|payroll|pension|stipend|arrears|bonus\s+credit)\b',
+    caseSensitive: false,
+  );
+
+  /// Interest / dividend credited to the user.
+  static final RegExp _interestWord = RegExp(
+    r'\b(?:interest|dividend)\b',
+    caseSensitive: false,
+  );
+
+  /// A payment credited **to the user's own credit card** — the card bill being
+  /// paid off. Never income.
+  static final RegExp _cardPaymentCredit = RegExp(
+    r'\b(?:payment|paid|amount)\b.{0,60}\bcredited to your card\b|'
+    r'\bcredited to your card\b.{0,50}\b(?:payment|ref#|on)\b|'
+    r'\bpayment\b.{0,80}\btowards your\b.{0,40}\bcredit\s*card\b|'
+    r'\bthank you for (?:your )?payment\b|'
+    r'\bpayment (?:of|towards)\b.{0,60}\b(?:credit card|card ending)\b',
+    caseSensitive: false,
+  );
+
+  /// An FD/TD closing and paying its principal into the account.
+  static final RegExp _redemptionWord = RegExp(
+    r'\bclosure of (?:td|fd|term\s*deposit|fixed\s*deposit)\b|'
+    r'\b(?:td|fd)\s*closure\b|\bon account of closure\b|'
+    r'\b(?:maturity|matured)\b.{0,30}\b(?:proceeds|credited|paid)\b|'
+    r'\bredemption\b|\bswitched?\s+out\b',
+    caseSensitive: false,
+  );
+
+  static final RegExp _refundWord = RegExp(
+    r'\b(?:refund(?:ed)?|reversal|reversed|chargeback|returned)\b',
+    caseSensitive: false,
+  );
+
+  static final RegExp _cashbackWord = RegExp(
+    r'\b(?:cashback|cash\s*back|reward\s*points?|rewards?\s+credited)\b',
+    caseSensitive: false,
+  );
+
+  /// A meal/flexi/wallet load. The Pluxee template puts the wallet *after* the
+  /// credit verb (`… credited with Rs.2200 towards Meal Wallet`).
+  static final RegExp _walletCreditWord = RegExp(
+    r'\b(?:credited|loaded|top\s*up|topup)\b.{0,50}'
+    r'\b(?:wallet|meal\s*wallet|pluxee|sodexo|flexi|upi\s*lite)\b|'
+    r'\b(?:wallet|meal\s*wallet)\b.{0,40}\b(?:credited|loaded|top\s*up|topup)\b',
+    caseSensitive: false,
+  );
+
+  /// A credit from another person / a named payer (P2P), not income.
+  static final RegExp _p2pCreditWord = RegExp(
+    r'\bdeposit by transfer\b|\bfrom\s+(?:Mr|Mrs|Ms|Dr)\.?\s|'
+    r'\bfrom\s+vpa\b|\breceived from\b|\btransfer(?:red)? from\b|'
+    r'\bby\s+(?:neft|imps|rtgs)\s+from\b',
+    caseSensitive: false,
+  );
+
+  /// A wallet credit inside marketing copy (`Get Rs.100 wallet credit`,
+  /// `get a Rs.750 Amazon Pay Gift Card`) is an offer, not a movement of money.
+  static final RegExp _walletOfferWording = RegExp(
+    r'\b(?:get|earn|win|upto|up to|save\s+(?:up\s*to\s*)?\d+|claim|grab|unlock)\b'
+    r'.{0,40}\b(?:wallet|credits?|gift\s*card|voucher|cashback)\b|'
+    r'\bwallet\s*credits?\b.{0,30}\bcode\b|'
+    r'\bcode\s*:',
     caseSensitive: false,
   );
 
@@ -102,7 +185,7 @@ class TransactionExtractor {
     r'[\s:.#-]*',
     caseSensitive: false,
   );
-  static final RegExp _maskSegment = RegExp(r'[xX*]{1,8}[\s-]*\d{3,5}');
+  static final RegExp _maskSegment = RegExp(r'[xX*]{1,12}[\s-]*\d{3,5}');
   static final RegExp _bareMaskDigits = RegExp(r'^\s*(\d{3,5})(?!\d)');
 
   static final RegExp _billRef = RegExp(
@@ -266,13 +349,48 @@ class TransactionExtractor {
     // account to another account — they are transfers, not consumption.
     final bankTransfer =
         _p2pPayee.hasMatch(body) || _debitByTransfer.hasMatch(lower);
-    final transferReason = _transferReason(lower, isCredit: isCredit);
-    final kind = bankTransfer && !cash
+    // Money-in taxonomy first: a card-bill credit, refund, TD redemption or
+    // wallet load must never be treated as income (only salary/interest are).
+    final moneyIn = isCredit
+        ? _moneyInKind(lower, body, sender)
+        : MoneyInKind.none;
+    // A marketing credit (`Get Rs.100 wallet credit`) is not a movement at all.
+    if (isCredit && moneyIn == MoneyInKind.none) return null;
+    // Only the inflows that are *really* account movements become transfers:
+    // a card bill being paid off, a TD being redeemed, a wallet being loaded.
+    // Refunds/cashback/P2P stay on the credit side of the ledger but are
+    // excluded from income by [MoneyInKind] (never by TxnKind).
+    const transferInflows = {
+      MoneyInKind.cardPayment,
+      MoneyInKind.redemption,
+      MoneyInKind.walletLoad,
+    };
+    final isTransferInflow = transferInflows.contains(moneyIn);
+    final transferReason = isTransferInflow
+        ? moneyIn.asTransferReason
+        : (moneyIn.isInflow
+              ? TransferReason.none
+              : _transferReason(lower, isCredit: isCredit));
+    final kind = cash
+        ? TxnKind.cash
+        : isTransferInflow
         ? TxnKind.transfer
-        : _kind(isCredit: isCredit, cash: cash, transferReason: transferReason);
+        : moneyIn.isInflow
+        ? TxnKind.income
+        : (bankTransfer
+              ? TxnKind.transfer
+              : _kind(
+                  isCredit: isCredit,
+                  cash: cash,
+                  transferReason: transferReason,
+                ));
     final reference = _reference(body);
     final instrument = _instrument(body, lower, sender);
     final last4 = _extractLast4(body);
+    // A card key may only come from a mask the message calls a **card**. A
+    // savings-account tail (`A/c XX1234`) is not a plastic, and treating it as
+    // one turned 11 savings accounts into phantom credit cards.
+    final cardLast4 = _extractCardLast4(body, sender);
     final issuer = _issuer(lower, sender);
     final vpa = _counterpartyVpa(body);
     final merchant = _merchant(body, cash: cash) ??
@@ -281,8 +399,8 @@ class TransactionExtractor {
     final balance = amountFinder.balanceAfter(body);
     final availableLimit = amountFinder.availableLimit(body);
 
-    final cardKey = (last4 != null)
-        ? '${issuer ?? (sender.entity ?? 'Card')}|$last4'
+    final cardKey = (cardLast4 != null)
+        ? '${issuer ?? (sender.entity ?? 'Card')}|$cardLast4'
         : null;
 
     final confidence = _confidence(
@@ -294,8 +412,13 @@ class TransactionExtractor {
       balanceFound: balance != null,
     );
 
-    final needsReview = best.score < 4 ||
-        (merchant == null && vpa == null && kind == TxnKind.spend);
+    final needsReview = ReviewQueue.shouldReview(
+      kind: kind,
+      confidence: confidence,
+      merchant: merchant,
+      vpa: vpa,
+      amountScore: best.score,
+    );
 
     return Txn(
       key: 'sms:${smsContentId(sender: message.sender, receivedAtMs: message.receivedAtMs, body: message.body)}',
@@ -308,6 +431,7 @@ class TransactionExtractor {
       merchant: merchant,
       counterpartyVpa: vpa,
       transferReason: transferReason,
+      moneyInKind: moneyIn,
       cardKey: cardKey,
       last4: last4,
       issuer: issuer,
@@ -315,6 +439,7 @@ class TransactionExtractor {
       balanceAfterPaise: balance?.paise,
       availableLimitPaise: availableLimit?.paise,
       confidence: confidence,
+      amountScore: best.score,
       sourceType: TxnSourceType.sms,
       needsReview: needsReview,
       rawBody: body,
@@ -334,23 +459,67 @@ class TransactionExtractor {
   }
 
   TransferReason _transferReason(String lower, {required bool isCredit}) {
-    if (_creditCardBill.hasMatch(lower)) return TransferReason.creditCardBill;
+    if (_creditCardBill.hasMatch(lower) || _cardPaymentCredit.hasMatch(lower)) {
+      return TransferReason.creditCardBill;
+    }
     if (_selfTransfer.hasMatch(lower)) return TransferReason.selfTransfer;
-    if (_walletLoad.hasMatch(lower)) return TransferReason.walletLoad;
+    if (_walletLoad.hasMatch(lower) || _walletCreditWord.hasMatch(lower)) {
+      return TransferReason.walletLoad;
+    }
+    if (_loanEmi.hasMatch(lower)) return TransferReason.loanRepayment;
     if (_investment.hasMatch(lower)) return TransferReason.investment;
+    if (!isCredit && _redemptionWord.hasMatch(lower)) {
+      return TransferReason.selfTransfer;
+    }
     // Outbound third-party payout (E02-E05) and numeric-VPA P2P (A09) are
-    // movements of money between people, not consumption.
+    // movements of money between people, not consumption. `personTransfer` is
+    // the honest label — "between your own accounts" was wrong for a payout to
+    // a landlord or a friend.
     if (!isCredit) {
       if (_thirdPartyRail.hasMatch(lower) || _numericVpa.hasMatch(lower)) {
-        return TransferReason.selfTransfer;
+        return TransferReason.personTransfer;
       }
+      if (_p2pPayee.hasMatch(lower)) return TransferReason.personTransfer;
       if (_upiWord.hasMatch(lower) &&
           _creditedWord.hasMatch(lower) &&
           !_vpaPattern.hasMatch(lower)) {
-        return TransferReason.selfTransfer;
+        return TransferReason.personTransfer;
       }
     }
     return TransferReason.none;
+  }
+
+  /// Classifies a credit-direction message into the money-in taxonomy.
+  ///
+  /// Order matters: a card-bill credit and a TD redemption must be recognised
+  /// before the generic "credited" fallback, because both contain the word
+  /// "credited" and neither is income.
+  MoneyInKind _moneyInKind(String lower, String body, SenderId sender) {
+    // Marketing copy that merely *mentions* a credit is not a movement.
+    if (_walletOfferWording.hasMatch(lower) &&
+        !RegExp(r'\bhas been credited\b|\bwas credited\b').hasMatch(lower)) {
+      return MoneyInKind.none;
+    }
+    final cardWording =
+        RegExp(r'\bcard\b').hasMatch(lower) ||
+        sender.entityKind == 'card' ||
+        RegExp(r'\bcredit\s*card\b').hasMatch(lower);
+    if (_cardPaymentCredit.hasMatch(lower) && cardWording) {
+      return MoneyInKind.cardPayment;
+    }
+    if (_redemptionWord.hasMatch(lower)) return MoneyInKind.redemption;
+    if (_refundWord.hasMatch(lower)) return MoneyInKind.refund;
+    if (_cashbackWord.hasMatch(lower)) return MoneyInKind.cashback;
+    if (_salaryWord.hasMatch(lower)) return MoneyInKind.salary;
+    if (_interestWord.hasMatch(lower)) return MoneyInKind.interest;
+    if (_walletCreditWord.hasMatch(lower)) return MoneyInKind.walletLoad;
+    if (_p2pCreditWord.hasMatch(lower)) return MoneyInKind.p2pReceive;
+    // An anonymous "credited to your a/c" is the user's own money moving
+    // between their accounts until something names a payer.
+    if (RegExp(r'\b(?:a/?c|account|acct)\b').hasMatch(lower)) {
+      return MoneyInKind.selfTransfer;
+    }
+    return MoneyInKind.selfTransfer;
   }
 
   TxnKind _kind({
@@ -423,6 +592,47 @@ class TransactionExtractor {
     }
     return null;
   }
+
+  /// A **card** tail only: the mask must sit in card wording (`card`,
+  /// `credit card`, `CC`, `Amex`, `corporate card`) or the sender must be a
+  /// card issuer. An `A/c XX1234` / `account` mask is a deposit account and
+  /// must never mint a credit card (the 21-cards-for-3-plastics bug).
+  String? _extractCardLast4(String body, SenderId sender) {
+    final cardSender = sender.entityKind == 'card';
+    final contexts = <Match>[
+      ..._cardContext.allMatches(body),
+    ];
+    if (contexts.isEmpty && !cardSender) return null;
+    for (final context in contexts) {
+      final tail = body.substring(
+        context.end,
+        (context.end + 40).clamp(0, body.length),
+      );
+      final segments = _maskSegment.allMatches(tail).toList();
+      if (segments.isNotEmpty) {
+        final raw = segments.first.group(0)!.replaceAll(RegExp(r'[^0-9]'), '');
+        if (raw.length >= 3) {
+          return raw.length > 4 ? raw.substring(raw.length - 4) : raw;
+        }
+      }
+      // `Credit Card 5444` / `Card 6859` prints the tail with no mask glyph.
+      final bare = _bareMaskDigits.firstMatch(tail);
+      if (bare != null) return bare.group(1);
+    }
+    // A card-issuer header with a single mask elsewhere in the body is still a
+    // card: `AMEX Corporate Card **********91008`.
+    if (cardSender) return _extractLast4(body);
+    return null;
+  }
+
+  /// Card context for a mask: the word "card" (or `CC`/`Amex`) followed by an
+  /// optional `no.`/`ending`, within a short distance of the mask.
+  static final RegExp _cardContext = RegExp(
+    r'\b(?:credit\s*card|corporate\s*card|debit\s*card|prepaid\s*card|'
+    r'card(?:\s*(?:no\.?|number|ending(?:\s*(?:with|in|no\.?))?))?|'
+    r'cc|amex|american\s*express)\b',
+    caseSensitive: false,
+  );
 
   String? _issuer(String lower, SenderId sender) {
     // 1. A wallet brand named in the body beats the sender header: a Paytm
@@ -662,31 +872,86 @@ class TransactionExtractor {
     return score.clamp(0.05, 0.99);
   }
 
-  /// Extracts a card bill notice (total due / min due / due date) from an SMS.
+  /// Extracts a card bill notice (total due / min due / statement date / due
+  /// date) from **any** message, including statement SMS that the classifier
+  /// calls informational. A bill was never persisted because this used to run
+  /// only for `isTransaction` messages.
   CardBillNotice? billNotice(SmsMessage message, SenderId sender) {
     final body = message.body;
     final lower = body.toLowerCase();
     if (!RegExp(r'\b(due|outstanding|statement|bill)\b').hasMatch(lower)) {
       return null;
     }
+    // Only a *card* statement. `SIP instalment … is due`, `KYC update due` and
+    // utility bills must not invent credit-card debt.
+    if (!_isCardBillMessage(body, lower, sender)) return null;
     final total = _amountAfterLabel(body, const [
-      'total due', 'total amount due', 'total outstanding', 'bill amount',
-      'amount due', 'total amount', 'outstanding amount', 'payment due',
+      'total amount due', 'total amt due', 'total due', 'total outstanding',
+      'total payment', 'total amt', 'total amount', 'bill amount',
+      'amount due', 'amt due', 'outstanding amount', 'payment due',
     ]);
     if (total == null) return null;
     final minimum = _amountAfterLabel(body, const [
-      'minimum due', 'min due', 'minimum amount due', 'min amt due', 'minimum payment due',
+      'minimum amount due', 'minimum payment due', 'minimum due', 'min amt due',
+      'min due', 'minimum amt',
     ]);
-    final dueDate = _dateAfterLabel(body, const ['due date', 'pay by', 'due on', 'by']);
-    final last4 = _extractLast4(body);
+    final dueDate = _dateAfterLabel(body, const [
+      'due date', 'due on', 'due by', 'pay by', 'pay before',
+    ]);
+    final statementDate = _statementDate(body, message.receivedAtMs);
+    final cardLast4 = _extractCardLast4(body, sender);
     final issuer = _issuer(lower, sender);
     return CardBillNotice(
-      cardKey: '${issuer ?? (sender.entity ?? 'Card')}|${last4 ?? '0000'}',
+      // An empty tail means "the card was not printed"; the builder attributes
+      // such a bill only when the issuer has exactly one card.
+      cardKey: '${issuer ?? (sender.entity ?? 'Card')}|${cardLast4 ?? ''}',
       totalDuePaise: total,
       minimumDuePaise: minimum,
       dueDateMs: dueDate?.millisecondsSinceEpoch,
+      statementDateMs: statementDate,
       receivedAtMs: message.receivedAtMs,
     );
+  }
+
+  static final RegExp _cardBillWording = RegExp(
+    r'\b(?:credit\s*card|card\s*(?:no\.?|number|ending)|corporate\s*card|'
+    r'amex|statement\s+(?:for|of)\b.{0,30}\bcard|card\s+statement)\b',
+    caseSensitive: false,
+  );
+
+  bool _isCardBillMessage(String body, String lower, SenderId sender) {
+    if (_cardBillWording.hasMatch(lower)) return true;
+    if (sender.entityKind == 'card') return true;
+    // `AMEX Corporate Card **********91008 has been generated.`
+    if (RegExp(r'\bcard\b[\s:*#-]*[x*]{2,}\d{2,5}').hasMatch(lower)) return true;
+    return false;
+  }
+
+  /// Statement date: an explicit label, a `<date> statement` phrase, or — for
+  /// the "your statement … has been generated" template — the day the alert
+  /// arrived (banks send it on the statement date).
+  int? _statementDate(String body, int receivedAtMs) {
+    final explicit = _dateAfterLabel(body, const [
+      'statement date', 'statement on', 'statement for',
+    ]);
+    if (explicit != null) return explicit.millisecondsSinceEpoch;
+    final before = RegExp(
+      r'(\d{1,2}[-/\s](?:[A-Za-z]{3,9}|\d{1,2})[-/\s]\d{2,4})\s+statement',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (before != null) {
+      final parts = RegExp(r'(\d{1,2})[-/\s]([A-Za-z]{3,9}|\d{1,2})[-/\s](\d{2,4})')
+          .firstMatch(before.group(1)!);
+      if (parts != null) {
+        final parsed = _parseDate(parts.group(1)!, parts.group(2)!, parts.group(3)!);
+        if (parsed != null) return parsed.millisecondsSinceEpoch;
+      }
+    }
+    if (RegExp(r'\bstatement\b.{0,60}\b(?:generated|is ready|ready)\b',
+        caseSensitive: false).hasMatch(body)) {
+      return receivedAtMs;
+    }
+    return null;
   }
 
   int? _amountAfterLabel(String body, List<String> labels) {
