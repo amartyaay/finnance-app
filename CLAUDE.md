@@ -39,7 +39,7 @@ iteration. Working branch: `main` (single-developer repo).
 | Round | Commit | Frontend | Principal | Finance | End user | Main gaps called out |
 |---|---|---:|---:|---:|---:|---|
 | 1 | `da88e2f` | 6.4 | 6.7 | 6.2 | 5.3 | Money-in fictional (card payments/refunds/TD booked as income, SIPs as spend); `card_bills` always empty; savings accounts as cards; dedupe merges SWIGGY+ZOMATO and deletes a payment; a11y contrast 3.78:1; cards tab 0 % (dart2js clamp); no learning from corrections |
-| 2 | `abd2f3f` | pending | pending | pending | **6.8** | Two different "out" figures (Home ₹33k vs Activity ₹20,313); no coherent money-in story; inert insight tiles; review banner opens all 2 000 rows; "36 entries" under an October heading; duplicate per-day figure; notification prints ₹105590 ungrouped |
+| 2 | `c87e42b` | **7.1** | **7.4** | **7.2** | **6.8** | **Card-bill double count: 6 HDFC payment pairs = ₹44,497.59 counted twice** (180 s window can't see a 1–2 day gap); "out" undefined across tabs (Home ₹33k vs Activity ₹20,313); Activity says "+₹3,939 in" while Home says no income; card intelligence is model-only (no basis labels, Axis 0 % vs ring 6 %, derived limit unlabelled and frozen); 8 of 18 SIP confirmations (~₹24,000) and 3 UPI Lite top-ups (₹7,534) dropped; a two-leg transfer booked as ₹5,000 spend; both remaining fraud flags are genuine Airtel KYC notices; 360 dp overflow in Insights (auto-fail) |'
 
 Round-1 evidence: `docs/eval/round-1/`; round-2: `docs/eval/round-2/`.
 
@@ -47,7 +47,7 @@ Round-1 evidence: `docs/eval/round-1/`; round-2: `docs/eval/round-2/`.
 
 | Metric | Start | Round 1 | Now |
 |---|---:|---:|---:|
-| Evaluator scores | — | 5.3 / 6.2 / 6.4 / 6.7 | end user **6.8**; other three pending |
+| Evaluator scores | — | 5.3 / 6.2 / 6.4 / 6.7 | **6.8 / 7.1 / 7.2 / 7.4** (mean 7.1) |
 | Fixture corpus | 43.1 % (broken build) | 99.1 % / 100 % | **109/109** transactions, 100 % classification (the corpus has 109 checks; an earlier note said 111 — wrong) |
 | `flutter test` | 29 (old MVP) | 214 / 1 | **240/240** |
 | "Other" share of spend | 71.7 % | 2.9 % | **0.7 %** |

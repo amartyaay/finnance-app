@@ -7,14 +7,17 @@ import '../app/design_tokens.dart';
 import '../app/widgets/kit.dart';
 import '../data/finance_repository.dart';
 import '../domain/money.dart';
+import '../domain/sms_inbox.dart';
 import '../domain/transaction.dart';
 import '../engine/card_metrics.dart';
 import '../engine/insights_engine.dart';
 import '../engine/monthly_summary.dart';
 import '../state/app_state.dart';
 import 'sms_inbox_screen.dart';
+import 'transactions_screen.dart';
 import 'widgets/card_face.dart';
 import 'widgets/charts.dart';
+import 'widgets/money_in_breakdown.dart';
 import 'widgets/txn_common.dart';
 import 'widgets/txn_detail_sheet.dart';
 import 'widgets/txn_row.dart';
@@ -22,10 +25,18 @@ import 'widgets/txn_row.dart';
 /// The dashboard. Answers three questions in one screen, in this order:
 /// how much have I spent, is anything wrong, and where did it go.
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key, this.onNavigate, this.onOpenSettings});
+  const HomeScreen({
+    super.key,
+    this.onNavigate,
+    this.onOpenSettings,
+    this.onOpenActivity,
+  });
 
   /// Switches the shell tab (1 = activity, 2 = cards, 3 = insights).
   final ValueChanged<int>? onNavigate;
+
+  /// Opens Activity with a filter already applied (transfers, category, queue).
+  final ValueChanged<ActivityRequest>? onOpenActivity;
 
   final VoidCallback? onOpenSettings;
 
@@ -111,7 +122,10 @@ class HomeScreen extends StatelessWidget {
               children: [
                 Entrance(
                   index: 0,
-                  child: _HeroCard(data: data),
+                  child: _HeroCard(
+                    data: data,
+                    onOpenActivity: onOpenActivity,
+                  ),
                 ),
                 if (hasAttention) ...[
                   const SizedBox(height: T.s3),
@@ -193,37 +207,18 @@ class HomeScreen extends StatelessWidget {
     final cut = space > max ~/ 2 ? window.substring(0, space) : window;
     return '${cut.trimRight()}…';
   }
-
-  static String _monthShort(DateTime month) {
-    const names = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return names[month.month - 1];
-  }
 }
 
 class _HeroCard extends StatelessWidget {
-  const _HeroCard({required this.data});
+  const _HeroCard({required this.data, this.onOpenActivity});
 
   final HomeData data;
+  final ValueChanged<ActivityRequest>? onOpenActivity;
 
   @override
   Widget build(BuildContext context) {
     final p = T.of(context);
     final summary = data.summary;
-    final change = summary.monthOverMonth;
-    final up = change > 0;
 
     // True income only. When no salary/interest credit exists there is no honest
     // "left over", so the row reports what left the accounts and what is still
@@ -233,6 +228,9 @@ class _HeroCard extends StatelessWidget {
     final stats = <({String label, String value})>[
       if (hasIncome) ...[
         (label: 'Came in', value: inrCompact(summary.income)),
+        // The same definition Activity and Cards use: spend + cash + card
+        // bills, never category spend alone.
+        (label: 'Out this month', value: inrCompact(data.moneyOut)),
         (
           label: left.value < 0 ? 'Over' : 'Left',
           // "Over" is a magnitude, so it never carries a minus sign.
@@ -243,12 +241,12 @@ class _HeroCard extends StatelessWidget {
         if (data.unpaidBillCount > 0)
           (
             label: data.unpaidBillCount == 1
-                ? 'Bill due'
-                : 'Bills due (${data.unpaidBillCount})',
+                ? 'Still due'
+                : 'Still due (${data.unpaidBillCount})',
             value: inrCompact(data.stillDue),
           ),
+        (label: 'Spend / day', value: inrCompact(summary.dailyAverage)),
       ],
-      (label: 'Spend / day', value: inrCompact(summary.dailyAverage)),
     ];
 
     // Every part of the footnote is a model field, and each one says whether it
@@ -260,14 +258,32 @@ class _HeroCard extends StatelessWidget {
       if (cardBills > 0) '${inrCompact(Paise(cardBills))} card bills',
       if (cash > 0) '${inrCompact(Paise(cash))} cash',
     ];
-    final footnote = <String>[
-      if (included.isNotEmpty)
-        hasIncome
-            ? 'Left is after ${included.join(' + ')}'
-            : 'Out this month includes ${included.join(' + ')}',
-      if (otherTransfers > 0)
-        '${inrCompact(Paise(otherTransfers))} transfers not counted',
-    ].join(' · ');
+    final includedLine = included.isEmpty
+        ? null
+        : hasIncome
+        ? 'Left is after ${included.join(' + ')}'
+        : 'Out this month includes ${included.join(' + ')}';
+
+    // All money-in, by why it arrived. Refunds and transfers are shown but
+    // never re-badged as income: that was the "no income vs +₹3,939 in" clash.
+    final moneyIn = moneyInGroups(
+      data.transactions,
+      monthStart: summary.monthStart,
+      monthEnd: DateTime(summary.monthStart.year, summary.monthStart.month + 1),
+    );
+    final moneyInText = moneyIn.isEmpty
+        ? (hasIncome
+              ? 'Money in: none found this month.'
+              : 'No salary, refund or transfer messages this month.')
+        : 'Money in: ${moneyInLine(moneyIn)}'
+              '${hasIncome ? '' : ' · Salary: none found'}';
+
+    // Projection, not a like-for-like comparison with a full previous month.
+    // Saying "on pace" here keeps this pill and Insights' projection identical.
+    final showPace =
+        summary.daysElapsed < summary.daysInMonth &&
+        summary.projectedSpendPaise > 0;
+    final paceLabel = 'On pace for ${inrCompact(summary.projectedSpend)}';
 
     final provenance = <String>[
       if (data.smsMessagesRead > 0) '${data.smsMessagesRead} messages read',
@@ -277,28 +293,18 @@ class _HeroCard extends StatelessWidget {
       if (data.lastScanAt != null) 'as of ${clockTime(data.lastScanAt!)}',
     ].join(' · ');
 
-    final previousMonth = DateTime(
-      summary.monthStart.year,
-      summary.monthStart.month - 1,
-    );
-    final deltaLabel =
-        '${(change.abs() * 100).round()}% vs '
-        '${MediaQuery.textScalerOf(context).scale(12) / 12 >= 1.2 ? HomeScreen._monthShort(previousMonth) : 'last month'}';
-
     final spoken = <String>[
       monthYearLabel(summary.monthStart),
       'Spent ${_spoken(summary.spend)}',
-      '${inr(summary.dailyAverage)} a day',
-      if (summary.previousSpendPaise > 0)
-        '${(change.abs() * 100).round()} percent ${up ? 'more' : 'less'} than last month',
+      if (showPace) 'On pace for ${_spoken(summary.projectedSpend)}',
       if (hasIncome)
         '${_spoken(summary.income)} came in; ${left.value < 0 ? '${_spoken(Paise(left.value.abs()))} over' : '${_spoken(Paise(left.value.abs()))} left'}'
       else
-        'No income messages found, so there is no left over figure. ${_spoken(data.moneyOut)} went out of your accounts',
+        'No salary or interest credit found, so there is no left over figure. ${_spoken(data.moneyOut)} went out of your accounts',
       if (!hasIncome && data.unpaidBillCount > 0)
         '${_spoken(data.stillDue)} still due across ${data.unpaidBillCount} ${data.unpaidBillCount == 1 ? 'card bill' : 'card bills'}',
-      if (data.refunds.value > 0)
-        '${_spoken(data.refunds)} refunded, not counted as income',
+      if (hasIncome) 'Out this month ${_spoken(data.moneyOut)}',
+      if (moneyIn.isNotEmpty) 'Money in, not income: ${moneyInLine(moneyIn)}',
     ].join('. ');
 
     return Semantics(
@@ -344,7 +350,7 @@ class _HeroCard extends StatelessWidget {
                             fontSize: 12,
                           ),
                         ),
-                        if (summary.previousSpendPaise > 0)
+                        if (showPace)
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: T.s2,
@@ -357,17 +363,15 @@ class _HeroCard extends StatelessWidget {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(
-                                  up
-                                      ? Icons.trending_up_rounded
-                                      : Icons.trending_down_rounded,
+                                const Icon(
+                                  Icons.speed_rounded,
                                   size: 14,
                                   color: Colors.white,
                                 ),
                                 const SizedBox(width: 4),
                                 Flexible(
                                   child: Text(
-                                    deltaLabel,
+                                    paceLabel,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: T.label.copyWith(
@@ -394,9 +398,8 @@ class _HeroCard extends StatelessWidget {
                     ),
                     const SizedBox(height: T.s1),
                     Text(
-                      '${inr(summary.dailyAverage)} a day · '
                       '${summary.daysElapsed} of ${summary.daysInMonth} days',
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: T.body.copyWith(
                         color: p.heroInk,
@@ -459,37 +462,49 @@ class _HeroCard extends StatelessWidget {
                         );
                       },
                     ),
+                    if (includedLine != null) ...[
+                      const SizedBox(height: T.s3),
+                      Text(
+                        includedLine,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: T.bodySmall.copyWith(
+                          color: p.heroMuted,
+                          fontSize: 12,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                    if (otherTransfers > 0) ...[
+                      SizedBox(height: includedLine == null ? T.s3 : 0),
+                      _HeroLink(
+                        text:
+                            '${inrCompact(Paise(otherTransfers))} transfers not counted',
+                        semanticsLabel:
+                            '${inrCompact(Paise(otherTransfers))} moved as transfers and not counted as spending. Show the transfers.',
+                        onTap: onOpenActivity == null
+                            ? null
+                            : () => onOpenActivity!(
+                                const ActivityRequest(transfersOnly: true),
+                              ),
+                      ),
+                    ],
+                    const SizedBox(height: T.s1),
+                    Text(
+                      moneyInText,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: T.bodySmall.copyWith(
+                        color: p.heroMuted,
+                        fontSize: 12,
+                        height: 1.35,
+                      ),
+                    ),
                     if (!hasIncome) ...[
-                      const SizedBox(height: T.s3),
+                      const SizedBox(height: 4),
                       Text(
-                        'No income messages found this month, so there is no '
-                        '"left over" figure.',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: T.bodySmall.copyWith(
-                          color: p.heroMuted,
-                          fontSize: 12,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
-                    if (data.refunds.value > 0) ...[
-                      const SizedBox(height: T.s3),
-                      Text(
-                        '${inr(data.refunds)} refunded, not counted as income',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: T.bodySmall.copyWith(
-                          color: p.heroMuted,
-                          fontSize: 12,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
-                    if (footnote.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        footnote,
+                        'Only salary and interest count as income, so there is '
+                        'no "left over" figure.',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: T.bodySmall.copyWith(
@@ -513,8 +528,68 @@ class _HeroCard extends StatelessWidget {
       inr(amount).replaceFirst('₹', '').replaceFirst('-', 'minus ');
 }
 
-class _HeroStat extends StatelessWidget {
-  const _HeroStat({required this.label, required this.value});
+/// A tappable line in the hero's receipt. It keeps a 48 dp target even though
+/// the type is small, because this is the door into the transfers ledger.
+class _HeroLink extends StatelessWidget {
+  const _HeroLink({
+    required this.text,
+    required this.semanticsLabel,
+    this.onTap,
+  });
+
+  final String text;
+  final String semanticsLabel;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = T.of(context);
+    return Semantics(
+      button: onTap != null,
+      label: semanticsLabel,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Row(
+            children: [
+              Icon(
+                Icons.swap_horiz_rounded,
+                size: 15,
+                color: p.heroMuted,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  text,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: T.bodySmall.copyWith(
+                    color: p.heroInk,
+                    fontSize: 12,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                    decoration: TextDecoration.underline,
+                    decorationColor: p.heroMuted,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 16,
+                color: p.heroMuted,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroStat extends StatelessWidget {  const _HeroStat({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -771,7 +846,10 @@ class _AttentionState extends State<_Attention> {
             title: '${data.needsReviewCount} to confirm',
             body: 'We could not name the merchant with confidence.',
             actionLabel: 'Review',
-            onAction: () => SmsInboxScreen.open(context),
+            onAction: () => SmsInboxScreen.open(
+              context,
+              initialFilter: InboxFilter.unreviewed,
+            ),
             onDismiss: () => setState(() => _reviewHidden = true),
           ),
         ),

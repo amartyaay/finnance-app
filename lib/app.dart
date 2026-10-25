@@ -98,6 +98,19 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   late int _index = _initialTab(widget.initialIndex);
 
+  /// A filter request for Activity, produced by another tab (e.g. the hero's
+  /// transfers link). The serial makes a repeated request distinguishable.
+  int _activitySerial = 0;
+  ActivityRequest _activityRequest = const ActivityRequest();
+
+  void _openActivity(ActivityRequest request) {
+    setState(() {
+      _activitySerial += 1;
+      _activityRequest = request.withSerial(_activitySerial);
+      _index = 1;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -166,8 +179,9 @@ class _AppShellState extends State<AppShell> {
           HomeScreen(
             onNavigate: (index) => setState(() => _index = index),
             onOpenSettings: _openSettings,
+            onOpenActivity: _openActivity,
           ),
-          const TransactionsScreen(),
+          TransactionsScreen(request: _activityRequest),
           const CardsScreen(),
           const InsightsScreen(),
         ],

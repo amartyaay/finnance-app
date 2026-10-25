@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../design_tokens.dart';
+import '../money_format.dart';
 import '../../domain/money.dart';
 
 /// Small shared widget kit. Screens compose these so spacing, radii and type
@@ -270,8 +272,8 @@ class _MoneyTextState extends State<MoneyText>
 
     if (widget.compact) {
       final text = widget.animate && _value != widget.amount.value
-          ? inrCompact(Paise(_value))
-          : inrCompact(widget.amount);
+          ? moneyCompact(Paise(_value))
+          : moneyCompact(widget.amount);
       return Text(
         '${widget.prefix ?? ''}$text',
         style: base,
@@ -280,7 +282,7 @@ class _MoneyTextState extends State<MoneyText>
       );
     }
 
-    final parts = inrParts(
+    final parts = moneyParts(
       widget.animate && _value != widget.amount.value
           ? Paise(_value)
           : widget.amount,
@@ -298,7 +300,7 @@ class _MoneyTextState extends State<MoneyText>
       letterSpacing: 0,
       color: color.withValues(alpha: 0.62),
     );
-    final spokenParts = inrParts(widget.amount);
+    final spokenParts = moneyParts(widget.amount);
     final spoken = '${spokenParts.major}${spokenParts.minor ?? ''}';
     final spokenPrefix = widget.prefix == '+'
         ? 'plus '
@@ -335,6 +337,10 @@ class _MoneyTextState extends State<MoneyText>
 
 enum PillTone { neutral, positive, caution, danger, info, brand }
 
+/// A small rounded label. Its text is **shrinkable**: the chip is a fixed piece
+/// of chrome inside rows that get only ~60 dp at 360 dp / 1.3x text, so the label
+/// ellipsizes instead of forcing the row to overflow (the round-2 automatic fail
+/// was a 63 px overflow from exactly this: a `Row` of unbreakable text).
 class Pill extends StatelessWidget {
   const Pill(
     this.label, {
@@ -360,6 +366,18 @@ class Pill extends StatelessWidget {
       PillTone.info => (p.infoSoft, p.info),
       PillTone.brand => (p.primarySoft, p.primary),
     };
+    final text = Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      softWrap: false,
+      style: TextStyle(
+        fontSize: dense ? 12 : 12,
+        fontWeight: FontWeight.w600,
+        color: fg,
+        letterSpacing: 0.1,
+      ),
+    );
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: dense ? T.s2 : T.s3,
@@ -369,25 +387,202 @@ class Pill extends StatelessWidget {
         color: bg,
         borderRadius: BorderRadius.circular(T.r5),
       ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // `Flexible` only makes sense with a bounded main axis. Inside a
+          // horizontally scrolling row there is none, so the label keeps its
+          // intrinsic width and the row scrolls instead of asserting.
+          final shrinkable = constraints.hasBoundedWidth;
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: dense ? 13 : 14, color: fg),
+                const SizedBox(width: 4),
+              ],
+              if (shrinkable) Flexible(child: text) else text,
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// One horizontally scrolling strip of chips — the single implementation of the
+/// filter-chip row (All messages and Activity both use it).
+///
+/// Two things are deliberate. The row clips to its own bounds, so a chip can
+/// never paint past the padded viewport; and the edge fade is a [ShaderMask]
+/// painted *over* the chips. The previous version drew a gradient underneath a
+/// row with `clipBehavior: Clip.none`, which left chips guillotined at the screen
+/// edge while the fade sat hidden behind them.
+class ChipStrip extends StatefulWidget {
+  const ChipStrip({
+    super.key,
+    required this.children,
+    this.spacing = T.s2,
+    this.padding = EdgeInsets.zero,
+    this.fade = 24,
+  });
+
+  final List<Widget> children;
+  final double spacing;
+  final EdgeInsetsGeometry padding;
+
+  /// Width of the edge fade. Set to 0 to disable it.
+  final double fade;
+
+  @override
+  State<ChipStrip> createState() => _ChipStripState();
+}
+
+class _ChipStripState extends State<ChipStrip> {
+  final ScrollController _scroll = ScrollController();
+  bool _moreLeft = false;
+  bool _moreRight = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_updateEdges);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateEdges());
+  }
+
+  @override
+  void didUpdateWidget(ChipStrip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.children.length != widget.children.length ||
+        oldWidget.fade != widget.fade) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _updateEdges());
+    }
+  }
+
+  @override
+  void dispose() {
+    _scroll
+      ..removeListener(_updateEdges)
+      ..dispose();
+    super.dispose();
+  }
+
+  /// The fade only appears on a side that has more chips to show, so a strip
+  /// that fits still reads as complete.
+  void _updateEdges() {
+    if (!mounted || !_scroll.hasClients) return;
+    final position = _scroll.position;
+    final moreLeft = position.pixels > 1;
+    final moreRight = position.pixels < position.maxScrollExtent - 1;
+    if (moreLeft == _moreLeft && moreRight == _moreRight) return;
+    setState(() {
+      _moreLeft = moreLeft;
+      _moreRight = moreRight;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strip = SingleChildScrollView(
+      controller: _scroll,
+      scrollDirection: Axis.horizontal,
+      clipBehavior: Clip.hardEdge,
+      padding: widget.padding,
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          if (icon != null) ...[
-            Icon(icon, size: dense ? 13 : 14, color: fg),
-            const SizedBox(width: 4),
+          for (var i = 0; i < widget.children.length; i++) ...[
+            if (i > 0) SizedBox(width: widget.spacing),
+            widget.children[i],
           ],
-          Text(
-            label,
-            maxLines: 1,
-            softWrap: false,
-            style: TextStyle(
-              fontSize: dense ? 12 : 12,
-              fontWeight: FontWeight.w600,
-              color: fg,
-              letterSpacing: 0.1,
-            ),
-          ),
         ],
+      ),
+    );
+    if (widget.fade <= 0) return strip;
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (bounds) {
+        final stop = bounds.width <= 0
+            ? 0.0
+            : (widget.fade / bounds.width).clamp(0.0, 0.2);
+        final (colors, stops) = switch ((_moreLeft, _moreRight)) {
+          (true, true) => (
+            const [Colors.transparent, Colors.black, Colors.black, Colors.transparent],
+            [0.0, stop, 1 - stop, 1.0],
+          ),
+          (true, false) => (
+            const [Colors.transparent, Colors.black, Colors.black],
+            [0.0, stop, 1.0],
+          ),
+          (false, true) => (
+            const [Colors.black, Colors.black, Colors.transparent],
+            [0.0, 1 - stop, 1.0],
+          ),
+          (false, false) => (
+            const [Colors.black, Colors.black],
+            [0.0, 1.0],
+          ),
+        };
+        return LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: colors,
+          stops: stops,
+        ).createShader(bounds);
+      },
+      child: strip,
+    );
+  }
+}
+
+/// The one filter chip in the app: a quiet outline pill when unselected, solid
+/// ink with canvas-coloured text when selected.
+///
+/// It used to exist twice — this `ChoiceChip` on All messages with an ink label
+/// on an ink fill (1.0:1, an invisible label) and a hand-rolled container on
+/// Activity. Both screens now build chips here, so the selected state has exactly
+/// one definition and it is legible: near-white on near-black is ~16:1.
+class FilterChipView extends StatelessWidget {
+  const FilterChipView({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.icon,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = T.of(context);
+    final ink = selected ? p.bg : p.inkSecondary;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: ChoiceChip(
+        showCheckmark: false,
+        selected: selected,
+        onSelected: (_) {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        selectedColor: p.ink,
+        backgroundColor: p.surface,
+        side: BorderSide(color: selected ? p.ink : p.outlineVariant),
+        labelPadding: const EdgeInsets.symmetric(horizontal: T.s1),
+        avatar: icon == null ? null : Icon(icon, size: 14, color: ink),
+        label: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: T.bodySmall.copyWith(
+            color: ink,
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }

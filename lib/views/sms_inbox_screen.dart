@@ -27,18 +27,28 @@ import 'widgets/inbox_message_tile.dart';
 /// Wire it from anywhere with `SmsInboxScreen.open` (or `openSmsInbox` from
 /// `app.dart`); the route name is [routeName] (`messages`).
 class SmsInboxScreen extends StatefulWidget {
-  const SmsInboxScreen({super.key});
+  const SmsInboxScreen({
+    super.key,
+    this.initialFilter = InboxFilter.all,
+  });
+
+  /// Which slice the caller wants to land on. Home's "12 to confirm" opens the
+  /// review filter, so the user does not start on 2,000 unfiltered rows.
+  final InboxFilter initialFilter;
 
   /// `messages` — the name other screens can push without importing this file.
   static const String routeName = 'messages';
 
-  static Route<void> route() => MaterialPageRoute<void>(
-    settings: const RouteSettings(name: routeName),
-    builder: (_) => const SmsInboxScreen(),
-  );
+  static Route<void> route({InboxFilter initialFilter = InboxFilter.all}) =>
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: routeName),
+        builder: (_) => SmsInboxScreen(initialFilter: initialFilter),
+      );
 
-  static Future<void> open(BuildContext context) =>
-      Navigator.of(context).push(route());
+  static Future<void> open(
+    BuildContext context, {
+    InboxFilter initialFilter = InboxFilter.all,
+  }) => Navigator.of(context).push(route(initialFilter: initialFilter));
 
   @override
   State<SmsInboxScreen> createState() => _SmsInboxScreenState();
@@ -54,7 +64,7 @@ class _SmsInboxScreenState extends State<SmsInboxScreen> {
   final Map<String, Txn?> _parsedCache = <String, Txn?>{};
 
   Timer? _debounce;
-  InboxFilter _filter = InboxFilter.all;
+  late InboxFilter _filter = widget.initialFilter;
   final List<SmsMessageRow> _rows = <SmsMessageRow>[];
   InboxStats _stats = InboxStats.empty;
   Set<String> _excludedShapes = const <String>{};

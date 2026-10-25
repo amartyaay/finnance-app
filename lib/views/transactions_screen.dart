@@ -60,7 +60,34 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   final TextEditingController _search = TextEditingController();
   int _monthOffset = 0;
   SpendCategoryKind? _kindFilter;
+
+  /// Money moved, not spend: card bill payments, SIPs, self transfers. This is
+  /// the filter behind the hero's "transfers not counted" line.
+  bool _transfersOnly = false;
   bool _needsReviewOnly = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _applyRequest(widget.request);
+  }
+
+  @override
+  void didUpdateWidget(TransactionsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.request.serial != oldWidget.request.serial) {
+      setState(() => _applyRequest(widget.request));
+    }
+  }
+
+  void _applyRequest(ActivityRequest request) {
+    if (request.serial == 0) return;
+    _monthOffset = 0;
+    _kindFilter = request.category;
+    _transfersOnly = request.transfersOnly;
+    _needsReviewOnly = request.needsReviewOnly;
+    _search.clear();
+  }
 
   @override
   void dispose() {
@@ -76,6 +103,13 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     final monthStart = DateTime(now.year, now.month + _monthOffset);
     final monthEnd = DateTime(now.year, now.month + _monthOffset + 1);
     final transactions = state.data.transactions;
+    // One summary for the displayed month, so the header's "out", "income" and
+    // entry count are the *same* definitions Home prints.
+    final summary = const SummaryCalculator().forMonth(
+      transactions,
+      now,
+      monthOffset: _monthOffset,
+    );
     final monthTransactions = transactions
         .where((txn) {
           final at = txn.occurredAt;
@@ -89,11 +123,14 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     } else if (transactions.isEmpty) {
       body = _EmptyActivity(state: state);
     } else {
-      final totals = _totals(monthTransactions);
       final categories = _categoriesInMonth(monthTransactions);
+      final hasTransfers = monthTransactions.any(
+        (txn) => txn.kind == TxnKind.transfer,
+      );
       final query = _search.text.trim().toLowerCase();
       final visible = monthTransactions.where((txn) {
         if (_kindFilter != null && txn.categoryKind != _kindFilter) return false;
+        if (_transfersOnly && txn.kind != TxnKind.transfer) return false;
         if (_needsReviewOnly && !txn.needsReview) return false;
         if (query.isEmpty) return true;
         final haystack =
@@ -171,48 +208,54 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     child: MoneyText(
-                      totals.spent,
+                      summary.spend,
                       animate: true,
                       style: T.moneyLarge(p.ink).copyWith(fontSize: 30),
                     ),
                   ),
-                  const SizedBox(height: T.s1),
-                  Text.rich(
-                    TextSpan(
+                  const SizedBox(height: T.s3),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: T.s2),
+                    child: Row(
                       children: [
-                        TextSpan(
-                          text: '+${inr(totals.income)}',
-                          style: T.money.copyWith(
-                            color: p.primary,
-                            fontSize: 13,
+                        Expanded(
+                          child: _ActivityStat(
+                            label: isCurrentMonth
+                                ? 'Out this month'
+                                : 'Out in ${_monthName(monthStart)}',
+                            value: inrCompact(summary.moneyOut),
                           ),
                         ),
-                        TextSpan(
-                          text: ' in  ·  ',
-                          style: T.bodySmall.copyWith(color: p.inkMuted),
-                        ),
-                        TextSpan(
-                          text: '−${inr(totals.out)}',
-                          style: T.money.copyWith(
-                            color: p.inkSecondary,
-                            fontSize: 13,
+                        Expanded(
+                          child: _ActivityStat(
+                            label: 'Income',
+                            value: inrCompact(summary.income),
                           ),
                         ),
-                        TextSpan(
-                          text: ' out  ·  ',
-                          style: T.bodySmall.copyWith(color: p.inkMuted),
-                        ),
-                        TextSpan(
-                          text:
-                              '${monthTransactions.length} '
-                              '${monthTransactions.length == 1 ? 'entry' : 'entries'}',
-                          style: T.bodySmall.copyWith(color: p.inkMuted),
+                        Expanded(
+                          child: _ActivityStat(
+                            label: summary.txnCount == 1
+                                ? 'Entry'
+                                : 'Entries',
+                            value: '${summary.txnCount}',
+                          ),
                         ),
                       ],
                     ),
-                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: T.s3),
+                  _ActivityCaption(
+                    periodLabel: isCurrentMonth
+                        ? 'Out this month'
+                        : 'Out in ${_monthName(monthStart)}',
+                    summary: summary,
+                    moneyIn: moneyInGroups(
+                      transactions,
+                      monthStart: monthStart,
+                      monthEnd: monthEnd,
+                    ),
+                  ),
+                  const SizedBox(height: T.s2),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: T.s3),
                     child: DailyBars(
@@ -271,25 +314,44 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       children: [
                         _FilterChip(
                           label: 'All',
-                          selected: _kindFilter == null && !_needsReviewOnly,
+                          selected:
+                              _kindFilter == null &&
+                              !_transfersOnly &&
+                              !_needsReviewOnly,
                           onTap: () => setState(() {
                             _kindFilter = null;
+                            _transfersOnly = false;
                             _needsReviewOnly = false;
                           }),
                         ),
-                        for (final entry in categories.entries) ...[
+                        if (hasTransfers) ...[
                           const SizedBox(width: T.s2),
                           _FilterChip(
-                            label: entry.value,
-                            selected: _kindFilter == entry.key,
+                            label: 'Transfers',
+                            icon: Icons.swap_horiz_rounded,
+                            selected: _transfersOnly,
                             onTap: () => setState(() {
-                              _kindFilter = _kindFilter == entry.key
-                                  ? null
-                                  : entry.key;
+                              _transfersOnly = !_transfersOnly;
+                              _kindFilter = null;
                               _needsReviewOnly = false;
                             }),
                           ),
                         ],
+                        for (final entry in categories.entries)
+                          if (!hasTransfers || entry.value != 'Transfers') ...[
+                            const SizedBox(width: T.s2),
+                            _FilterChip(
+                              label: entry.value,
+                              selected: _kindFilter == entry.key,
+                              onTap: () => setState(() {
+                                _kindFilter = _kindFilter == entry.key
+                                    ? null
+                                    : entry.key;
+                                _transfersOnly = false;
+                                _needsReviewOnly = false;
+                              }),
+                            ),
+                          ],
                         if (state.data.needsReview.isNotEmpty) ...[
                           const SizedBox(width: T.s2),
                           _FilterChip(
@@ -299,6 +361,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                             onTap: () => setState(() {
                               _needsReviewOnly = !_needsReviewOnly;
                               _kindFilter = null;
+                              _transfersOnly = false;
                             }),
                           ),
                         ],
@@ -399,8 +462,109 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   }
 }
 
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
+/// One of the three month figures under Activity's headline. The labels are
+/// deliberately the same words Home uses ("Out this month", "Income").
+class _ActivityStat extends StatelessWidget {
+  const _ActivityStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = T.of(context);
+    return Column(
+      children: [
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            maxLines: 1,
+            softWrap: false,
+            style: T.money.copyWith(
+              color: p.ink,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: T.label.copyWith(
+            color: p.inkMuted,
+            fontSize: 11.5,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The two explanations under Activity's figures: what the "out" total includes,
+/// and every rupee that came in, grouped by why it arrived. This is the line
+/// that stops "no income" on Home and "+₹3,939 in" here from contradicting.
+class _ActivityCaption extends StatelessWidget {
+  const _ActivityCaption({
+    required this.periodLabel,
+    required this.summary,
+    required this.moneyIn,
+  });
+
+  final String periodLabel;
+  final MonthlySummary summary;
+  final List<MoneyInGroup> moneyIn;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = T.of(context);
+    final included = <String>[
+      if (summary.cardBillPaymentPaise > 0)
+        '${inrCompact(Paise(summary.cardBillPaymentPaise))} card bills',
+      if (summary.cashPaise > 0)
+        '${inrCompact(Paise(summary.cashPaise))} cash',
+    ];
+    final lines = <String?>[
+      if (included.isNotEmpty)
+        '$periodLabel includes ${included.join(' · ')}',
+      moneyIn.isEmpty
+          ? (summary.hasTrueIncome
+                ? null
+                : 'No salary, refund or transfer messages this month.')
+          : 'Money in: ${moneyInLine(moneyIn)}'
+                '${summary.hasTrueIncome ? '' : ' · Salary: none found'}',
+      if (!summary.hasTrueIncome && moneyIn.isNotEmpty)
+        'Only salary and interest count as income; refunds and transfers do not.',
+    ].whereType<String>().toList(growable: false);
+    if (lines.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        for (final line in lines)
+          Padding(
+            padding: const EdgeInsets.only(top: T.s1),
+            child: Text(
+              line,
+              textAlign: TextAlign.center,
+              style: T.bodySmall.copyWith(
+                color: p.inkMuted,
+                fontSize: 12,
+                height: 1.35,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+String _monthName(DateTime date) => monthYearLabel(date).split(' ').first;
+
+class _FilterChip extends StatelessWidget {  const _FilterChip({
     required this.label,
     required this.selected,
     required this.onTap,
@@ -519,11 +683,14 @@ class _ActivitySkeleton extends StatelessWidget {
   }
 }
 
+/// One day's own figures, using the same definitions as the month header:
+/// "out" is spend + cash + card-bill payments, "income" is real income only.
 ({Paise spent, Paise income, Paise out}) _totals(List<Txn> transactions) {
   var spent = 0;
   var income = 0;
   var out = 0;
   for (final txn in transactions) {
+    if (countsAsTrueIncome(txn)) income += txn.amountPaise;
     switch (txn.kind) {
       case TxnKind.spend:
         spent += txn.amountPaise;
@@ -531,9 +698,11 @@ class _ActivitySkeleton extends StatelessWidget {
       case TxnKind.cash:
         out += txn.amountPaise;
       case TxnKind.income:
-        income += txn.amountPaise;
-      case TxnKind.transfer:
         break;
+      case TxnKind.transfer:
+        if (txn.transferReason == TransferReason.creditCardBill) {
+          out += txn.amountPaise;
+        }
     }
   }
   return (spent: Paise(spent), income: Paise(income), out: Paise(out));

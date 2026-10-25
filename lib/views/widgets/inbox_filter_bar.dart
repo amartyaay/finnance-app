@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../app/design_tokens.dart';
+import '../../app/widgets/kit.dart';
 import '../../domain/sms_inbox.dart';
 
-/// Search plus the five class filters. Horizontally scrollable so the labels
-/// never truncate at 360 dp / 1.3x text.
+/// Search plus the five class filters. The chip row is the shared [ChipStrip],
+/// which scrolls and fades at the edges instead of cutting a chip off at the
+/// screen edge.
 class InboxFilterBar extends StatelessWidget {
   const InboxFilterBar({
     super.key,
@@ -21,7 +23,6 @@ class InboxFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = T.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -50,28 +51,15 @@ class InboxFilterBar extends StatelessWidget {
           ),
         ),
         const SizedBox(height: T.s3),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              for (final option in InboxFilter.values) ...[
-                if (option != InboxFilter.values.first)
-                  const SizedBox(width: T.s2),
-                ChoiceChip(
-                  label: Text(option.label),
-                  showCheckmark: false,
-                  selected: filter == option,
-                  onSelected: (_) => onFilter(option),
-                  labelStyle: T.bodySmall.copyWith(
-                    color: filter == option ? p.ink : p.inkSecondary,
-                    fontWeight: filter == option
-                        ? FontWeight.w700
-                        : FontWeight.w500,
-                  ),
-                ),
-              ],
-            ],
-          ),
+        ChipStrip(
+          children: [
+            for (final option in InboxFilter.values)
+              FilterChipView(
+                label: option.label,
+                selected: filter == option,
+                onTap: () => onFilter(option),
+              ),
+          ],
         ),
       ],
     );
