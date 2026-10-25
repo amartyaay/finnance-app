@@ -31,6 +31,18 @@ IconData insightToneIcon(InsightTone tone) => switch (tone) {
   InsightTone.neutral => Icons.insights_rounded,
 };
 
+/// The engine speaks in counts ("in 1 days"). The card is the last place to
+/// clean the grammar up without touching the number.
+String _tidyTitle(String title) {
+  if (title.contains('in 1 days')) {
+    return title.replaceFirst('in 1 days', 'tomorrow');
+  }
+  if (title.contains('in 0 days')) {
+    return title.replaceFirst('in 0 days', 'today');
+  }
+  return title;
+}
+
 /// One claim, ranked by how much it matters. Warnings and cautions get a tint
 /// so they lead the eye; everything else stays on the calm surface.
 class InsightTile extends StatelessWidget {
@@ -46,6 +58,7 @@ class InsightTile extends StatelessWidget {
         insight.tone == InsightTone.caution;
     final amount = insight.amountPaise;
     final chip = insight.chip?.trim();
+    final title = _tidyTitle(insight.title);
     final semantics = [
       switch (insight.tone) {
         InsightTone.warning => 'Warning',
@@ -53,7 +66,7 @@ class InsightTile extends StatelessWidget {
         InsightTone.positive => 'Good news',
         InsightTone.neutral => 'Note',
       },
-      insight.title,
+      title,
       insight.body,
       if (amount != null && amount != 0) inr(Paise(amount)),
     ].join('. ');
@@ -110,7 +123,7 @@ class InsightTile extends StatelessWidget {
             ),
             const SizedBox(height: T.s3),
             Text(
-              insight.title,
+              title,
               style: T.cardTitle.copyWith(color: p.ink, fontSize: 15.5),
             ),
             const SizedBox(height: T.s1),

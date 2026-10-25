@@ -1,4 +1,4 @@
-# Captures the four tabs from the real phone.
+﻿# Captures the four tabs from the real phone.
 #
 # Android is the only supported target. This replaces the web/Chrome harness:
 # the emulator/browser render path was costing build time and producing
@@ -46,7 +46,7 @@ foreach ($name in $tabs.Keys) {
 # Settings is a pushed route from the Home avatar.
 & $adb -s $serial shell input tap 135 $navY | Out-Null
 Start-Sleep -Seconds 2
-& $adb -s $serial shell input tap 700 178 | Out-Null
+& $adb -s $serial shell input tap 867 173 | Out-Null
 Start-Sleep -Seconds 3
 & $adb -s $serial shell screencap -p /sdcard/shot_settings.png | Out-Null
 & $adb -s $serial pull /sdcard/shot_settings.png (Join-Path $outDir 'device-settings.png') 2>$null | Out-Null

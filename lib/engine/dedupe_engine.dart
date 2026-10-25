@@ -202,6 +202,15 @@ class DedupeEngine {
 
     final sameSender = a.sender != null && a.sender == b.sender;
     if (sameSender && _refsDistinguish(a, b)) return false;
+    // The very same alert text, from the same sender, for the same amount: one
+    // event notified twice (a fund house re-sending its SIP confirmation two
+    // minutes later). This is the only same-sender merge that needs no merchant.
+    if (sameSender &&
+        a.rawBody != null &&
+        b.rawBody != null &&
+        _bodySignature(a.rawBody!) == _bodySignature(b.rawBody!)) {
+      return true;
+    }
     if (a.kind != b.kind) return false;
 
     final bothCardBill =
@@ -317,4 +326,7 @@ class DedupeEngine {
 
   static String _normalise(String value) =>
       value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
+
+  static String _bodySignature(String body) =>
+      body.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
 }

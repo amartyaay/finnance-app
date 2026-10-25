@@ -176,11 +176,15 @@ class _FullFace extends StatelessWidget {
         ),
         const SizedBox(height: 2),
         Text(
-          card.displayName,
+          card.displayName.toLowerCase() == card.issuer.toLowerCase()
+              ? 'Credit card'
+              : card.displayName,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: T.cardTitle.copyWith(
-            color: ink,
+            color: card.displayName.toLowerCase() == card.issuer.toLowerCase()
+                ? mutedInk
+                : ink,
             fontSize: 17,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.2,
@@ -481,7 +485,7 @@ class _FaceGauge extends StatelessWidget {
         ),
         const SizedBox(height: 1),
         Text(
-          'used',
+          percent == null ? 'not set' : 'used',
           maxLines: 1,
           style: T.bodySmall.copyWith(color: mutedInk, fontSize: 12),
         ),

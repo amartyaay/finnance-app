@@ -74,7 +74,7 @@ for label, sql in {
 }.items():
     print(f'  {label}: {q(sql)[0][0]}')
 
-print('\n=== the ₹2,999.85 SIP purchase ===')
+print('\n=== the 2,999.85 SIP purchase ===')
 for row in q("select count(*), coalesce(sum(amount_paise),0)/100 from transactions "
              "where raw_body like '%2,999.85%'"):
     print('  rows / total:', row)

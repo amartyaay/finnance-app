@@ -653,14 +653,19 @@ class _Attention extends StatelessWidget {
     }
 
     for (final card in data.cards.where((c) => c.dueSoon).take(1)) {
+      final days = card.daysToDue ?? 0;
+      final dueText = days <= 0
+          ? 'due today'
+          : days == 1
+          ? 'due tomorrow'
+          : 'due in $days days';
       widgets.add(
         Padding(
           padding: const EdgeInsets.only(bottom: T.s3),
           child: _CompactNotice(
             tone: PillTone.caution,
             icon: Icons.event_available_rounded,
-            title:
-                '${card.card.displayName} bill due in ${card.daysToDue} days',
+            title: '${card.card.displayName} bill $dueText',
             body:
                 '${inr(card.totalDue)} total due${card.minimumDue != null ? ' · ${inr(card.minimumDue!)} minimum' : ''}. '
                 'Paying in full avoids interest.',

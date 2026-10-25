@@ -346,7 +346,7 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
   /// Stored in `app_meta`; together with the schema version it decides whether
   /// the stored ledger has to be re-derived. Bump this on every rule change
   /// that alters what a message becomes.
-  static const int parserVersion = 5;
+  static const int parserVersion = 6;
 
   @override
   Future<IngestResult> reparseAll() async {

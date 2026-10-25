@@ -278,7 +278,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     top: 0,
                     bottom: 0,
                     right: 0,
-                    width: 28,
+                    width: 48,
                     child: IgnorePointer(
                       child: DecoratedBox(
                         decoration: BoxDecoration(

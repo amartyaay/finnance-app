@@ -57,10 +57,16 @@ class CardSummaryCard extends StatelessWidget {
         ? null
         : (utilization! * 100).round();
     final color = utilizationBandColor(band, context);
+    final used = utilization == null
+        ? null
+        : Paise((limit.value * utilization!).round());
     final caption = utilization == null
         ? 'Add a card limit to see total utilisation.'
-        : 'of ${inr(limit)} limit across $limitedCards '
-              '${limitedCards == 1 ? 'card' : 'cards'}';
+        : 'of ${inr(limit)} across $limitedCards '
+              '${limitedCards == 1 ? 'card' : 'cards'} with a limit';
+    final limitNote = limitedCards == cards.length
+        ? 'All limits set'
+        : '$limitedCards of ${cards.length} limits set';
 
     return AppCard(
       padding: const EdgeInsets.all(T.s4),
@@ -108,7 +114,7 @@ class CardSummaryCard extends StatelessWidget {
                           dense: true,
                         ),
                         Text(
-                          '${cards.length} ${cards.length == 1 ? 'card' : 'cards'}',
+                          limitNote,
                           style: T.bodySmall.copyWith(
                             color: p.inkMuted,
                             fontSize: 12,
@@ -125,9 +131,9 @@ class CardSummaryCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      utilization == null
+                      used == null
                           ? 'Set a limit on each card below.'
-                          : '${inr(Paise((limit.value * utilization!).round()))} outstanding in total.',
+                          : '${inr(used)} used · ${inr(Paise((limit.value - used.value).clamp(0, limit.value)))} available',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: T.bodySmall.copyWith(color: p.inkMuted),
