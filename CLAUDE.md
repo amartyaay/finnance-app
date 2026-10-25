@@ -19,8 +19,9 @@ iteration. Working branch: `main` (single-developer repo).
 | 6 | "We need a strong data parser or a small in-house classification model — do research." | Researched (`docs/research/05-classifier-options.md`): **no model in v1**; admission gate + arithmetic confirmation beats a classifier; LR later, needs 2–3 days of labelling. |
 | 7 | On-device LLM: "not at SMS-receive time is also ok; user can trigger it." | Researched (`docs/research/06-on-device-llm.md`): **S24 FE has no AICore/Gemini Nano, no S24 variant does**. Recommended manual "copy as prompt → paste answer" round trip; bundled 270M model needs `minSdk` 30 + labels. Not built yet. |
 | 8 | Focus on **mobile/Android only, ignore web**. | Done: web/desktop unsupported; `README` states it; verification moved to `tool/device_shots.ps1` (device captures). |
-| 9 | **Screen listing all SMS with manual categorisation**, remembered and applied to previous transactions; **optional**, never compulsory. | Built: `SmsInboxScreen` + `InboxStore` (retroactive "every payment from X", "just this", "not a transaction", "this is a transaction"). **Entry point not yet wired** (no button). |
-| 10 | "Work on UI/UX, make it fancy, modern and good looking, along with backend/data." | Redesign landed and device-verified (`9c55679`): gradient hero + money typography, pace chart, category donut, card faces, neutral insights, day-grouped activity, designed dark mode, haptics, 48 dp actions. |
+| 9 | **Screen listing all SMS with manual categorisation**, remembered and applied to previous transactions; **optional**, never compulsory. | Done and reachable: Settings › Data › "All messages", plus the dismissible review banner. "Every payment from X" rewrites history and stores a rule; Settings › Learned categories has undo. |
+| 10 | "Work on UI/UX, make it fancy, modern and good looking, along with backend/data." | Redesign landed and device-verified (`9c55679`), then wired to the real data (`abd2f3f`): true hero, inbox door, learned-rules list. Round-2 end-user score 5.3 → **6.8**. |
+| 11 | "Keep updating the goal file and keep doing git commits." | This file, updated every round; every iteration is committed. |
 
 ## Decisions to keep (with evidence)
 
@@ -38,8 +39,23 @@ iteration. Working branch: `main` (single-developer repo).
 | Round | Commit | Frontend | Principal | Finance | End user | Main gaps called out |
 |---|---|---:|---:|---:|---:|---|
 | 1 | `da88e2f` | 6.4 | 6.7 | 6.2 | 5.3 | Money-in fictional (card payments/refunds/TD booked as income, SIPs as spend); `card_bills` always empty; savings accounts as cards; dedupe merges SWIGGY+ZOMATO and deletes a payment; a11y contrast 3.78:1; cards tab 0 % (dart2js clamp); no learning from corrections |
+| 2 | `abd2f3f` | pending | pending | pending | **6.8** | Two different "out" figures (Home ₹33k vs Activity ₹20,313); no coherent money-in story; inert insight tiles; review banner opens all 2 000 rows; "36 entries" under an October heading; duplicate per-day figure; notification prints ₹105590 ungrouped |
 
-Reports: `docs/eval/round-1/{frontend,principal,finance,end-user}.md`.
+Round-1 evidence: `docs/eval/round-1/`; round-2: `docs/eval/round-2/`.
+
+## Session progress (measured, not claimed)
+
+| Metric | Start | Round 1 | Now |
+|---|---:|---:|---:|
+| Evaluator scores | — | 5.3 / 6.2 / 6.4 / 6.7 | end user **6.8**; other three pending |
+| Fixture corpus | 43.1 % (broken build) | 99.1 % / 100 % | **111/111** transactions, 100 % classification |
+| `flutter test` | 29 (old MVP) | 214 / 1 | **240/240** |
+| "Other" share of spend | 71.7 % | 2.9 % | **0.7 %** |
+| Spam counted · verbless · duplicate groups | 1 · 4 · 3 | 0 · 0 · 0 | **0 · 0 · 0** |
+| Cards in the ledger | 21 phantom | — | **4 real** (Amex, Axis, HDFC, Pluxee) |
+| Fraud flags per 2 000 messages | 151 (0/14 true) | — | **2**, zero OTP false positives |
+| Bill notices stored | 0 | — | **6** with due dates |
+
 
 ## Real-inbox measurements (2 000 messages, Galaxy S24)
 
@@ -57,19 +73,20 @@ Fixture corpus: **108/109 transactions** (H07 is a documented bad fixture), **77
 
 ## Open todos (priority order)
 
-- [ ] **Wire the doors**: `SmsInboxScreen` route, Settings "undo learned rule" list, review badge on Home (`HomeData.needsReviewCount` is exposed but unused).
-- [ ] **Money-in taxonomy**: salary / refund / cardPayment / selfTransfer / redemption / cashback / walletLoad. `Came in` and the savings rate must count only real income. Home currently prints "Came in ₹0" when the inbox has no salary.
-- [ ] **Bill notices from informational SMS**: `billNotice()` only runs for transactions, so `card_bills` is empty and a due bill can never show. Expose reported / live / projected utilisation with a basis label.
-- [ ] **Card identity**: gate `cardKey`/`_ensureCard` on credit-card instruments (savings accounts currently become cards: 21 cards, 0 limits, 126 non-card rows). Add `deleteCard`.
-- [ ] **Dedupe regression**: same-sender + same-amount + same-card to *different merchants* merges and deletes the loser (SWIGGY ₹500 + ZOMATO ₹500, 60 s). Require merchant agreement.
-- [ ] **Fraud precision**: 151 flags / 2 000 messages, 0/14 sampled true; 37 HDFC OTPs flagged. Demote link+CTA to promo; `_kycLure` must not match "complete your"; require a real credential ask.
-- [ ] **Reparse on upgrade**: DB holds stale rows (₹7.05 L vs ₹3.37 L from current code). `reparseAll()` keyed on `parser_version`.
-- [ ] **Copy**: "bill due in 1 days" / "in 0 days"; "Came in ₹0" when no income messages exist.
-- [ ] **Schema drift**: `schemaVersion` is 9 with no v9 migration block (harmless today, a trap later).
-- [ ] **Device migration test** for v7→v8 (FFI native-assets build hung; proven only by a recording-database contract test).
-- [ ] Two outlier days flatten the Home pace chart on real data — bucket weekly, or use a log scale.
-- [ ] Onboarding screen not captured on device (needs clearing the owner's data).
-- [ ] On-device AI "copy as prompt → paste answer" round trip (`docs/research/06-on-device-llm.md`), only after the money-in taxonomy is honest.
+- [ ] **One "out" figure** shared by Home, Activity and Cards; reconcile Cards' "Total due" (sum of statements) with Home's "Bill due" (unpaid).
+- [ ] **A coherent money-in answer**: group refunds / transfers / salary with labels, make the "transfers not counted" line tappable, and explain "no income found" next to "+₹3,939 in" in one sentence.
+- [ ] **Insight tiles must act**: wire `Insight.action` to Activity/Cards/recurring, add dismiss via `AppState.dismissInsight` (currently dead code).
+- [ ] **Review banner → the queue**: open `SmsInboxScreen` on the unreviewed filter, not all 2 000.
+- [ ] **Period labels**: Insights shows all-time counts under an October heading; hero "3 % vs last month" and Insights' projection must be labelled as actual vs projected.
+- [ ] **Duplicate per-day figure** in the hero (₹812.52 a day and Spend/day ₹813).
+- [ ] **Android notification**: group amounts (₹105590 → ₹1,05,590), an "Other" action that opens the message, one notification per batch, and a permission prompt with copy instead of silent.
+- [ ] Salary capture: the owner's inbox has **no salary SMS**; allow marking an inflow as salary once so `Left` becomes answerable.
+- [ ] `CBSSBI` missing from `SenderRegistry` (30 transactions on this device).
+- [ ] Delete the legacy `savingsRate` getter; `savingsRateOrNull` is the truth.
+- [ ] Schema drift: `schemaVersion` 9 vs v9 block (harmless today, a trap later).
+- [ ] Device migration test for v7→v8 (FFI native-assets build hung; proven only by a contract test).
+- [ ] Refund line unexercised (no refunds in the window) — needs a fixture-level test.
+- [ ] On-device AI "copy as prompt → paste answer" round trip (`docs/research/06-on-device-llm.md`), only once money-in is fully honest.
 
 ## Commands
 
