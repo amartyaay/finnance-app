@@ -201,7 +201,8 @@ class SmsClassifier {
     caseSensitive: false,
   );
   static final RegExp _url = RegExp(
-    r'(?:https?://|www\.)[^\s]+|\b[a-z0-9-]+\.(?:com|in|net|org|xyz|top|club|live|icu|info|co|biz|me|site|online|shop|vip|link)(?:/[^\s]*)?',
+    r'(?:https?://|www\.)[^\s]+|'
+    r'\b[a-z0-9-]+\.(?:com|in|net|org|xyz|top|club|live|icu|info|co|biz|me|site|online|shop|vip|link)(?![a-z0-9-])(?:/[^\s]*)?',
     caseSensitive: false,
   );
   static final RegExp _otpLikeNumber = RegExp(
@@ -397,7 +398,7 @@ class SmsClassifier {
       signals.add(const SmsSignal('kyc_lure', -4, detail: 'KYC / block / expiry pressure wording'));
     }
 
-    final url = _firstUrl(lower);
+    final url = _firstUrl(lower, body);
     final risk = url == null
         ? (suspicious: false, impersonation: false)
         : _urlRisk(url);
@@ -502,14 +503,21 @@ class SmsClassifier {
   /// `Never share OTP @mycards.hdfc.bank.in` is an *email-style handle*, and
   /// matching its `bank.in` tail as a link was one of the two reasons every HDFC
   /// OTP was labelled fraud.
-  String? _firstUrl(String lower) {
+  String? _firstUrl(String lower, String body) {
     for (final match in _url.allMatches(lower)) {
       final start = match.start;
       if (start > 0) {
         final before = lower[start - 1];
         if (RegExp(r'[a-z0-9@._%-]').hasMatch(before)) continue;
       }
-      return match.group(0)!.replaceAll(RegExp(r'[)\],.;:]+$'), '');
+      final text = match.group(0)!;
+      // A real link is printed as lowercase; `credited.Info:UPI…` is a sentence
+      // that happens to contain a dot, not a domain.
+      final original = start + text.length <= body.length
+          ? body.substring(start, start + text.length)
+          : text;
+      if (!text.startsWith('http') && original != text) continue;
+      return text.replaceAll(RegExp(r'[)\],.;:]+$'), '');
     }
     return null;
   }
@@ -587,9 +595,15 @@ class SmsClassifier {
     final registrable = _registrableDomain(host);
     // A host that names a brand must be that brand's own domain.
     for (final entry in _brandDomains.entries) {
+      final brand = entry.key;
       final claimsBrand = RegExp(
-        '(^|[.\\-])${RegExp.escape(entry.key)}',
-      ).hasMatch(host);
+        '(^|[.\\-])${RegExp.escape(brand)}',
+      ).hasMatch(host) &&
+          // A three-letter brand (`yes`, `sbi`) must stand alone as a label
+          // prefix — `yesbankltd` is a VPA handle, not a Yes Bank claim.
+          (brand.length >= 4 ||
+              RegExp('(^|[.\\-])${RegExp.escape(brand)}(?=[.\\-]|\\d)')
+                  .hasMatch(host));
       if (!claimsBrand) continue;
       final trusted = entry.value.any(
         (domain) => registrable == domain || host.endsWith('.$domain'),

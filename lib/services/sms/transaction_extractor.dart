@@ -59,7 +59,7 @@ class TransactionExtractor {
     // Real debit-mandate SIPs print the AMC's *name + folio code*, never the
     // word "SIP": `via Debit Mandate for NIPPONMUTUA_REL261124_…`.
     r'nippon|bandhan|kfin|motilal|white\s*oak|whiteoak|franklin|hdfc\s*mf|'
-    r'icici\s*pru|debit\s*mandate|nach\s*mandate)\b',
+    r'icici\s*pru|debit\s*mandate)\b',
     caseSensitive: false,
   );
 
@@ -91,7 +91,7 @@ class TransactionExtractor {
     r'\bcredited to your card\b.{0,50}\b(?:payment|ref#|on)\b|'
     r'\bpayment\b.{0,80}\btowards your\b.{0,40}\bcredit\s*card\b|'
     r'\bthank you for (?:your )?payment\b|'
-    r'\bpayment (?:of|towards)\b.{0,60}\b(?:credit card|card ending)\b',
+    r'\bpayment (?:of|towards)\b.{0,60}\b(?:credit\s*card|card\s*(?:number|no\.?|ending))\b',
     caseSensitive: false,
   );
 
@@ -393,7 +393,7 @@ class TransactionExtractor {
     final cardLast4 = _extractCardLast4(body, sender);
     final issuer = _issuer(lower, sender);
     final vpa = _counterpartyVpa(body);
-    final merchant = _merchant(body, cash: cash) ??
+    final merchant = _merchant(body, cash: cash, keepCompanySuffix: isCredit) ??
         _cardPostTimestampMerchant(body) ??
         _p2pMerchant(body);
     final balance = amountFinder.balanceAfter(body);
@@ -620,10 +620,19 @@ class TransactionExtractor {
       if (bare != null) return bare.group(1);
     }
     // A card-issuer header with a single mask elsewhere in the body is still a
-    // card: `AMEX Corporate Card **********91008`.
-    if (cardSender) return _extractLast4(body);
+    // card: `AMEX Corporate Card **********91008`. But a card issuer also sends
+    // *account* alerts — `A/c XX1234 debited` from an SBI Card header is a
+    // deposit account, never a new plastic.
+    if (cardSender && !_accountContext.hasMatch(body)) {
+      return _extractLast4(body);
+    }
     return null;
   }
+
+  static final RegExp _accountContext = RegExp(
+    r"\b(?:a/?c|acct|acc(?:ount)?)(?:\s*no\.?)?\b",
+    caseSensitive: false,
+  );
 
   /// Card context for a mask: the word "card" (or `CC`/`Amex`) followed by an
   /// optional `no.`/`ending`, within a short distance of the mask.
@@ -705,7 +714,11 @@ class TransactionExtractor {
     return _payloadMarker.hasMatch(body) ? all.last.group(0) : all.first.group(0);
   }
 
-  String? _merchant(String body, {required bool cash}) {
+  String? _merchant(
+    String body, {
+    required bool cash,
+    bool keepCompanySuffix = false,
+  }) {
     // A bill-pay tag is the counterparty of an ICICI bill payment (H01-H04).
     final bill = _billRef.firstMatch(body);
     if (bill != null) return bill.group(0)!.toUpperCase();
@@ -723,7 +736,10 @@ class TransactionExtractor {
 
     for (final pattern in _merchantAnchors) {
       for (final match in pattern.allMatches(body)) {
-        final candidate = _cleanMerchant(match.group(1)!);
+        final candidate = _cleanMerchant(
+          match.group(1)!,
+          keepCompanySuffix: keepCompanySuffix,
+        );
         if (_isUsableMerchant(candidate)) return candidate;
       }
     }
@@ -755,7 +771,7 @@ class TransactionExtractor {
     return parts.isEmpty ? null : parts.join(' ');
   }
 
-  String _cleanMerchant(String value) {
+  String _cleanMerchant(String value, {bool keepCompanySuffix = false}) {
     var cleaned = value.replaceAll(RegExp(r'\s+'), ' ').trim();
     // `IND*Amazon.in`, `EBA*MF-AXIS` — the aggregator tag is not the brand.
     cleaned = cleaned.replaceFirst(
@@ -775,10 +791,14 @@ class TransactionExtractor {
     // Stop at the first sentence/spatial/balance/rail token, or a long digit run
     // (a reference number is not a merchant).
     // `SWIGGY PVT LTD FOOD2` — the company suffix and a trailing digit are noise.
-    cleaned = cleaned.replaceFirst(
-      RegExp(r'\s+(?:pvt|private)\.?\s+ltd\.?.*$', caseSensitive: false),
-      '',
-    );
+    // A *credit* payer keeps its full legal name: `ACME TECHNOLOGIES PVT LTD`
+    // is the entity that paid, and truncating it loses the identity.
+    if (!keepCompanySuffix) {
+      cleaned = cleaned.replaceFirst(
+        RegExp(r'\s+(?:pvt|private)\.?\s+ltd\.?.*$', caseSensitive: false),
+        '',
+      );
+    }
     cleaned = cleaned.replaceFirst(RegExp(r'\d+$'), '');
     final cut = _merchantCut.firstMatch(cleaned);
     if (cut != null) cleaned = cleaned.substring(0, cut.start);

@@ -89,6 +89,20 @@ class HomeData {
   /// Refunds booked this month (reported separately from income).
   Paise get refunds => summary.refunds;
 
+  /// Money-in by kind for the current month: salary/interest are true income,
+  /// the rest (refund, cashback, cardPayment, walletLoad, redemption,
+  /// selfTransfer, p2pReceive) are reported on their own line.
+  Map<MoneyInKind, int> get moneyInByKind {
+    final byKind = <MoneyInKind, int>{};
+    for (final txn in transactions) {
+      final kind = txn.moneyInKind;
+      if (kind == MoneyInKind.none) continue;
+      if (txn.occurredAt.isBefore(summary.monthStart)) continue;
+      byKind.update(kind, (v) => v + txn.amountPaise, ifAbsent: () => txn.amountPaise);
+    }
+    return byKind;
+  }
+
   List<CardMetrics> get cardsWithLimit =>
       cards.where((c) => c.card.creditLimitPaise != null).toList(growable: false);
 

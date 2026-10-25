@@ -204,7 +204,11 @@ class DedupeEngine {
     if (sameSender && _refsDistinguish(a, b)) return false;
     if (a.kind != b.kind) return false;
 
-    final merchantSame = _merchantSimilarity(a.merchant, b.merchant) >= 0.6 ||
+    final bothCardBill =
+        a.transferReason == TransferReason.creditCardBill &&
+        b.transferReason == TransferReason.creditCardBill;
+    final merchantSame = bothCardBill ||
+        _merchantSimilarity(a.merchant, b.merchant) >= 0.6 ||
         _tokenOverlap(a.merchant, b.merchant);
     final oneMissingMerchant =
         (a.merchant?.isNotEmpty != true) != (b.merchant?.isNotEmpty != true);

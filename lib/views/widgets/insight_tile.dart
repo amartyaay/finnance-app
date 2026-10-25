@@ -42,13 +42,8 @@ class InsightTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = T.of(context);
     final toneColor = insightToneColor(context, insight.tone);
-    final tinted = insight.tone == InsightTone.warning ||
+    final emphasised = insight.tone == InsightTone.warning ||
         insight.tone == InsightTone.caution;
-    final background = switch (insight.tone) {
-      InsightTone.warning => p.dangerSoft,
-      InsightTone.caution => p.cautionSoft,
-      _ => p.surface,
-    };
     final amount = insight.amountPaise;
     final chip = insight.chip?.trim();
     final semantics = [
@@ -69,10 +64,10 @@ class InsightTile extends StatelessWidget {
       excludeSemantics: true,
       child: Container(
         decoration: BoxDecoration(
-          color: background,
+          color: p.surface,
           border: Border.all(
-            color: tinted
-                ? toneColor.withValues(alpha: 0.24)
+            color: emphasised
+                ? toneColor.withValues(alpha: 0.30)
                 : p.outlineVariant,
           ),
           borderRadius: BorderRadius.circular(T.r3),

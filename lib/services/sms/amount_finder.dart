@@ -34,8 +34,13 @@ class AmountFinder {
   const AmountFinder();
 
   /// Currency-marked numbers: `Rs 250`, `Rs.1,299.50`, `INR 5000`, `₹ 99`.
+  ///
+  /// Indian bank statements print `Total amt: INR Dr. 11660.26` — the debit
+  /// mark sits between the currency and the figure, and without it every Axis
+  /// statement had no parsable amount at all.
   static final RegExp _currency = RegExp(
-    r'(?:(?:rs|inr)\.?|₹)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)',
+    r'(?:(?:rs|inr)\.?|₹)\s*(?:(?:dr|cr|debit|credit)\.?\s*)?'
+    r'([0-9][0-9,]*(?:\.[0-9]{1,2})?)',
     caseSensitive: false,
   );
 

@@ -1,4 +1,5 @@
 import '../domain/enums.dart';
+import '../domain/merchant_signature.dart';
 
 /// Offline merchant -> category rules, tuned for Indian merchants.
 ///
@@ -111,6 +112,8 @@ class Categorizer {
     ('petrol', 'Fuel', SpendCategoryKind.fuel),
     ('diesel', 'Fuel', SpendCategoryKind.fuel),
     ('indian oil', 'Fuel', SpendCategoryKind.fuel),
+    // `INF*Indian` is the Infibeam tag in front of an Indian Oil pump.
+    ('inf indian', 'Fuel', SpendCategoryKind.fuel),
     ('iocl', 'Fuel', SpendCategoryKind.fuel),
     ('hp petrol', 'Fuel', SpendCategoryKind.fuel),
     ('hpcl', 'Fuel', SpendCategoryKind.fuel),
@@ -124,6 +127,8 @@ class Categorizer {
     // Shopping
     ('amazon', 'Shopping', SpendCategoryKind.shopping),
     ('flipkart', 'Shopping', SpendCategoryKind.shopping),
+    // `PYU*Flipkar` — PayU tag plus a truncated brand.
+    ('flipkar', 'Shopping', SpendCategoryKind.shopping),
     ('myntra', 'Shopping', SpendCategoryKind.shopping),
     ('ajio', 'Shopping', SpendCategoryKind.shopping),
     ('nykaa', 'Shopping', SpendCategoryKind.shopping),
@@ -253,6 +258,19 @@ class Categorizer {
     for (final rule in _rules) {
       if (normalised.contains(rule.$1)) {
         return (name: rule.$2, kind: rule.$3);
+      }
+    }
+    // The same shop must be recognised next time even when the alert adds a
+    // store number or a branch: `Pluxee Meal 4411` and `Pluxee-Mcal` share the
+    // normalised merchant signature, so a rule learned on one fires on the
+    // other. Learned `merchant_rules` are consulted before this fallback by the
+    // repository; this is the bundled-rule equivalent.
+    final signature = MerchantSignature.of(merchant);
+    if (signature != null && signature != normalised) {
+      for (final rule in _rules) {
+        if (signature.contains(rule.$1)) {
+          return (name: rule.$2, kind: rule.$3);
+        }
       }
     }
     return (name: 'Other', kind: SpendCategoryKind.other);

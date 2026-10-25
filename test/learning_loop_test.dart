@@ -9,6 +9,7 @@
 //   * AppState         — the methods a Settings or detail-sheet button calls.
 
 import 'package:finnance_app/data/demo_repository.dart';
+import 'package:finnance_app/data/finance_repository.dart';
 import 'package:finnance_app/domain/enums.dart';
 import 'package:finnance_app/domain/merchant_rule.dart';
 import 'package:finnance_app/domain/merchant_signature.dart';
@@ -345,6 +346,44 @@ void main() {
           greaterThanOrEqualTo(data.needsReview[i].occurredAtMs),
         );
       }
+    });
+  });
+
+  group('HomeData', () {
+    test('needsReviewCount reports the full queue behind the capped list', () {
+      final data = HomeDataBuilder().build(
+        transactions: const [],
+        cards: const [],
+        bills: const [],
+        smsMessages: const [],
+        assessments: const [],
+        categories: const [],
+        now: _now,
+        isDemo: false,
+        lastScanAt: null,
+        smsRead: 0,
+        needsReview: [_txn(atMs: 1, confidence: 0.2)],
+        needsReviewCount: 27,
+      );
+      expect(data.needsReview, hasLength(1));
+      expect(data.needsReviewCount, 27);
+    });
+
+    test('defaults the count to the list when no total is supplied', () {
+      final data = HomeDataBuilder().build(
+        transactions: const [],
+        cards: const [],
+        bills: const [],
+        smsMessages: const [],
+        assessments: const [],
+        categories: const [],
+        now: _now,
+        isDemo: false,
+        lastScanAt: null,
+        smsRead: 0,
+        needsReview: [_txn(atMs: 1, confidence: 0.2)],
+      );
+      expect(data.needsReviewCount, 1);
     });
   });
 }

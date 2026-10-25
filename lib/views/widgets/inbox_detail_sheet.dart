@@ -64,10 +64,14 @@ class _InboxMessageSheet extends StatefulWidget {
 
 class _InboxMessageSheetState extends State<_InboxMessageSheet> {
   late final Txn? _txn = widget.stored ?? widget.parsed;
-  late final String? _signature = MerchantSignature.of(
-    _txn?.merchant,
-    senderEntity: senderEntity(widget.row.sender),
-  );
+
+  /// The merchant signature backing "Every payment from X".
+  ///
+  /// Only an existing payment can create one: marking a non-payment as "every
+  /// from this bank" would otherwise sweep every spend from that bank, and the
+  /// sender fallback is never used across directions (a `hdfc bank` key must
+  /// not turn a salary credit into a spend rule).
+  late final String? _signature = _signatureFor(_txn);
   late final String _merchantLabel = merchantScopeLabel(
     _txn,
     widget.row.sender,
@@ -107,6 +111,18 @@ class _InboxMessageSheetState extends State<_InboxMessageSheet> {
     _amount.dispose();
     _merchant.dispose();
     super.dispose();
+  }
+
+  String? _signatureFor(Txn? txn) {
+    if (txn == null) return null;
+    if (MerchantSignature.isSenderFallback(txn.merchant) &&
+        txn.kind != TxnKind.spend) {
+      return null;
+    }
+    return MerchantSignature.of(
+      txn.merchant,
+      senderEntity: senderEntity(widget.row.sender),
+    );
   }
 
   void _close() {
@@ -183,9 +199,9 @@ class _InboxMessageSheetState extends State<_InboxMessageSheet> {
       if (removed > 0) {
         final label = removed == 1 ? 'payment' : 'payments';
         message = every
-            ? 'Removed $removed $label from $_merchantLabel out of your '
-                  'totals. Future alerts from there stay out.'
-            : 'Removed this $label from your totals.';
+            ? 'Removed $removed $label at $_merchantLabel from your totals. '
+                  'Future alerts from there stay out.'
+            : 'Removed this payment from your totals.';
       } else {
         message = 'Marked as not a transaction.';
       }
@@ -395,7 +411,8 @@ class _InboxMessageSheetState extends State<_InboxMessageSheet> {
               ),
               _ScopeOption(
                 title: 'Just this payment',
-                subtitle: 'Only this message changes. Nothing is remembered.',
+                subtitle: 'Only this message changes; no other payment is '
+                    'touched.',
                 selected: !_everyPayment,
                 onTap: () => setState(() => _everyPayment = false),
               ),

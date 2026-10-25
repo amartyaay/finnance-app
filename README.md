@@ -69,8 +69,16 @@ android/          RawSmsStore + receiver (stores raw SMS, posts quick-classify n
 flutter pub get
 flutter test                 # parser corpus, engines, widget smoke tests
 flutter analyze              # zero issues expected
-flutter run -d chrome        # web build opens in demo mode (no SMS on web)
-flutter build apk --debug    # Android
+flutter build apk --debug    # the only supported build
+```
+
+**Android only.** The web and desktop targets are not supported: there is no SMS
+inbox to read, and the browser's number semantics differ from the phone's (a
+64-bit clamp can silently become zero under dart2js). Verification therefore runs
+on a device:
+
+```powershell
+powershell -File tool/device_shots.ps1   # four tabs + settings -> docs/shots/device-*.png
 ```
 
 The web build and the onboarding screen both offer **demo data**: a generated 4-month dataset (three cards, rent, SIP, subscriptions, a duplicate charge, a phishing message) so the whole app can be judged without granting SMS access.

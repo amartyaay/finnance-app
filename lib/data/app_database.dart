@@ -178,7 +178,16 @@ class AppDatabase {
       )
     ''');
     // One statement, one row: the same bill can arrive as a statement SMS and a
-    // due reminder, and both must not double the "still due" figure.
+    // due reminder, and both must not double the "still due" figure. Older
+    // builds could have written duplicates, so collapse them first — a unique
+    // index that fails to create would leave the whole database unopened.
+    await db.execute('''
+      DELETE FROM card_bills WHERE id NOT IN (
+        SELECT MIN(id) FROM card_bills
+        GROUP BY card_key, total_due,
+          COALESCE(due_date, 0), COALESCE(statement_date, 0)
+      )
+    ''');
     await db.execute('''
       CREATE UNIQUE INDEX IF NOT EXISTS card_bills_dedupe_idx
       ON card_bills(

@@ -92,16 +92,12 @@ class InsightsScreen extends StatelessWidget {
                   ],
                 ),
               ),
-            for (final alert in data.phishingAlerts)
+            if (data.phishingAlerts.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(bottom: T.s3),
-                child: NoticeBanner(
-                  title: 'Possible fraud message',
-                  body: _preview(alert.preview),
-                  icon: Icons.gpp_maybe_rounded,
-                  tone: PillTone.danger,
-                  actionLabel: 'View',
-                  onAction: () => _showAlert(context, alert),
+                child: _FraudCard(
+                  alerts: data.phishingAlerts,
+                  onOpen: (alert) => _showAlert(context, alert),
                 ),
               ),
             for (final insight in attention)
@@ -262,6 +258,143 @@ class InsightsScreen extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _FraudCard extends StatelessWidget {
+  const _FraudCard({required this.alerts, required this.onOpen});
+
+  final List<PhishingAlert> alerts;
+  final ValueChanged<PhishingAlert> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = T.of(context);
+    final shown = alerts.take(2).toList(growable: false);
+    return Container(
+      padding: const EdgeInsets.all(T.s4),
+      decoration: BoxDecoration(
+        color: p.dangerSoft,
+        border: Border.all(color: p.danger.withValues(alpha: 0.20)),
+        borderRadius: BorderRadius.circular(T.r3),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconBadge(
+                icon: Icons.gpp_maybe_rounded,
+                color: p.danger,
+                size: 38,
+                iconSize: 19,
+              ),
+              const SizedBox(width: T.s3),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Possible fraud messages',
+                      style: T.cardTitle.copyWith(
+                        color: p.danger,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      'Kept out of your totals. Nothing was opened.',
+                      style: T.bodySmall.copyWith(
+                        color: p.danger.withValues(alpha: 0.9),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: T.s2),
+          for (var i = 0; i < shown.length; i++) ...[
+            if (i > 0)
+              Divider(
+                height: 1,
+                color: p.danger.withValues(alpha: 0.18),
+              ),
+            Semantics(
+              button: true,
+              label:
+                  'Fraud message from ${shown[i].sender}. ${_preview(shown[i].preview)}. Open.',
+              excludeSemantics: true,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => onOpen(shown[i]),
+                  borderRadius: BorderRadius.circular(T.r2),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 48),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: T.s2),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            size: 16,
+                            color: p.danger,
+                          ),
+                          const SizedBox(width: T.s2),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  shown[i].sender,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: T.bodySmall.copyWith(
+                                    color: p.danger,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12.5,
+                                  ),
+                                ),
+                                Text(
+                                  _preview(shown[i].preview),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: T.bodySmall.copyWith(
+                                    color: p.danger.withValues(alpha: 0.9),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            size: 18,
+                            color: p.danger,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+          if (alerts.length > shown.length) ...[
+            const SizedBox(height: T.s1),
+            Text(
+              '+${alerts.length - shown.length} more flagged',
+              style: T.bodySmall.copyWith(
+                color: p.danger,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

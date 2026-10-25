@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../app/design_tokens.dart';
 import '../app/widgets/kit.dart';
+import '../domain/enums.dart';
 import '../domain/sms_inbox.dart';
 import '../domain/sms_message.dart';
 import '../domain/transaction.dart';
@@ -23,8 +24,8 @@ import 'widgets/inbox_message_tile.dart';
 /// it never shows a launch modal or an undismissable badge, and every action is
 /// scoped — the owner chooses "just this payment" or "every payment from X".
 ///
-/// Wire it from anywhere with [openSmsInbox] (or `SmsInboxScreen.open`); the
-/// route name is [routeName] (`messages`).
+/// Wire it from anywhere with `SmsInboxScreen.open` (or `openSmsInbox` from
+/// `app.dart`); the route name is [routeName] (`messages`).
 class SmsInboxScreen extends StatefulWidget {
   const SmsInboxScreen({super.key});
 
@@ -42,9 +43,6 @@ class SmsInboxScreen extends StatefulWidget {
   @override
   State<SmsInboxScreen> createState() => _SmsInboxScreenState();
 }
-
-/// Convenience for screens that already import `app.dart`.
-Future<void> openSmsInbox(BuildContext context) => SmsInboxScreen.open(context);
 
 class _SmsInboxScreenState extends State<SmsInboxScreen> {
   static const int _pageSize = 50;
@@ -202,15 +200,15 @@ class _SmsInboxScreenState extends State<SmsInboxScreen> {
   }
 
   InboxRowStatus _status(SmsMessageRow row, Txn? parsed, Txn? stored) {
-    final base = inboxRowStatus(
-      row,
-      hasTransaction: parsed != null || stored != null,
-    );
-    if (base == InboxRowStatus.flagged) return base;
+    if (row.smsClass == SmsClass.phishing) return InboxRowStatus.flagged;
     if (isExcludedShape(parsed ?? stored, _excludedShapes)) {
       return InboxRowStatus.notCounted;
     }
-    return base;
+    // A ledger row is the strongest evidence that this message is a payment —
+    // it also covers a payment the owner typed in by hand, whose stored class
+    // may still be informational.
+    if (stored != null) return InboxRowStatus.transaction;
+    return inboxRowStatus(row, hasTransaction: parsed != null);
   }
 
   Future<void> _openMessage(SmsMessageRow row) async {
@@ -367,9 +365,9 @@ class _SmsInboxScreenState extends State<SmsInboxScreen> {
           icon: Icons.mark_email_unread_outlined,
           title: 'No messages yet',
           body:
-              'Finanance reads bank and UPI texts on this phone automatically '
-              'as they arrive. When the first one lands, it shows up here, '
-              'newest first — nothing needs setting up.',
+              'The app reads bank and UPI texts on this phone automatically as '
+              'they arrive. When the first one lands it shows up here, newest '
+              'first — nothing needs setting up.',
           actionLabel: state.isDemo ? 'Exit demo' : 'Scan SMS now',
           onAction: state.isDemo ? state.exitDemo : state.scanInbox,
           secondaryLabel: 'Skip for now',

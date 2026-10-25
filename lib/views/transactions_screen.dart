@@ -226,45 +226,74 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
               ),
             ),
             const SizedBox(height: T.s3),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              clipBehavior: Clip.none,
-              child: Row(
+            SizedBox(
+              height: 48,
+              child: Stack(
                 children: [
-                  _FilterChip(
-                    label: 'All',
-                    selected: _kindFilter == null && !_needsReviewOnly,
-                    onTap: () => setState(() {
-                      _kindFilter = null;
-                      _needsReviewOnly = false;
-                    }),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    clipBehavior: Clip.none,
+                    child: Row(
+                      children: [
+                        _FilterChip(
+                          label: 'All',
+                          selected: _kindFilter == null && !_needsReviewOnly,
+                          onTap: () => setState(() {
+                            _kindFilter = null;
+                            _needsReviewOnly = false;
+                          }),
+                        ),
+                        for (final entry in categories.entries) ...[
+                          const SizedBox(width: T.s2),
+                          _FilterChip(
+                            label: entry.value,
+                            selected: _kindFilter == entry.key,
+                            onTap: () => setState(() {
+                              _kindFilter = _kindFilter == entry.key
+                                  ? null
+                                  : entry.key;
+                              _needsReviewOnly = false;
+                            }),
+                          ),
+                        ],
+                        if (state.data.needsReview.isNotEmpty) ...[
+                          const SizedBox(width: T.s2),
+                          _FilterChip(
+                            label: 'Needs review',
+                            icon: Icons.flag_rounded,
+                            selected: _needsReviewOnly,
+                            onTap: () => setState(() {
+                              _needsReviewOnly = !_needsReviewOnly;
+                              _kindFilter = null;
+                            }),
+                          ),
+                        ],
+                        const SizedBox(width: T.s5),
+                      ],
+                    ),
                   ),
-                  for (final entry in categories.entries) ...[
-                    const SizedBox(width: T.s2),
-                    _FilterChip(
-                      label: entry.value,
-                      selected: _kindFilter == entry.key,
-                      onTap: () => setState(() {
-                        _kindFilter = _kindFilter == entry.key
-                            ? null
-                            : entry.key;
-                        _needsReviewOnly = false;
-                      }),
+                  // A soft edge fade: the chip row scrolls, but it should not
+                  // look like a chip was guillotined at the screen edge.
+                  Positioned(
+                    top: 0,
+                    bottom: 0,
+                    right: 0,
+                    width: 28,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                            colors: [
+                              p.bg.withValues(alpha: 0),
+                              p.bg,
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
-                  ],
-                  if (state.data.needsReview.isNotEmpty) ...[
-                    const SizedBox(width: T.s2),
-                    _FilterChip(
-                      label: 'Needs review',
-                      icon: Icons.flag_rounded,
-                      selected: _needsReviewOnly,
-                      onTap: () => setState(() {
-                        _needsReviewOnly = !_needsReviewOnly;
-                        _kindFilter = null;
-                      }),
-                    ),
-                  ],
-                  const SizedBox(width: T.s5),
+                  ),
                 ],
               ),
             ),

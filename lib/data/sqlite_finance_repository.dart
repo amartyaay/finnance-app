@@ -346,7 +346,7 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
   /// Stored in `app_meta`; together with the schema version it decides whether
   /// the stored ledger has to be re-derived. Bump this on every rule change
   /// that alters what a message becomes.
-  static const int parserVersion = 4;
+  static const int parserVersion = 5;
 
   @override
   Future<IngestResult> reparseAll() async {
@@ -385,7 +385,14 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
           ) ??
           0;
 
-      await db.delete('transactions');
+      // Rows the owner typed by hand ("This is a transaction") cannot be
+      // re-derived from any message, so a re-parse must carry them across
+      // instead of dropping them.
+      await db.delete(
+        'transactions',
+        where: 'source_type != ?',
+        whereArgs: [TxnSourceType.manual.name],
+      );
       await db.delete('card_bills');
       await db.update('sms_messages', {'processed': 0});
 
@@ -968,7 +975,7 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
     if (everyFromMerchant && signature != null) {
       final rows = await db.query(
         'transactions',
-        columns: const ['dedupe_key', 'merchant', 'sender'],
+        columns: const ['dedupe_key', 'merchant', 'sender', 'kind'],
       );
       final keys = <String>[];
       for (final row in rows) {
@@ -977,6 +984,13 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
           senderEntity: _learning.senderEntityFor(row['sender'] as String?),
         );
         if (rowSignature != signature) continue;
+        // A sender-fallback key (`hdfc bank`) is shared by every alert from
+        // that bank; "not a transaction" must never sweep a salary credit or a
+        // transfer, only spends.
+        if (MerchantSignature.isSenderFallback(row['merchant'] as String?) &&
+            row['kind'] != TxnKind.spend.name) {
+          continue;
+        }
         final key = row['dedupe_key'] as String?;
         if (key != null) keys.add(key);
       }
@@ -1048,7 +1062,9 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
       last4: parsed?.last4,
       issuer: parsed?.issuer,
       confidence: 1,
-      sourceType: TxnSourceType.sms,
+      // Manual provenance keeps this row through `reparseAll`, which cannot
+      // recreate a payment the parser does not read from any message.
+      sourceType: TxnSourceType.manual,
       needsReview: false,
       // Typed by a human, so the ledger admission rule must not re-derive the
       // decision from the promo/informational wording that made the parser skip
