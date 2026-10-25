@@ -48,7 +48,7 @@ Round-1 evidence: `docs/eval/round-1/`; round-2: `docs/eval/round-2/`.
 | Metric | Start | Round 1 | Now |
 |---|---:|---:|---:|
 | Evaluator scores | — | 5.3 / 6.2 / 6.4 / 6.7 | end user **6.8**; other three pending |
-| Fixture corpus | 43.1 % (broken build) | 99.1 % / 100 % | **111/111** transactions, 100 % classification |
+| Fixture corpus | 43.1 % (broken build) | 99.1 % / 100 % | **109/109** transactions, 100 % classification (the corpus has 109 checks; an earlier note said 111 — wrong) |
 | `flutter test` | 29 (old MVP) | 214 / 1 | **240/240** |
 | "Other" share of spend | 71.7 % | 2.9 % | **0.7 %** |
 | Spam counted · verbless · duplicate groups | 1 · 4 · 3 | 0 · 0 · 0 | **0 · 0 · 0** |
@@ -69,7 +69,7 @@ Tracked with `tool/replay_inbox.dart` (offline, re-parses raw messages with curr
 | Duplicate groups (10 min) | 3 | **0** |
 | Counted rows | 275 | 269 |
 
-Fixture corpus: **108/109 transactions** (H07 is a documented bad fixture), **77/77 classification**.
+Fixture corpus: **109/109 transactions**, **77/77 classification** (both corrected fixtures now assert the research-backed treatment).
 
 ## Open todos (priority order)
 
