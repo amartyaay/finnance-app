@@ -152,7 +152,11 @@ class DedupeEngine {
     for (final receipt in receipts) {
       Txn? match;
       for (final other in sorted) {
-        if (identical(other, receipt) || _isInflow(other)) continue;
+        // A payment receipt pairs with a debit; a merchant's "refund
+        // processed" pairs with the bank's refund credit.
+        if (identical(other, receipt) || _isInflow(other) != _isInflow(receipt)) {
+          continue;
+        }
         final gapMs = (other.occurredAtMs - receipt.occurredAtMs).abs();
         if (gapMs > receiptWindowMs) continue;
         final diff = (other.amountPaise - receipt.amountPaise).abs();
@@ -170,9 +174,17 @@ class DedupeEngine {
                       gapMs <= 2 * 60 * 60 * 1000)
             : diff <= 100 && gapMs <= 24 * 60 * 60 * 1000;
         if (!close) continue;
-        if (other.sourceType == TxnSourceType.receipt &&
-            other.occurredAtMs > receipt.occurredAtMs) {
-          continue; // pair receipt-with-receipt once, earlier one first
+        if (other.sourceType == TxnSourceType.receipt) {
+          // Pair receipt-with-receipt once (earlier first), only within an
+          // hour, and never across two order ids: two ₹49 Airtel recharges
+          // on two days are two recharges.
+          if (other.occurredAtMs > receipt.occurredAtMs) continue;
+          if (gapMs > 60 * 60 * 1000) continue;
+          if (_refsDistinguish(other, receipt) &&
+              _isInflow(receipt) == _isInflow(other) &&
+              other.sender == receipt.sender) {
+            continue;
+          }
         }
         // Prefer a bank alert over another receipt, then the closest in time.
         if (match == null ||
@@ -187,6 +199,26 @@ class DedupeEngine {
       if (match != null) {
         pairs.add((a: match.key, b: receipt.key, closure: false, opposite: false));
         union(match.key, receipt.key);
+      }
+    }
+
+    // One bank moving money between two of the user's own accounts can print
+    // the legs minutes apart (SBI: "A/C …5650 has a debit by transfer of Rs
+    // 1,02,794.00 … Avl Bal Rs 0.00" then "A/C …4642 Credited INR 1,02,794.00
+    // … Deposit by transfer from Mr. <you>"). Same sender, same amount,
+    // opposite directions, neither naming a merchant, within 30 minutes.
+    for (var i = 0; i < sorted.length; i++) {
+      final a = sorted[i];
+      if (a.merchant != null || a.sender == null) continue;
+      for (var j = i + 1; j < sorted.length; j++) {
+        final b = sorted[j];
+        if (b.occurredAtMs - a.occurredAtMs > 30 * 60 * 1000) break;
+        if (b.merchant != null || b.sender != a.sender) continue;
+        if (b.amountPaise != a.amountPaise) continue;
+        if (_isInflow(a) == _isInflow(b)) continue;
+        if (_refsDistinguish(a, b)) continue;
+        pairs.add((a: a.key, b: b.key, closure: false, opposite: true));
+        union(a.key, b.key);
       }
     }
 

@@ -78,3 +78,21 @@ A failed payment, a scheduled debit, a request, or a "you can pay" is `info`/`pr
 8. "Your SIP of Rs 5,000 will be debited on 5th" → `info`. "SIP of Rs 5,000 processed/debited" → `debit/investment`.
 9. "Statement for card xx1234: Total due Rs 13,402, Min due Rs 670, due 12 Nov" → `bill_notice`, amount 13402.
 10. "Rs 105 cashback credited to your Amazon Pay balance" → `credit/cashback`.
+
+## Adjudicated rulings (round 1 of labelling, 2026-10-26)
+
+11. **Employer meal/benefit wallet loads** (Pluxee, Sodexo, Zeta "credited … towards Meal Wallet") →
+    `credit/other`, note `meal benefit`. Not salary: the money can only be spent at food merchants,
+    and the spends from the wallet are counted as `debit/spend` when they happen.
+12. **Fund-house / RTA unit confirmations** ("SIP Purchase in Folio … processed at NAV …") →
+    `debit/investment` with `dup_of` the bank's mandate debit when one exists (amounts may differ by
+    stamp duty, e.g. 3,000 vs 2,999.85). With no bank debit anywhere nearby, `info`.
+13. **Merchant / biller receipts** ("Recharge of INR 361 successful", "Amount paid: Rs.349",
+    "Payment Confirmed! Your Swiggy Order of Rs 417") → `debit/spend`; set `dup_of` to the bank/card
+    alert for the same payment if one exists within 3 days (search both directions in time: the
+    earlier message is the original).
+14. **SBI UPI "trf to <NAME>"** → `debit/spend` when NAME is a shop/brand/business (often truncated:
+    `M S SHRINGERI KI`, `Q MART`, `TATA 1MG HEALTHC`); `debit/p2p` only when it is clearly a person;
+    `trf to PhonePe/Paytm/CRED` → `debit/other` with a note unless the context shows a card bill.
+15. **Card-bill legs**: the bank debit and the issuer's "payment received" are both labelled
+    `card_bill_payment` and are **not** linked with `dup_of` (different instruments); the auditor pairs them.

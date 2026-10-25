@@ -554,7 +554,8 @@ class SmsClassifier {
   /// a brand but is not on the list is impersonation — the one strong link-only
   /// fraud signal, and what the lookalike-header fixtures rely on.
   static const Map<String, List<String>> _brandDomains = {
-    'hdfc': ['hdfcbank.com', 'hdfc.bank.in'],
+    // hdfcbk.io is HDFC's own short-link domain (166 false alarms without it).
+    'hdfc': ['hdfcbank.com', 'hdfc.bank.in', 'hdfcbk.io'],
     'icici': ['icicibank.com', 'icici.bank.in', 'icicipruamc.com', 'iciciprumf.com'],
     'sbi': [
       'sbi.co.in', 'sbicard.com', 'onlinesbi.sbi', 'sbi.bank.in', 'sbiyono.sbi',
@@ -572,7 +573,7 @@ class SmsClassifier {
     'cred': ['cred.club'],
     'onecard': ['getonecard.app', 'onecard.app'],
     'uidai': ['uidai.gov.in'],
-    'irctc': ['irctc.co.in'],
+    'irctc': ['irctc.co.in', 'irctctourism.com'],
     'indiapost': ['indiapost.gov.in'],
   };
 

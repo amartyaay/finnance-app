@@ -159,10 +159,19 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
     try {
       // A year of history, uncapped in practice: salary cycles, recurring
       // payments and card statements need more than the newest 2 000 alerts
-      // (the owner's phone holds 8 000+ messages over ~20 months).
+      // (the owner's phone holds 8 000+ messages over ~20 months). After the
+      // one-time backfill only newer messages are read, with a two-day overlap
+      // so a late-delivered SMS is not skipped (inserts ignore duplicates).
+      final backfilled = await _meta(db, 'inbox_backfill') == '$maxInboxRead';
+      final newest = Sqflite.firstIntValue(
+        await db.rawQuery('SELECT MAX(received_at) FROM sms_messages'),
+      );
+      final since = (!backfilled || newest == null)
+          ? now.subtract(const Duration(days: 400)).millisecondsSinceEpoch
+          : newest - const Duration(days: 2).inMilliseconds;
       incoming = await _reader.readInbox(
         limit: maxInboxRead,
-        sinceMillis: now.subtract(const Duration(days: 400)).millisecondsSinceEpoch,
+        sinceMillis: since,
       );
     } on UnsupportedError {
       rethrow;
@@ -183,6 +192,7 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
     await batch.commit(noResult: true);
+    await _setMeta(db, 'inbox_backfill', '$maxInboxRead');
 
     final result = await _processPending(db, now);
     await _writeParserVersion(db);
@@ -357,7 +367,7 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
   /// Stored in `app_meta`; together with the schema version it decides whether
   /// the stored ledger has to be re-derived. Bump this on every rule change
   /// that alters what a message becomes.
-  static const int parserVersion = 8;
+  static const int parserVersion = 9;
 
   @override
   Future<IngestResult> reparseAll() async {
@@ -466,6 +476,22 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
     }
     await _reparse(db);
   }
+
+  Future<String?> _meta(Database db, String key) async {
+    final rows = await db.query(
+      'app_meta',
+      where: 'key = ?',
+      whereArgs: [key],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.first['value'] as String?;
+  }
+
+  Future<void> _setMeta(Database db, String key, String value) => db.insert(
+    'app_meta',
+    {'key': key, 'value': value},
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
 
   Future<void> _writeParserVersion(Database db) async {
     for (final entry in {

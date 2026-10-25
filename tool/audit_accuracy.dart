@@ -228,8 +228,15 @@ void main(List<String> args) {
         .where((g) => g.expectedKind == TxnKind.spend)
         .map((g) => g.amountPaise ?? 0),
   );
+  // Only rows from labelled messages: the inbox may hold more than the set.
+  final countedLabelled = {
+    for (final e in counted.entries)
+      if (gold.containsKey(e.key)) e.key: e.value,
+  };
   final appSpend = sum(
-    counted.values.where((t) => t.kind == TxnKind.spend).map((t) => t.amountPaise),
+    countedLabelled.values
+        .where((t) => t.kind == TxnKind.spend)
+        .map((t) => t.amountPaise),
   );
   final correctSpend = sum(
     perRoot.entries
@@ -272,7 +279,8 @@ void main(List<String> args) {
 
   String pct(int a, int b) => b == 0 ? '—' : '${(a / b * 100).toStringAsFixed(1)} %';
   String rs(int p) => '₹${(p / 100).toStringAsFixed(0)}';
-  final spendCounted = counted.values.where((t) => t.kind == TxnKind.spend).length;
+  final spendCounted =
+      countedLabelled.values.where((t) => t.kind == TxnKind.spend).length;
   final spendRight = perRoot.entries
       .where((e) =>
           gold[e.key]!.expectedKind == TxnKind.spend &&

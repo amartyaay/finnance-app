@@ -25,7 +25,7 @@ class SmsGuards {
     r'\b(?:is due|are due|due on|due by|minimum due|amount due|total due|'
     r'pay now|pay before|avoid (?:late|penalty)|will be debited|will be charged|'
     r'scheduled (?:for|on)|upcoming|convert your transaction|reply yes to confirm|'
-    r'first debit on)\b',
+    r'first debit on|to be paid|has been initiated|is initiated)\b',
     caseSensitive: false,
   );
 
@@ -65,8 +65,14 @@ class SmsGuards {
     r'\brecharge successful\b|রিচার্জ সফল|'
     r'\b(?:bill )?payment of (?:inr|rs\.?|₹)\s*[\d,.]+ (?:was|is|has been) successful|'
     r'\bwas successfully paid\b|\bsuccessfully paid\b|\bamount paid\s*:|'
+    // Not "Amount billed": with no bank debit behind it, a billed
+    // subscription was usually never paid (its mandate was cancelled).
     r'\bpayment confirmed\b|'
-    r'\bbooking confirmed\b.{0,120}\bfor (?:inr|rs\.?|₹)|'
+    r'\bbooking confirmed\b.{0,300}\bfor (?:inr|rs\.?|₹)|'
+    r'\bpayment of (?:inr|rs\.?|₹)\s*[\d,.]+ using [a-z ]{2,20} is successful|'
+    r'\bfor (?:inr|rs\.?|₹)\s*[\d,.]+\s+(?:confirmed|done)\b|'
+    r'\b(?:inr|rs\.?|₹)\s*[\d,.]+ done for .{2,60}\bhas succeeded\b|'
+    r'\bwallet has been recharged with an amount of\b|'
     r'\bwe have processed (?:inr|rs\.?|₹)|'
     r'\byour payment of (?:inr|rs\.?|₹)\s*[\d,.]+ has been received\b|'
     r'\bhas been deducted from your \w+ wallet\b',

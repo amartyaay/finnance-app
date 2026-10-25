@@ -70,8 +70,8 @@ class AppState extends ChangeNotifier {
     try {
       _hasSmsPermission = await _permissions.isGranted();
       _data = await _active.load();
-      // First run with permission but nothing parsed: pull the inbox once so the
-      // app is useful immediately instead of showing an empty dashboard.
+      // First run with permission but nothing parsed: pull the inbox before
+      // showing anything, so the app is useful immediately.
       if (!_demoMode && _hasSmsPermission && _data.transactions.isEmpty) {
         await _ingestQuietly();
       }
@@ -79,6 +79,14 @@ class AppState extends ChangeNotifier {
       _errorMessage = _friendly(error);
     } finally {
       _isLoading = false;
+      notifyListeners();
+    }
+    // Every later launch: show the stored ledger at once, then pick up the
+    // messages that arrived while the app was closed (incremental, a second
+    // or two) and redraw. Without this a missed broadcast stayed missing
+    // until the user thought to tap "Scan".
+    if (!_demoMode && _hasSmsPermission && _data.transactions.isNotEmpty) {
+      await _ingestQuietly();
       notifyListeners();
     }
   }

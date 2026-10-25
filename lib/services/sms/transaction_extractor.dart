@@ -283,6 +283,11 @@ class TransactionExtractor {
     caseSensitive: false,
   );
 
+  static final RegExp _honorific = RegExp(
+    r'^(?:mr|mrs|ms|miss|dr|smt)\.?\s',
+    caseSensitive: false,
+  );
+
   /// Payment apps and billers that forward money elsewhere.
   static final RegExp _paymentAppPayee = RegExp(
     r'^(?:phonepe|paytm|cred\b|mobikwik|amazon\s*pay|billdesk|google\s*pay|gpay|'
@@ -405,9 +410,13 @@ class TransactionExtractor {
     // unasked, so it is a transfer the user is asked about.
     final viaPaymentApp =
         sbiPayee != null && _paymentAppPayee.hasMatch(sbiPayee);
+    // "trf to Mr MUKESH KUMAR": an honorific is the one reliable person signal
+    // SBI prints; everything else stays spend at the payee.
+    final sbiPerson = sbiPayee != null && _honorific.hasMatch(sbiPayee);
     final bankTransfer = _p2pPayee.hasMatch(body) ||
         sbiSelf ||
         viaPaymentApp ||
+        sbiPerson ||
         (sbiPayee == null && _debitByTransfer.hasMatch(lower));
     // Money-in taxonomy first: a card-bill credit, refund, TD redemption or
     // wallet load must never be treated as income (only salary/interest are).
@@ -432,6 +441,8 @@ class TransactionExtractor {
         ? TransferReason.selfTransfer
         : viaPaymentApp && RegExp(r'^cred\b', caseSensitive: false).hasMatch(sbiPayee)
         ? TransferReason.creditCardBill
+        : sbiPerson
+        ? TransferReason.personTransfer
         : (moneyIn.isInflow
               ? TransferReason.none
               : _transferReason(lower, isCredit: isCredit));
@@ -506,7 +517,11 @@ class TransactionExtractor {
       availableLimitPaise: availableLimit?.paise,
       confidence: confidence,
       amountScore: best.score,
-      sourceType: TxnSourceType.sms,
+      // A merchant's own "refund processed" (no account or card named) is a
+      // receipt: it folds into the bank's refund credit when that arrives.
+      sourceType: moneyIn == MoneyInKind.refund && !_bankEvidence.hasMatch(lower)
+          ? TxnSourceType.receipt
+          : TxnSourceType.sms,
       needsReview: needsReview,
       rawBody: body,
     );
