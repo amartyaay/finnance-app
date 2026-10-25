@@ -19,7 +19,7 @@ class SharedPreferencesThemePreferenceStore implements ThemePreferenceStore {
     final prefs = await SharedPreferences.getInstance();
     final value = prefs.getString(_key);
     return AppThemePreference.values.byName(
-      value ?? AppThemePreference.system.name,
+      value ?? AppThemePreference.light.name,
     );
   }
 
@@ -32,7 +32,7 @@ class SharedPreferencesThemePreferenceStore implements ThemePreferenceStore {
 
 class ThemeViewModel extends ChangeNotifier {
   ThemeViewModel({
-    AppThemePreference initialPreference = AppThemePreference.system,
+    AppThemePreference initialPreference = AppThemePreference.light,
     ThemePreferenceStore? preferenceStore,
   }) : _preference = initialPreference,
        _preferenceStore =

@@ -11,27 +11,31 @@ import android.content.pm.PackageManager
 import android.os.Build
 
 object TransactionNotificationHelper {
-    const val CHANNEL_ID = "transaction_classification"
+    const val CHANNEL_ID = "transaction_spend"
     const val ACTION_CLASSIFY = "com.amartyaay.finnance_app.ACTION_CLASSIFY"
-    const val EXTRA_TRANSACTION_ID = "transaction_id"
+    const val EXTRA_SMS_REF = "sms_ref"
     const val EXTRA_CATEGORY_NAME = "category_name"
 
-    fun showClassificationNotification(
+    /**
+     * Shows the spend with quick categories. Tapping a category writes a pending
+     * category that the Flutter side applies on next open, so the user never has
+     * to wait for the app to start.
+     */
+    fun showSpendNotification(
         context: Context,
-        transaction: InsertedTransaction
+        smsId: String,
+        amountPaise: Long,
+        merchant: String?
     ) {
         if (!canPostNotifications(context)) {
             return
         }
 
-        val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        ensureChannel(notificationManager)
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        ensureChannel(manager)
 
-        val title = "Classify ${formatAmount(transaction.amountPaise)}"
-        val merchant = transaction.merchant ?: transaction.instrument.replaceFirstChar {
-            if (it.isLowerCase()) it.titlecase() else it.toString()
-        }
+        val title = "Spent ${formatAmount(amountPaise)}"
+        val subtitle = merchant?.takeIf { it.isNotBlank() } ?: "Tap to categorise"
 
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(context, CHANNEL_ID)
@@ -39,89 +43,59 @@ object TransactionNotificationHelper {
             Notification.Builder(context)
         }
 
+        val base = smsId.hashCode() * 10
         val notification = builder
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
-            .setContentText(merchant)
+            .setContentText(subtitle)
             .setAutoCancel(true)
-            .setContentIntent(openAppPendingIntent(context, transaction.id, "Other"))
-            .addAction(
-                R.mipmap.ic_launcher,
-                "Food",
-                classifyPendingIntent(context, transaction.id, "Food", 1)
-            )
-            .addAction(
-                R.mipmap.ic_launcher,
-                "Travel",
-                classifyPendingIntent(context, transaction.id, "Travel", 2)
-            )
-            .addAction(
-                R.mipmap.ic_launcher,
-                "Other",
-                openAppPendingIntent(context, transaction.id, "Other")
-            )
+            .setContentIntent(openApp(context, base + 1))
+            .addAction(action(context, smsId, "Food", base + 2))
+            .addAction(action(context, smsId, "Travel", base + 3))
+            .addAction(action(context, smsId, "Shopping", base + 4))
             .build()
 
-        notificationManager.notify(transaction.id.toInt(), notification)
+        manager.notify(smsId.hashCode(), notification)
     }
 
-    fun cancel(context: Context, transactionId: Long) {
-        val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.cancel(transactionId.toInt())
+    fun cancel(context: Context, smsId: String) {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.cancel(smsId.hashCode())
     }
 
-    private fun classifyPendingIntent(
+    private fun action(
         context: Context,
-        transactionId: Long,
-        categoryName: String,
-        requestOffset: Int
-    ): PendingIntent {
+        smsId: String,
+        category: String,
+        requestCode: Int
+    ): Notification.Action {
         val intent = Intent(context, CategoryActionReceiver::class.java).apply {
             action = ACTION_CLASSIFY
-            putExtra(EXTRA_TRANSACTION_ID, transactionId)
-            putExtra(EXTRA_CATEGORY_NAME, categoryName)
+            putExtra(EXTRA_SMS_REF, smsId)
+            putExtra(EXTRA_CATEGORY_NAME, category)
         }
-        return PendingIntent.getBroadcast(
-            context,
-            transactionId.toInt() * 10 + requestOffset,
-            intent,
-            pendingIntentFlags()
-        )
+        val pending = PendingIntent.getBroadcast(context, requestCode, intent, flags())
+        return Notification.Action.Builder(R.mipmap.ic_launcher, category, pending).build()
     }
 
-    private fun openAppPendingIntent(
-        context: Context,
-        transactionId: Long,
-        categoryName: String
-    ): PendingIntent {
+    private fun openApp(context: Context, requestCode: Int): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
-            action = Intent.ACTION_VIEW
-            putExtra(EXTRA_TRANSACTION_ID, transactionId)
-            putExtra(EXTRA_CATEGORY_NAME, categoryName)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
-        return PendingIntent.getActivity(
-            context,
-            transactionId.toInt() * 10 + 3,
-            intent,
-            pendingIntentFlags()
-        )
+        return PendingIntent.getActivity(context, requestCode, intent, flags())
     }
 
-    private fun ensureChannel(notificationManager: NotificationManager) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return
-        }
-
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Transaction classification",
-            NotificationManager.IMPORTANCE_DEFAULT
-        ).apply {
-            description = "Prompts to categorize new expense SMS alerts."
-        }
-        notificationManager.createNotificationChannel(channel)
+    private fun ensureChannel(manager: NotificationManager) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        manager.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_ID,
+                "Spending alerts",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "New card and UPI payments, with one-tap categories."
+            }
+        )
     }
 
     private fun canPostNotifications(context: Context): Boolean {
@@ -130,22 +104,21 @@ object TransactionNotificationHelper {
             PackageManager.PERMISSION_GRANTED
     }
 
-    private fun pendingIntentFlags(): Int {
-        return PendingIntent.FLAG_UPDATE_CURRENT or
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                PendingIntent.FLAG_IMMUTABLE
-            } else {
-                0
-            }
+    private fun flags(): Int {
+        var value = PendingIntent.FLAG_UPDATE_CURRENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            value = value or PendingIntent.FLAG_IMMUTABLE
+        }
+        return value
     }
 
     private fun formatAmount(amountPaise: Long): String {
         val rupees = amountPaise / 100
         val paise = amountPaise % 100
         return if (paise == 0L) {
-            "Rs.$rupees"
+            "₹$rupees"
         } else {
-            "Rs.$rupees.${paise.toString().padStart(2, '0')}"
+            "₹$rupees.${paise.toString().padStart(2, '0')}"
         }
     }
 }

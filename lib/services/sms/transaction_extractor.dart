@@ -1,0 +1,734 @@
+import '../../domain/enums.dart';
+import '../../domain/hashing.dart';
+import '../../domain/sms_message.dart';
+import '../../domain/transaction.dart';
+import 'amount_finder.dart';
+import 'sender_registry.dart';
+import 'sms_guards.dart';
+
+/// Turns a transaction-classified SMS into a structured [Txn].
+///
+/// The extractor never guesses silently: when the amount, direction or merchant
+/// cannot be established with enough evidence, the row is returned with
+/// `needsReview: true` so the UI can ask instead of polluting the totals.
+class TransactionExtractor {
+  TransactionExtractor({
+    this.registry = const SenderRegistry(),
+    this.amountFinder = const AmountFinder(),
+  });
+
+  final SenderRegistry registry;
+  final AmountFinder amountFinder;
+
+  static final RegExp _creditCardBill = RegExp(
+    r'\b(?:credit\s*card|cc)\s*(?:bill|payment|repayment|dues?|outstanding)\b|'
+    r'\b(?:bill\s*pay|billpay|billdesk|bbps|bharat\s*bill\s*pay)\b|'
+    r'\b(?:payment|paid|received)\b.{0,40}\b(?:credit\s*card|card\s*bill|card\s*payment)\b|'
+    r'\bthank you for (?:your )?payment\b',
+    caseSensitive: false,
+  );
+
+  /// Two legs, both on the user's *own* accounts. `deposited to your a/c` (F06)
+  /// and `reversed to your a/c` (G02) have one leg and are not self transfers.
+  static final RegExp _selfTransfer = RegExp(
+    r'\b(?:self\s*transfer|own\s+account|own\s+a/?c|between\s+your\s+accounts|to\s+self)\b|'
+    r'\bfrom\s+your\b.{0,80}\bto\s+your\b',
+    caseSensitive: false,
+  );
+
+  static final RegExp _walletLoad = RegExp(
+    r'\b(?:upi\s*lite|wallet|paytm\s*wallet|amazon\s*pay\s*balance|mobikwik)\b.{0,50}'
+    r'\b(?:top\s*up|topup|load(?:ed)?|add(?:ed)?\s*(?:money|cash)|recharge|credit)\b|'
+    r'\b(?:top\s*up|topup|load(?:ed)?)\b.{0,40}\b(?:upi\s*lite|wallet)\b|'
+    r'\badd(?:ed)?\s+to\s+(?:your\s+)?(?:paytm|amazon\s*pay|mobikwik|phonepe|google\s*pay)?\s*wallet\b',
+    caseSensitive: false,
+  );
+
+  /// Investment wording, including the asset-manager names that real SIP
+  /// alerts use instead of the word "SIP": `… deducted … towards ICICI
+  /// Prudential Asset Managem …` is a mutual-fund purchase, not consumption.
+  ///
+  /// `mf` is guarded against the aggregator tag shape `EBA*MF-AXIS` (F02), which
+  /// is a redemption merchant string, not an instruction to buy a fund.
+  static final RegExp _investment = RegExp(
+    r'\b(?:mutual\s*fund|sip|systematic\s+investment|demat|broker|zerodha|groww|'
+    r'upstox|indmoney|smallcase|nps|ppf|fixed\s+deposit|recurring\s+deposit|'
+    r'\bfd\b|\brd\b|stock|equity|ipo|'
+    r'prudential|amc|asset\s*manag\w*|mf(?![-*])|nav)\b',
+    caseSensitive: false,
+  );
+
+  /// A payout to a named beneficiary is a transfer, not consumption. The rail
+  /// must be in a real phrase: `BIL*NEFT*HS92` is a reference token, not a rail
+  /// (H03).
+  static final RegExp _thirdPartyRail = RegExp(
+    r'\b(?:via|by|through)\s+(?:neft|imps|rtgs|cheque)\b|'
+    r'\b(?:neft|imps|rtgs)\s*(?:ref|utr|no)\b|'
+    r'\bcheque\s*(?:no\.?|#)',
+    caseSensitive: false,
+  );
+
+  /// A phone-number UPI handle is a person, not a shop (A09).
+  static final RegExp _numericVpa = RegExp(r'\b\d{6,}@[a-z]');
+
+  /// P2A marker: a UPI debit that carries no VPA handle and reports the
+  /// counterparty bank as credited is an account-to-account transfer (A03).
+  static final RegExp _upiWord = RegExp(r'\bupi\b', caseSensitive: false);
+  static final RegExp _creditedWord = RegExp(r'\bcredited\b', caseSensitive: false);
+
+  static final RegExp _cash = RegExp(
+    r'\b(?:atm\s*(?:wdl|withdrawal|cash)|cash\s*withdrawal|'
+    r'(?:withdrawn|wdl)\b.{0,40}\batm\b|\batm\b.{0,40}\b(?:withdrawn|wdl|withdrawal))\b',
+    caseSensitive: false,
+  );
+
+  static final RegExp _vpaPattern = RegExp(
+    r'\b([a-zA-Z0-9][a-zA-Z0-9._-]{1,40})@([a-zA-Z][a-zA-Z0-9.]{1,20})\b',
+  );
+
+  /// `Info:` payloads and `UPI/<ref>/<vpa>` rails print the counterparty VPA
+  /// last and the account holder's own VPA first (F01).
+  static final RegExp _payloadMarker = RegExp(
+    r'\binfo\s*:|\bupi\s*[/:\-]',
+    caseSensitive: false,
+  );
+
+  /// Account/card mask contexts. Real Indian masks are 3 digits (`XX742`),
+  /// single-`x` (`x2210`), Amex 5 (`**91009`), hyphenated (`XX-7007`) or a
+  /// multi-segment PAN (`7121-81XX-XXXX-7007`).
+  static final RegExp _maskContext = RegExp(
+    r'(?:a\s*/?\s*c(?:\s*no\.?)?|acct|acc(?:ount)?(?:\s*no\.?)?|'
+    r'card(?:\s*(?:no\.?|number))?|ending(?:\s*(?:with|in|no\.?))?)'
+    r'[\s:.#-]*',
+    caseSensitive: false,
+  );
+  static final RegExp _maskSegment = RegExp(r'[xX*]{1,8}[\s-]*\d{3,5}');
+  static final RegExp _bareMaskDigits = RegExp(r'^\s*(\d{3,5})(?!\d)');
+
+  static final RegExp _billRef = RegExp(
+    r'BIL(?:\*[A-Z0-9]+)+',
+    caseSensitive: false,
+  );
+
+  static final RegExp _upiPayloadRef = RegExp(
+    r'\bupi\s*[/:\-]\s*(?:p2[am]\s*[/:\-]\s*)?([A-Z0-9]{6,24})\b',
+    caseSensitive: false,
+  );
+
+  static final RegExp _orderRef = RegExp(
+    r'\border(?:\s*id)?(?:\s*is|:|\s)\s*([A-Z0-9][A-Z0-9-]{5,24})\b|'
+    r'\b([A-Z0-9][A-Z0-9-]{5,24})\s+is your order id\b',
+    caseSensitive: false,
+  );
+
+  static final RegExp _refKeyword = RegExp(
+    r'\b(?:ref(?:erence)?|utr|rrn|txn(?:\s*(?:id|no\.?|#))?|transaction\s*(?:id|no\.?)|'
+    r'trf\s*ref|imps\s*ref|neft\s*ref|cheque\s*(?:no\.?)?|nach(?:\s*mandate)?|mandate|loan)\b'
+    r'\s*(?:no\.?|id)?\s*[:#.\-]*\s*([A-Z0-9][A-Z0-9*/-]{3,24})',
+    caseSensitive: false,
+  );
+
+  /// Merchant names that are really bank/railway plumbing, not merchants.
+  static const Set<String> _merchantNoise = {
+    'your account', 'account', 'a/c', 'ac', 'bank', 'the bank', 'inr', 'rs',
+    'upi', 'neft', 'imps', 'rtgs', 'txn', 'transaction', 'payment', 'paid',
+    'debited', 'credited', 'invalid', 'info', 'ref', 'reference', 'balance',
+    'avl', 'available', 'transfer', 'card', 'credit card', 'debit card',
+  };
+
+  /// Generic nouns that are never a merchant, checked as the *first* token so
+  /// that "merchant refund" (G04) survives while "dispute" (A02) does not.
+  static const Set<String> _merchantStop = {
+    'dispute', 'disputes', 'refund', 'payment', 'payments', 'charge', 'charges',
+    'fee', 'fees', 'confirm', 'cancel', 'available', 'limit', 'info', 'visit',
+    'call', 'sms', 'report', 'block', 'help', 'details', 'notice', 'alert',
+    'request', 'order', 'due', 'credit', 'debit', 'interest', 'cheque', 'cdm',
+    'bbps', 'atm', 'pos', 'neft', 'imps', 'rtgs', 'wallet', 'balance',
+    'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'sept',
+    'oct', 'nov', 'dec', 'you', 'your', 'the', 'and',
+  };
+
+  static const Set<String> _monthToken = {
+    'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'sept',
+    'oct', 'nov', 'dec',
+  };
+
+  static const Set<String> _bankWords = {
+    'hdfc', 'icici', 'sbi', 'axis', 'kotak', 'idfc', 'rbl', 'indusind', 'yes',
+    'au', 'federal', 'hsbc', 'amex', 'american express', 'onecard', 'canara',
+    'pnb', 'bob', 'union', 'dbs', 'citibank', 'standard chartered', 'cred',
+  };
+
+  /// Anchor prepositions, in priority order. `from` first: on a credit it names
+  /// the payer, and on a debit the `from your A/c` leg is rejected anyway.
+  /// Card alerts print the merchant *after* the timestamp:
+  /// `… 12:34:47 IST WWW AMAZON Avl Limit: …` (Axis, and several others).
+  static final RegExp _postTimestampMerchant = RegExp(
+    r'\bIST\s+([A-Za-z][A-Za-z0-9 .&_*/-]{2,50}?)\s+(?:Avl|Available|Not you|$)',
+    caseSensitive: false,
+  );
+
+  /// SBI's person-to-person phrasing: `-Transferred to Mr. NAME. Avl Balance …`.
+  static final RegExp _p2pPayee = RegExp(
+    r'\btransferred\s+to\s+((?:Mr|Mrs|Ms|Dr)\.?\s+)?([A-Za-z][A-Za-z .]{2,40}?)[.,]?\s+(?:Avl|Available|$)',
+    caseSensitive: false,
+  );
+
+  /// SBI's outgoing NEFT/IMPS wording with no named counterparty.
+  static final RegExp _debitByTransfer = RegExp(
+    r'\bdebit by transfer\b|\btrf\s+to\b',
+    caseSensitive: false,
+  );
+
+  /// Axis-style card alert: merchant sits between the IST timestamp and the limit.
+  String? _cardPostTimestampMerchant(String body) {
+    final match = _postTimestampMerchant.firstMatch(body);
+    final candidate = match?.group(1)?.trim();
+    if (candidate == null || candidate.length < 3) return null;
+    final cleaned = candidate
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll(RegExp(r'[*#|/.,;:-]+$'), '')
+        .trim();
+    if (cleaned.isEmpty) return null;
+    // "WWW AMAZON" and "WWW FLIPKART" — the WWW prefix is noise.
+    return cleaned.replaceFirst(RegExp(r'^WWW\s+', caseSensitive: false), '');
+  }
+
+  /// `-Transferred to Mr. NAME` — the payee is the best merchant we have.
+  String? _p2pMerchant(String body) {
+    final match = _p2pPayee.firstMatch(body);
+    final name = match?.group(2)?.trim();
+    if (name == null || name.length < 3) return null;
+    return name.replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  static final List<RegExp> _merchantAnchors = [
+    RegExp(r'\bfrom\s+([A-Za-z0-9][A-Za-z0-9 .&@_*/-]{2,60})', caseSensitive: false),
+    RegExp(r'\bto\s+([A-Za-z0-9][A-Za-z0-9 .&@_*/-]{2,60})', caseSensitive: false),
+    RegExp(r'\btowards\s+([A-Za-z0-9][A-Za-z0-9 .&@_*/-]{2,60})', caseSensitive: false),
+    RegExp(r'\bat\s+([A-Za-z0-9][A-Za-z0-9 .&@_*/-]{2,60})', caseSensitive: false),
+    RegExp(r'\bvia\s+([A-Za-z0-9][A-Za-z0-9 .&@_*/-]{2,60})', caseSensitive: false),
+    RegExp(r'\bfor\s+([A-Za-z][A-Za-z0-9 .&@_*/-]{2,60})', caseSensitive: false),
+    RegExp(r'\bof\s+([A-Za-z][A-Za-z0-9 .&@_*/-]{2,60})', caseSensitive: false),
+    RegExp(r'\binfo\s*:?\s*([A-Za-z0-9][A-Za-z0-9 .&@_*/-]{2,60})', caseSensitive: false),
+  ];
+
+  static final RegExp _merchantCut = RegExp(
+    r'(?:\.(?=\s|$))|[,;:()|]|\s[-|]\s|'
+    r'\b(?:avl|available|avail|bal|balance|limit|lmt|outstanding|ref|reference|'
+    r'upi|imps|neft|rtgs|txn|transaction|via|using|dated|on|at|for|to|from|and|'
+    r'is|has|will|call|sms|info|bank|a/c|acct|acc|account|card|standing|instruction|'
+    r'subscription|mandate|nach|emi|loan|bill|statement|due|credit|debit|interest|'
+    r'cheque|cdm|bbps)\b|'
+    r'\d{3,}',
+    caseSensitive: false,
+  );
+
+  /// Banks named in the body, used only in an issuer context (`ICICI Bank
+  /// Credit Card`), so `HDFC LIFE` (I04) and `@okhdfcbank` (F01) do not win.
+  static final RegExp _issuerContext = RegExp(
+    r'^\s*(?:small\s+finance\s+)?(?:bank\s+)?(?:credit\s+|debit\s+)?'
+    r'(?:card|a/?c|acc(?:ount)?|bank)\b',
+    caseSensitive: false,
+  );
+  static final RegExp _bankMention = RegExp(
+    r'\b(hdfc|icici|sbi|axis|kotak|idfc|rbl|indusind|yes|au|federal|hsbc|'
+    r'standard chartered|amex|american express|onecard|slice|canara|pnb|bob|'
+    r'union|dbs|citibank|cred)\b',
+    caseSensitive: false,
+  );
+
+  Txn? extract(SmsMessage message, SenderId sender, {CardBillNotice? Function()? onBillNotice}) {
+    final body = message.body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final lower = body.toLowerCase();
+
+    // A reminder, decline, collect request or mandate set-up never posts a row.
+    if (SmsGuards.notMovedYet(lower)) return null;
+    // A merchant's own receipt header (Swiggy, Zepto, …) is never our account.
+    if (registry.isMerchantReceiptSender(sender)) return null;
+    // No order without a completed movement of money: an offer, eligibility or
+    // limit figure is not a payment.
+    if (!SmsGuards.moneyMoved(lower)) return null;
+    // A merchant-side receipt is the payer's copy, not the user's account (K14).
+    if (SmsGuards.merchantReceipt(lower) &&
+        amountFinder.balanceAfter(body) == null &&
+        amountFinder.availableLimit(body) == null) {
+      return null;
+    }
+
+    final best = amountFinder.best(body);
+    if (best == null || best.score < 2) return null;
+    final amountPaise = best.paise;
+
+    final isCredit = _isCreditMessage(lower);
+    final cash = _cash.hasMatch(lower);
+    // "Transferred to Mr. X" and SBI's "debit by transfer" move money out of the
+    // account to another account — they are transfers, not consumption.
+    final bankTransfer =
+        _p2pPayee.hasMatch(body) || _debitByTransfer.hasMatch(lower);
+    final transferReason = _transferReason(lower, isCredit: isCredit);
+    final kind = bankTransfer && !cash
+        ? TxnKind.transfer
+        : _kind(isCredit: isCredit, cash: cash, transferReason: transferReason);
+    final reference = _reference(body);
+    final instrument = _instrument(body, lower, sender);
+    final last4 = _extractLast4(body);
+    final issuer = _issuer(lower, sender);
+    final vpa = _counterpartyVpa(body);
+    final merchant = _merchant(body, cash: cash) ??
+        _cardPostTimestampMerchant(body) ??
+        _p2pMerchant(body);
+    final balance = amountFinder.balanceAfter(body);
+    final availableLimit = amountFinder.availableLimit(body);
+
+    final cardKey = (last4 != null)
+        ? '${issuer ?? (sender.entity ?? 'Card')}|$last4'
+        : null;
+
+    final confidence = _confidence(
+      sender: sender,
+      amount: best,
+      hasMerchant: merchant != null,
+      hasInstrument: instrument != Instrument.unknown,
+      hasReference: reference != null,
+      balanceFound: balance != null,
+    );
+
+    final needsReview = best.score < 4 ||
+        (merchant == null && vpa == null && kind == TxnKind.spend);
+
+    return Txn(
+      key: 'sms:${smsContentId(sender: message.sender, receivedAtMs: message.receivedAtMs, body: message.body)}',
+      occurredAtMs: message.receivedAtMs,
+      amountPaise: amountPaise,
+      kind: kind,
+      instrument: instrument,
+      smsId: null,
+      sender: sender.normalized,
+      merchant: merchant,
+      counterpartyVpa: vpa,
+      transferReason: transferReason,
+      cardKey: cardKey,
+      last4: last4,
+      issuer: issuer,
+      referenceId: reference,
+      balanceAfterPaise: balance?.paise,
+      availableLimitPaise: availableLimit?.paise,
+      confidence: confidence,
+      sourceType: TxnSourceType.sms,
+      needsReview: needsReview,
+      rawBody: body,
+    );
+  }
+
+  bool _isCreditMessage(String lower) {
+    // A reversal credits the account even when the original verb was "debited".
+    if (SmsGuards.isReversal(lower)) return true;
+    if (RegExp(r'\b(?:debited|spent|paid|withdrawn|withdrew|sent|charged|purchase[sd]?)\b')
+        .hasMatch(lower)) {
+      return false;
+    }
+    return RegExp(
+      r'\b(?:credited|received|refund(?:ed)?|deposited|deposit|cashback)\b',
+    ).hasMatch(lower);
+  }
+
+  TransferReason _transferReason(String lower, {required bool isCredit}) {
+    if (_creditCardBill.hasMatch(lower)) return TransferReason.creditCardBill;
+    if (_selfTransfer.hasMatch(lower)) return TransferReason.selfTransfer;
+    if (_walletLoad.hasMatch(lower)) return TransferReason.walletLoad;
+    if (_investment.hasMatch(lower)) return TransferReason.investment;
+    // Outbound third-party payout (E02-E05) and numeric-VPA P2P (A09) are
+    // movements of money between people, not consumption.
+    if (!isCredit) {
+      if (_thirdPartyRail.hasMatch(lower) || _numericVpa.hasMatch(lower)) {
+        return TransferReason.selfTransfer;
+      }
+      if (_upiWord.hasMatch(lower) &&
+          _creditedWord.hasMatch(lower) &&
+          !_vpaPattern.hasMatch(lower)) {
+        return TransferReason.selfTransfer;
+      }
+    }
+    return TransferReason.none;
+  }
+
+  TxnKind _kind({
+    required bool isCredit,
+    required bool cash,
+    required TransferReason transferReason,
+  }) {
+    if (cash) return TxnKind.cash;
+    if (transferReason != TransferReason.none) return TxnKind.transfer;
+    if (isCredit) return TxnKind.income;
+    return TxnKind.spend;
+  }
+
+  Instrument _instrument(String body, String lower, SenderId sender) {
+    if (_cash.hasMatch(lower)) return Instrument.atm;
+    // A UPI-Lite/wallet debit is a wallet movement even though the body also
+    // prints the parent account mask (A05).
+    if (RegExp(r'\bupi\s*lite\b|\bwallet\b|\bpaytm\b|\bphonepe\b|\bmobikwik\b').hasMatch(lower)) {
+      return Instrument.wallet;
+    }
+    if (RegExp(r'\bcredit\s*card\b|\bcc\b').hasMatch(lower) || sender.entityKind == 'card') {
+      return Instrument.creditCard;
+    }
+    if (RegExp(r'\bdebit\s*card\b|\batm\s*card\b|\bpos\b|\becom\b|\bcard\s*used\b')
+        .hasMatch(lower)) {
+      return Instrument.debitCard;
+    }
+    // `Kotak Card x2210` names a card without the word "credit" (C04/G04).
+    if (RegExp(r'\bcard\b[\s:*#-]*[x*]{1,4}\d{2,5}').hasMatch(lower) ||
+        amountFinder.availableLimit(body) != null) {
+      return Instrument.creditCard;
+    }
+    // Money coming back lands in the account that raised the debit (G02/G03/G05),
+    // but a reversal never routes through a UPI store.
+    final reversal = SmsGuards.isReversal(lower);
+    if (_vpaPattern.hasMatch(body)) return Instrument.upi;
+    if (!reversal && RegExp(r'\bupi\b').hasMatch(lower)) return Instrument.upi;
+    if (RegExp(r'\ba/?c\b|\bacc\b|\baccount\b|\bneft\b|\bimps\b|\brtgs\b').hasMatch(lower)) {
+      return Instrument.bankAccount;
+    }
+    // The destination decides next: a wallet sender credits the wallet (F07),
+    // a card sender the card.
+    if (sender.entityKind == 'card') return Instrument.creditCard;
+    if (sender.entityKind == 'wallet') return Instrument.wallet;
+    if (reversal) return Instrument.bankAccount;
+    if (sender.entityKind == 'bank') return Instrument.bankAccount;
+    if (RegExp(r'\bemi\b').hasMatch(lower)) return Instrument.emi;
+    return Instrument.unknown;
+  }
+
+  /// The tail of the account/card mask. Segments are read per context, and
+  /// within a context the *last* segment wins, because PANs print as
+  /// `7121-81XX-XXXX-7007`. Amex prints five digits; `last4` is the final four.
+  String? _extractLast4(String body) {
+    for (final context in _maskContext.allMatches(body)) {
+      final tail = body.substring(
+        context.end,
+        (context.end + 32).clamp(0, body.length),
+      );
+      final segments = _maskSegment.allMatches(tail).toList();
+      if (segments.isNotEmpty) {
+        final raw = segments.last.group(0)!.replaceAll(RegExp(r'[^0-9]'), '');
+        if (raw.length >= 3) {
+          return raw.length > 4 ? raw.substring(raw.length - 4) : raw;
+        }
+      }
+      // `Credit Card 5444` prints the tail with no mask glyph at all (I01).
+      final bare = _bareMaskDigits.firstMatch(tail);
+      if (bare != null) return bare.group(1);
+    }
+    return null;
+  }
+
+  String? _issuer(String lower, SenderId sender) {
+    // 1. A wallet brand named in the body beats the sender header: a Paytm
+    //    header can report an Amazon Pay refund (F07).
+    if (sender.entityKind == 'wallet') {
+      final brand = RegExp(r'\b(amazon\s*pay|paytm|phonepe|google\s*pay|mobikwik)\b')
+          .firstMatch(lower);
+      if (brand != null) {
+        final name = brand.group(1)!;
+        return switch (name) {
+          'amazon pay' => 'Amazon Pay',
+          'paytm' => 'Paytm',
+          'phonepe' => 'PhonePe',
+          'google pay' => 'Google Pay',
+          _ => 'MobiKwik',
+        };
+      }
+    }
+    // 2. A bank named next to a card/account: `ICICI Bank credit card` (H05) is
+    //    the issuer even when a payment channel (CRED) sent the SMS. The context
+    //    check keeps `HDFC LIFE` (I04) and `@okhdfcbank` (F01) out.
+    for (final match in _bankMention.allMatches(lower)) {
+      final rest = lower.substring(match.end, (match.end + 26).clamp(0, lower.length));
+      if (!_issuerContext.hasMatch(rest)) continue;
+      final name = match.group(1)!;
+      if (name == 'sbi' && RegExp(r'^\s*credit\s+card\b').hasMatch(rest)) {
+        return 'SBI Card';
+      }
+      return _issuerLabel(name);
+    }
+    // 3. Fall back to the resolved DLT header.
+    final entity = sender.entity;
+    if (entity == 'CRED') return null; // a payment channel, not an issuer.
+    return entity;
+  }
+
+  String _issuerLabel(String name) {
+    const labels = {
+      'hdfc': 'HDFC Bank',
+      'icici': 'ICICI Bank',
+      'sbi': 'State Bank of India',
+      'axis': 'Axis Bank',
+      'kotak': 'Kotak Mahindra Bank',
+      'idfc': 'IDFC FIRST Bank',
+      'rbl': 'RBL Bank',
+      'indusind': 'IndusInd Bank',
+      'yes': 'Yes Bank',
+      'au': 'AU Small Finance Bank',
+      'federal': 'Federal Bank',
+      'hsbc': 'HSBC India',
+      'standard chartered': 'Standard Chartered',
+      'amex': 'American Express',
+      'american express': 'American Express',
+      'onecard': 'OneCard',
+      'slice': 'Slice',
+      'canara': 'Canara Bank',
+      'pnb': 'Punjab National Bank',
+      'bob': 'Bank of Baroda',
+      'union': 'Union Bank of India',
+      'dbs': 'DBS Bank',
+      'citibank': 'Citibank',
+      'cred': 'CRED',
+    };
+    return labels[name] ?? _titleCase(name);
+  }
+
+  String? _counterpartyVpa(String body) {
+    final all = _vpaPattern.allMatches(body).toList();
+    if (all.isEmpty) return null;
+    return _payloadMarker.hasMatch(body) ? all.last.group(0) : all.first.group(0);
+  }
+
+  String? _merchant(String body, {required bool cash}) {
+    // A bill-pay tag is the counterparty of an ICICI bill payment (H01-H04).
+    final bill = _billRef.firstMatch(body);
+    if (bill != null) return bill.group(0)!.toUpperCase();
+
+    // A UPI/P2A payload names the counterparty; the VPA printed earlier belongs
+    // to the account holder (F01, A06).
+    final hasPayload = _payloadMarker.hasMatch(body);
+    final vpa = _counterpartyVpa(body);
+    if (hasPayload && vpa != null) return vpa;
+
+    if (cash) {
+      final atm = _atmMerchant(body);
+      if (atm != null) return atm;
+    }
+
+    for (final pattern in _merchantAnchors) {
+      for (final match in pattern.allMatches(body)) {
+        final candidate = _cleanMerchant(match.group(1)!);
+        if (_isUsableMerchant(candidate)) return candidate;
+      }
+    }
+
+    if (vpa != null) return _vpaMerchant(vpa);
+    return null;
+  }
+
+  /// ATM notices print `<label> <atm-id> <branch>-<city>`; only the label and
+  /// the locality are merchant-worthy (D01 -> `SBG ATM MANCHERIAL`).
+  String? _atmMerchant(String body) {
+    final at = RegExp(r'\bat\s+([A-Za-z0-9][^,.;(]{2,70})', caseSensitive: false)
+        .firstMatch(body);
+    if (at == null) return null;
+    final segment = at.group(1)!;
+    final stop = RegExp(r'\b(?:using|from|on)\b', caseSensitive: false)
+        .firstMatch(segment);
+    final text = stop == null ? segment : segment.substring(0, stop.start);
+    final parts = <String>[];
+    for (final token in text.split(RegExp(r'[\s,/]+'))) {
+      for (final piece in token.split('-')) {
+        if (!RegExp(r'^[A-Za-z]{2,}$').hasMatch(piece)) continue;
+        final upper = piece.toUpperCase();
+        if (const {'SBH', 'ACC', 'LTD'}.contains(upper)) continue;
+        if (parts.isNotEmpty && parts.last == upper) continue;
+        parts.add(upper);
+      }
+    }
+    return parts.isEmpty ? null : parts.join(' ');
+  }
+
+  String _cleanMerchant(String value) {
+    var cleaned = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    // `IND*Amazon.in`, `EBA*MF-AXIS` — the aggregator tag is not the brand.
+    cleaned = cleaned.replaceFirst(
+      RegExp(r'^(?:ind|inf|payu|pyu|eba|mps|raz|bharatqr)\s*[*:]\s*', caseSensitive: false),
+      '',
+    );
+    // `PAYU ZOMATO` uses a space instead of the `*` separator (C05).
+    cleaned = cleaned.replaceFirst(RegExp(r'^payu\s+', caseSensitive: false), '');
+    cleaned = cleaned.replaceFirst(
+      RegExp(r'^(?:vpa|paid to)\s+', caseSensitive: false),
+      '',
+    );
+    cleaned = cleaned.replaceFirst(
+      RegExp(r'^(?:your|the)\s+', caseSensitive: false),
+      '',
+    );
+    // Stop at the first sentence/spatial/balance/rail token, or a long digit run
+    // (a reference number is not a merchant).
+    // `SWIGGY PVT LTD FOOD2` — the company suffix and a trailing digit are noise.
+    cleaned = cleaned.replaceFirst(
+      RegExp(r'\s+(?:pvt|private)\.?\s+ltd\.?.*$', caseSensitive: false),
+      '',
+    );
+    cleaned = cleaned.replaceFirst(RegExp(r'\d+$'), '');
+    final cut = _merchantCut.firstMatch(cleaned);
+    if (cut != null) cleaned = cleaned.substring(0, cut.start);
+    cleaned = cleaned.replaceAll(RegExp(r'[\s*#|/.,;:_-]+$'), '').trim();
+    return cleaned;
+  }
+
+  bool _isUsableMerchant(String candidate) {
+    final lower = candidate.toLowerCase().trim();
+    if (lower.length < 3) return false;
+    // A brand needs a real word in it; `Rs.5` is a truncated amount, not a shop.
+    if (!RegExp(r'[A-Za-z]{3,}').hasMatch(candidate)) return false;
+    if (RegExp(r'^(?:rs|inr|₹)\.?\s').hasMatch(lower)) return false;
+    if (RegExp(r'\d$').hasMatch(lower)) return false;
+    if (RegExp(r'^\d').hasMatch(lower)) return false;
+    // `20-Jul-23` and `Jan-Mar` are dates, not shops.
+    if (lower.split(RegExp(r'[-\s]+')).every(_monthToken.contains)) return false;
+    if (_merchantStop.contains(lower)) return false;
+    if (_merchantStop.contains(lower.split(' ').first)) return false;
+    if (_merchantNoise.contains(lower)) return false;
+    if (RegExp(r'\d{3,}').hasMatch(lower)) return false;
+    if (RegExp(r'\b(?:account|balance|ref|upi|txn|transaction|card|otp|a/c|bank)\b')
+        .hasMatch(lower)) {
+      return false;
+    }
+    // A bare bank name is the user's own institution, never the counterparty.
+    final bankish = lower
+        .replaceAll(RegExp(r'\b(?:bank|finance|small)\b'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (_bankWords.contains(bankish)) return false;
+    return true;
+  }
+
+  String _vpaMerchant(String vpa) {
+    final local = vpa.split('@').first;
+    if (!RegExp(r'^[A-Za-z]{4,}$').hasMatch(local)) return vpa;
+    return _titleCase(local);
+  }
+
+  String _titleCase(String value) {
+    return value
+        .split(' ')
+        .where((w) => w.isNotEmpty)
+        .map((w) => w[0].toUpperCase() + w.substring(1).toLowerCase())
+        .join(' ');
+  }
+
+  String? _reference(String body) {
+    final bill = _billRef.firstMatch(body);
+    if (bill != null) {
+      final token = bill.group(0)!.toUpperCase();
+      final tail = token.substring(3); // starts at the first '*'
+      // `BIL*000910062` is a channel tag plus a plain number (H01/H04);
+      // `BIL*ONL*00059` is a coded reference and is kept whole (H02/H03).
+      if (RegExp(r'^\*\d+$').hasMatch(tail)) return tail.substring(1);
+      return token;
+    }
+    for (final match in _upiPayloadRef.allMatches(body)) {
+      if (match.end < body.length && body[match.end] == '@') continue; // a VPA, not a ref
+      return match.group(1)!.toUpperCase();
+    }
+    for (final match in _orderRef.allMatches(body)) {
+      final group = match.group(1) ?? match.group(2);
+      if (group != null) return group.toUpperCase();
+    }
+    for (final match in _refKeyword.allMatches(body)) {
+      final group = match.group(1);
+      if (group == null || group.contains('@')) continue;
+      return group.toUpperCase();
+    }
+    return null;
+  }
+
+  double _confidence({
+    required SenderId sender,
+    required AmountCandidate amount,
+    required bool hasMerchant,
+    required bool hasInstrument,
+    required bool hasReference,
+    required bool balanceFound,
+  }) {
+    var score = 0.35;
+    if (sender.trust == SenderTrust.known) score += 0.25;
+    if (sender.trust == SenderTrust.plausible) score += 0.1;
+    if (amount.score >= 6) score += 0.15;
+    if (hasInstrument) score += 0.1;
+    if (hasMerchant) score += 0.1;
+    if (hasReference) score += 0.05;
+    if (balanceFound) score += 0.05;
+    return score.clamp(0.05, 0.99);
+  }
+
+  /// Extracts a card bill notice (total due / min due / due date) from an SMS.
+  CardBillNotice? billNotice(SmsMessage message, SenderId sender) {
+    final body = message.body;
+    final lower = body.toLowerCase();
+    if (!RegExp(r'\b(due|outstanding|statement|bill)\b').hasMatch(lower)) {
+      return null;
+    }
+    final total = _amountAfterLabel(body, const [
+      'total due', 'total amount due', 'total outstanding', 'bill amount',
+      'amount due', 'total amount', 'outstanding amount', 'payment due',
+    ]);
+    if (total == null) return null;
+    final minimum = _amountAfterLabel(body, const [
+      'minimum due', 'min due', 'minimum amount due', 'min amt due', 'minimum payment due',
+    ]);
+    final dueDate = _dateAfterLabel(body, const ['due date', 'pay by', 'due on', 'by']);
+    final last4 = _extractLast4(body);
+    final issuer = _issuer(lower, sender);
+    return CardBillNotice(
+      cardKey: '${issuer ?? (sender.entity ?? 'Card')}|${last4 ?? '0000'}',
+      totalDuePaise: total,
+      minimumDuePaise: minimum,
+      dueDateMs: dueDate?.millisecondsSinceEpoch,
+      receivedAtMs: message.receivedAtMs,
+    );
+  }
+
+  int? _amountAfterLabel(String body, List<String> labels) {
+    final lower = body.toLowerCase();
+    for (final label in labels) {
+      final idx = lower.indexOf(label);
+      if (idx < 0) continue;
+      for (final candidate in amountFinder.findAll(body)) {
+        if (candidate.start >= idx && candidate.start <= idx + label.length + 45) {
+          return candidate.paise;
+        }
+      }
+    }
+    return null;
+  }
+
+  DateTime? _dateAfterLabel(String body, List<String> labels) {
+    final lower = body.toLowerCase();
+    for (final label in labels) {
+      final idx = lower.indexOf(label);
+      if (idx < 0) continue;
+      final window = body.substring(idx, (idx + 60).clamp(0, body.length));
+      final match = RegExp(r'(\d{1,2})[-/\s]([A-Za-z]{3,9}|\d{1,2})[-/\s](\d{2,4})')
+          .firstMatch(window);
+      if (match == null) continue;
+      final parsed = _parseDate(match.group(1)!, match.group(2)!, match.group(3)!);
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  DateTime? _parseDate(String day, String month, String year) {
+    const months = {
+      'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+      'jul': 7, 'aug': 8, 'sep': 9, 'sept': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+    };
+    final d = int.tryParse(day);
+    final m = int.tryParse(month) ?? months[month.toLowerCase()];
+    var y = int.tryParse(year);
+    if (d == null || m == null || y == null) return null;
+    if (y < 100) y += 2000;
+    if (d < 1 || d > 31 || m < 1 || m > 12) return null;
+    return DateTime(y, m, d);
+  }
+}

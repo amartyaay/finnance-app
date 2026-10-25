@@ -1,38 +1,27 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'data/sqlite_transaction_store.dart';
-import 'repositories/transaction_repository.dart';
-import 'services/csv_export_service.dart';
-import 'services/permission_service.dart';
-import 'services/sms_parser_service.dart';
-import 'services/sms_reader_service.dart';
-import 'theme/app_theme.dart';
-import 'viewmodels/home_view_model.dart';
+import 'app/theme.dart';
+import 'state/app_state.dart';
 import 'viewmodels/theme_view_model.dart';
+import 'views/cards_screen.dart';
 import 'views/home_screen.dart';
-import 'views/login_screen.dart';
-import 'views/web_account_screen.dart';
-
-enum AppInitialScreen { login, home }
+import 'views/insights_screen.dart';
+import 'views/onboarding_screen.dart';
+import 'views/settings_screen.dart';
+import 'views/transactions_screen.dart';
 
 class FinanceApp extends StatefulWidget {
   const FinanceApp({
     super.key,
-    this.homeViewModel,
+    this.appState,
     this.themeViewModel,
-    this.initialScreen = AppInitialScreen.login,
-    this.isWebOverride,
     this.autoInitialize = true,
   });
 
-  final HomeViewModel? homeViewModel;
+  final AppState? appState;
   final ThemeViewModel? themeViewModel;
-  final AppInitialScreen initialScreen;
-  final bool? isWebOverride;
   final bool autoInitialize;
 
   @override
@@ -40,124 +29,131 @@ class FinanceApp extends StatefulWidget {
 }
 
 class _FinanceAppState extends State<FinanceApp> {
+  late final AppState _appState = widget.appState ?? AppState();
+  late final ThemeViewModel _theme = widget.themeViewModel ?? ThemeViewModel();
+
   @override
   void initState() {
     super.initState();
     if (widget.autoInitialize) {
-      if (widget.themeViewModel != null) {
-        unawaited(widget.themeViewModel!.initialize());
-      }
-      if (widget.homeViewModel != null) {
-        unawaited(widget.homeViewModel!.initialize());
+      _theme.initialize();
+      _appState.init();
+      // The web build cannot read SMS, so it opens on generated demo data, and
+      // it defaults to the light theme the design was built around (?theme=dark
+      // opts out).
+      if (kIsWeb) {
+        _theme.setPreference(
+          Uri.base.queryParameters['theme'] == 'dark'
+              ? AppThemePreference.dark
+              : AppThemePreference.light,
+        );
+        _appState.startDemo();
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isWeb = widget.isWebOverride ?? kIsWeb;
-    final providers = [
-      if (widget.themeViewModel != null)
-        ChangeNotifierProvider<ThemeViewModel>.value(
-          value: widget.themeViewModel!,
-        )
-      else
-        ChangeNotifierProvider<ThemeViewModel>(
-          create: (_) {
-            final viewModel = _createThemeViewModel();
-            if (widget.autoInitialize) {
-              unawaited(viewModel.initialize());
-            }
-            return viewModel;
-          },
-        ),
-      if (widget.homeViewModel != null)
-        ChangeNotifierProvider<HomeViewModel>.value(
-          value: widget.homeViewModel!,
-        )
-      else if (!isWeb)
-        ChangeNotifierProvider<HomeViewModel>(
-          create: (_) {
-            final viewModel = _createHomeViewModel();
-            if (widget.autoInitialize) {
-              unawaited(viewModel.initialize());
-            }
-            return viewModel;
-          },
-        ),
-    ];
-
     return MultiProvider(
-      providers: providers,
+      providers: [
+        ChangeNotifierProvider<AppState>.value(value: _appState),
+        ChangeNotifierProvider<ThemeViewModel>.value(value: _theme),
+      ],
       child: Consumer<ThemeViewModel>(
-        builder: (context, themeViewModel, _) {
-          return MaterialApp(
-            title: 'Finance SMS',
-            debugShowCheckedModeBanner: false,
-            theme: buildLightTheme(),
-            darkTheme: buildDarkTheme(),
-            themeMode: themeViewModel.themeMode,
-            home: AppEntryScreen(
-              initialScreen: widget.initialScreen,
-              isWeb: isWeb,
-            ),
-          );
-        },
+        builder: (context, theme, _) => MaterialApp(
+          title: 'Finance SMS',
+          debugShowCheckedModeBanner: false,
+          theme: buildAppTheme(),
+          darkTheme: buildAppTheme(brightness: Brightness.dark),
+          themeMode: theme.themeMode,
+          home: const AppShell(),
+        ),
       ),
     );
   }
-
-  HomeViewModel _createHomeViewModel() {
-    final transactionStore = SqliteTransactionStore();
-    final repository = TransactionRepository(
-      smsReaderService: const MethodChannelSmsReaderService(),
-      smsParserService: DefaultSmsParserService(),
-      transactionStore: transactionStore,
-      csvExportService: const MethodChannelCsvExportService(),
-    );
-    return HomeViewModel(
-      transactionRepository: repository,
-      permissionService: const PermissionHandlerSmsPermissionService(),
-    );
-  }
-
-  ThemeViewModel _createThemeViewModel() {
-    return ThemeViewModel();
-  }
 }
 
-class AppEntryScreen extends StatefulWidget {
-  const AppEntryScreen({
-    super.key,
-    required this.initialScreen,
-    required this.isWeb,
-  });
+/// Four destinations. Settings is a pushed route from the avatar rather than a
+/// fifth tab: five labels crowd a 360 dp bar at large text sizes, and settings is
+/// a rare visit compared with the four daily ones.
+class AppShell extends StatefulWidget {
+  const AppShell({super.key, this.initialIndex = 0});
 
-  final AppInitialScreen initialScreen;
-  final bool isWeb;
+  final int initialIndex;
 
   @override
-  State<AppEntryScreen> createState() => _AppEntryScreenState();
+  State<AppShell> createState() => _AppShellState();
 }
 
-class _AppEntryScreenState extends State<AppEntryScreen> {
-  late bool _showAccount = widget.initialScreen == AppInitialScreen.home;
+class _AppShellState extends State<AppShell> {
+  late int _index = _initialTab(widget.initialIndex);
+
+  /// `?tab=2` lets screenshots and deep links land on a specific tab.
+  static int _initialTab(int fallback) {
+    if (!kIsWeb) return fallback;
+    final parsed = int.tryParse(Uri.base.queryParameters['tab'] ?? '');
+    if (parsed == null || parsed < 0 || parsed > 3) return fallback;
+    return parsed;
+  }
+
+  static const _destinations = [
+    NavigationDestination(
+      icon: Icon(Icons.home_outlined),
+      selectedIcon: Icon(Icons.home_rounded),
+      label: 'Home',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.receipt_long_outlined),
+      selectedIcon: Icon(Icons.receipt_long_rounded),
+      label: 'Activity',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.credit_card_outlined),
+      selectedIcon: Icon(Icons.credit_card_rounded),
+      label: 'Cards',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.insights_outlined),
+      selectedIcon: Icon(Icons.insights_rounded),
+      label: 'Insights',
+    ),
+  ];
+
+  void _openSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (!_showAccount) {
-      return LoginScreen(
-        onGooglePressed: () {
-          setState(() {
-            _showAccount = true;
-          });
-        },
-      );
+    final state = context.watch<AppState>();
+
+    if (!state.isLoading &&
+        !state.isDemo &&
+        !state.hasSmsPermission &&
+        state.data.isEmpty) {
+      return const OnboardingScreen();
     }
 
-    if (widget.isWeb) {
-      return const WebAccountScreen();
-    }
-    return const HomeScreen();
+    return Scaffold(
+      body: IndexedStack(
+        index: _index,
+        children: [
+          HomeScreen(
+            onNavigate: (index) => setState(() => _index = index),
+            onOpenSettings: _openSettings,
+          ),
+          const TransactionsScreen(),
+          const CardsScreen(),
+          const InsightsScreen(),
+        ],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _index,
+        onDestinationSelected: (value) => setState(() => _index = value),
+        destinations: _destinations,
+      ),
+    );
   }
 }
