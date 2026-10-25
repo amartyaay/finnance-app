@@ -123,6 +123,19 @@ class TransactionExtractor {
     caseSensitive: false,
   );
 
+  /// A credit whose payer is a **named business** (a company suffix), not a
+  /// person and not the user's own account. It is a genuine receipt whose
+  /// source we cannot classify further: `MoneyInKind.other`, still income.
+  /// An anonymous "credited to your a/c" never matches this — it stays a self
+  /// transfer, because income is never assumed.
+  static final RegExp _businessCreditWord = RegExp(
+    r'\b(?:credited|received|deposited)\b.{0,80}\b(?:from|by)\b.{0,24}'
+    r'\b[\w&.\-]+(?:\s+[\w&.\-]+){0,3}\s+'
+    r'(?:pvt\.?|private|ltd\.?|limited|llp|inc\.?|corp(?:oration)?|'
+    r'technologies|solutions|services|consult(?:ing|ancy))\b',
+    caseSensitive: false,
+  );
+
   /// A credit from another person / a named payer (P2P), not income.
   static final RegExp _p2pCreditWord = RegExp(
     r'\bdeposit by transfer\b|\bfrom\s+(?:Mr|Mrs|Ms|Dr)\.?\s|'
@@ -512,6 +525,7 @@ class TransactionExtractor {
     if (_cashbackWord.hasMatch(lower)) return MoneyInKind.cashback;
     if (_salaryWord.hasMatch(lower)) return MoneyInKind.salary;
     if (_interestWord.hasMatch(lower)) return MoneyInKind.interest;
+    if (_businessCreditWord.hasMatch(lower)) return MoneyInKind.other;
     if (_walletCreditWord.hasMatch(lower)) return MoneyInKind.walletLoad;
     if (_p2pCreditWord.hasMatch(lower)) return MoneyInKind.p2pReceive;
     // An anonymous "credited to your a/c" is the user's own money moving
@@ -540,15 +554,20 @@ class TransactionExtractor {
     if (RegExp(r'\bupi\s*lite\b|\bwallet\b|\bpaytm\b|\bphonepe\b|\bmobikwik\b').hasMatch(lower)) {
       return Instrument.wallet;
     }
-    if (RegExp(r'\bcredit\s*card\b|\bcc\b').hasMatch(lower) || sender.entityKind == 'card') {
+    if (RegExp(r'\bcredit\s*card\b|\bcc\b|\bto\s+your\s+card\b').hasMatch(lower) ||
+        sender.entityKind == 'card') {
       return Instrument.creditCard;
     }
     if (RegExp(r'\bdebit\s*card\b|\batm\s*card\b|\bpos\b|\becom\b|\bcard\s*used\b')
         .hasMatch(lower)) {
       return Instrument.debitCard;
     }
-    // `Kotak Card x2210` names a card without the word "credit" (C04/G04).
-    if (RegExp(r'\bcard\b[\s:*#-]*[x*]{1,4}\d{2,5}').hasMatch(lower) ||
+    // `Kotak Card x2210` names a card without the word "credit" (C04/G04); an
+    // issuer's "credited to your card ending 6859" does the same. This check
+    // comes after the debit-card branch so "Debit Card ending 5522" stays a
+    // debit card.
+    if (RegExp(r'\bcard\s*(?:no\.?|number|ending)\b').hasMatch(lower) ||
+        RegExp(r'\bcard\b[\s:*#-]*[x*]{1,4}\d{2,5}').hasMatch(lower) ||
         amountFinder.availableLimit(body) != null) {
       return Instrument.creditCard;
     }
@@ -635,11 +654,18 @@ class TransactionExtractor {
   );
 
   /// Card context for a mask: the word "card" (or `CC`/`Amex`) followed by an
-  /// optional `no.`/`ending`, within a short distance of the mask.
+  /// optional `no.`/`number`/`ending`, within a short distance of the mask.
+  ///
+  /// The qualifier sits **outside** the alternatives on purpose. With
+  /// `credit\s*card` as its own branch, a body reading `credit card ending with
+  /// 4821` matched only `credit card` (leftmost-first) and the digits 40
+  /// characters later never bound — the issuer leg of a card-bill payment had
+  /// no `cardKey`, which is exactly the key the bill-payment pairing needs to
+  /// keep the right row.
   static final RegExp _cardContext = RegExp(
     r'\b(?:credit\s*card|corporate\s*card|debit\s*card|prepaid\s*card|'
-    r'card(?:\s*(?:no\.?|number|ending(?:\s*(?:with|in|no\.?))?))?|'
-    r'cc|amex|american\s*express)\b',
+    r'card|cc|amex|american\s*express)'
+    r'(?:\s*(?:no\.?|number|ending(?:\s*(?:with|in|no\.?))?))?\b',
     caseSensitive: false,
   );
 

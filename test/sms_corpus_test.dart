@@ -194,6 +194,15 @@ void _checkTransactionFixture(SmsFixture fixture) {
   if (fixture.last4 != null) {
     _expect(check, 'last4', fixture.last4, txn.last4);
   }
+  // Card identity, not just the tail: a bill-payment pair can only keep the
+  // issuer leg if that leg binds `issuer|last4`. Asserting it is what stops the
+  // "credit card ending with NNNN" regression from passing silently.
+  if (fixture.cardKey != null) {
+    _expect(check, 'cardKey', fixture.cardKey, txn.cardKey);
+  }
+  if (fixture.moneyInKind != null) {
+    _expect(check, 'moneyInKind', fixture.moneyInKind, txn.moneyInKind.name);
+  }
 
   final issuer = fixture.issuer;
   if (issuer != null && !_issuerIsNote(issuer)) {
@@ -243,8 +252,15 @@ void _checkDuplicateGroup(String group, List<SmsFixture> fixtures) {
   final txns = <Txn>[];
 
   for (final fixture in fixtures) {
+    // Offset fixtures are the real shape of a card-bill pair: the bank debit
+    // and the issuer's "payment received" arrive hours apart.
     final txn = _extractor.extract(
-      _message(fixture),
+      SmsMessage(
+        id: fixture.id,
+        sender: fixture.sender,
+        body: fixture.body,
+        receivedAtMs: _receivedAtMs + fixture.receivedOffsetSeconds * 1000,
+      ),
       _registry.resolve(fixture.sender),
     );
     if (txn == null) {
@@ -265,6 +281,17 @@ void _checkDuplicateGroup(String group, List<SmsFixture> fixtures) {
   _expect(check, 'rowCount', fixtures.length, marked.length);
   _expect(check, 'survivingRows', 1, survivors.length);
   _expect(check, 'groupAmount', 1, marked.map((t) => t.amountPaise).toSet().length);
+  // A card-bill group must keep the leg that names the card. Whatever the
+  // arrival order, the funding-account debit may not win the group.
+  if (fixtures.any((f) => f.cardKey != null) && survivors.length == 1) {
+    _expect(
+      check,
+      'survivorReason',
+      TransferReason.creditCardBill.name,
+      survivors.single.transferReason.name,
+    );
+    _expect(check, 'survivorCardKey', true, survivors.single.cardKey != null);
+  }
 
   expect(check.mismatches, isEmpty, reason: '${check.label} ${_reason(check)}');
 }
@@ -321,8 +348,12 @@ String _excerpt(String body) {
 
 void main() {
   group('Fixture coverage', () {
-    test('matches the §10 coverage audit (103 rows)', () {
-      expect(smsCorpus.length, 103);
+    // 103 §10 rows + H11/H12 (the two real HDFC bill-payment legs, 20 h apart)
+    // + H13 (the "credited to your card ending" issuer template). The corpus
+    // grew by three because the existing rows never asserted `cardKey`, which is
+    // why an issuer leg with no card identity could pass 109/109 checks.
+    test('matches the coverage audit (106 rows)', () {
+      expect(smsCorpus.length, 106);
       final counts = <String, int>{};
       for (final fixture in smsCorpus) {
         final prefix = fixture.id.substring(0, 1);
@@ -336,7 +367,7 @@ void main() {
         'E': 5,
         'F': 7,
         'G': 10,
-        'H': 10,
+        'H': 13,
         'I': 7,
         'J': 5,
         'K': 20,

@@ -1,3 +1,4 @@
+import '../../app/money_format.dart';
 import '../../domain/enums.dart';
 import '../../domain/money.dart';
 import '../../domain/transaction.dart';
@@ -81,10 +82,9 @@ List<MoneyInGroup> moneyInGroups(
 bool hasSalary(List<MoneyInGroup> groups) =>
     groups.any((group) => group.kind == MoneyInKind.salary);
 
-/// `₹1.2L` for lakh-sized totals, exact rupees below that. A ₹3,939.66 refund
-/// keeps its paise; a six-figure transfer total does not need them.
-String moneyInAmount(Paise amount) =>
-    amount.value >= 100000 * 100 ? inrCompact(amount) : inr(amount);
+/// `₹3,940` for a refund total, `₹1,05,590` for a transfer total — the one money
+/// rule in `lib/app/money_format.dart`, not a third format invented here.
+String moneyInAmount(Paise amount) => money(amount);
 
 /// `Refunds ₹3,939.66 · Transfers in ₹1.2L` — the one string every screen uses.
 String moneyInLine(List<MoneyInGroup> groups) => groups

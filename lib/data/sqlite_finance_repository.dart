@@ -492,20 +492,34 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
       final row = byKey[txn.key];
       if (row == null) continue;
       if (txn.isDuplicateOfKey != null) {
-        await db.delete('transactions', where: 'id = ?', whereArgs: [row['id']]);
-        merged++;
+        // Marked, never deleted (README, ARCHITECTURE §6): the loser keeps its
+        // row and its raw message, and every reader skips `duplicate_of != null`.
+        if (row['duplicate_of'] != txn.isDuplicateOfKey) {
+          await db.update(
+            'transactions',
+            {'duplicate_of': txn.isDuplicateOfKey, 'needs_review': 0},
+            where: 'id = ?',
+            whereArgs: [row['id']],
+          );
+          merged++;
+        }
         continue;
       }
       final kindChanged = row['kind'] != txn.kind.name;
       final reasonChanged = row['transfer_reason'] != txn.transferReason.name;
       final moneyInChanged = row['money_in_kind'] != txn.moneyInKind.name;
-      if (!kindChanged && !reasonChanged && !moneyInChanged) continue;
+      // A winner that was previously some other group's loser must be unmarked.
+      final staleDuplicate = row['duplicate_of'] != null;
+      if (!kindChanged && !reasonChanged && !moneyInChanged && !staleDuplicate) {
+        continue;
+      }
 
       final values = <String, Object?>{
         'kind': txn.kind.name,
         'transfer_reason': txn.transferReason.name,
         'money_in_kind': txn.moneyInKind.name,
         'needs_review': 0,
+        if (staleDuplicate) 'duplicate_of': null,
       };
       if (row['category_source'] != CategorySource.user.name) {
         final rule = _learning.match(rules, txn);

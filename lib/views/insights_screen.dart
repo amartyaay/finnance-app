@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app/design_tokens.dart';
+import '../app/money_format.dart';
 import '../app/widgets/kit.dart';
 import '../data/finance_repository.dart';
-import '../domain/money.dart';
-import '../engine/card_metrics.dart';
 import '../engine/insights_engine.dart';
 import '../state/app_state.dart';
+import 'insight_actions.dart';
+import 'transactions_screen.dart';
 import 'widgets/insight_breakdowns.dart';
 import 'widgets/insight_tile.dart';
 import 'widgets/txn_common.dart';
@@ -15,7 +16,13 @@ import 'widgets/txn_common.dart';
 /// Insights: what needs attention, what is recurring, and where the money went.
 /// Every claim on this screen is backed by a number the engine computed.
 class InsightsScreen extends StatefulWidget {
-  const InsightsScreen({super.key});
+  const InsightsScreen({super.key, this.onNavigate, this.onOpenActivity});
+
+  /// Switches the shell tab (1 = activity, 2 = cards, 3 = insights).
+  final ValueChanged<int>? onNavigate;
+
+  /// Opens Activity with a filter already applied.
+  final ValueChanged<ActivityRequest>? onOpenActivity;
 
   @override
   State<InsightsScreen> createState() => _InsightsScreenState();
@@ -28,6 +35,10 @@ class _InsightsScreenState extends State<InsightsScreen> {
   /// while the first scan runs, and painting "Nothing to analyse yet" over it is
   /// a claim the app has not checked yet. That flash is what this removes.
   bool _settled = false;
+
+  /// Lets a "See recurring" insight action scroll to that section instead of
+  /// promising a destination it cannot reach.
+  final GlobalKey _recurringKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -67,8 +78,9 @@ class _InsightsScreenState extends State<InsightsScreen> {
     } else {
       // The engine counts elapsed hours, so a bill due on 27 Oct reads "in 1
       // days" on the evening of the 25th. Count calendar days here so Home,
-      // Cards and Insights all give the same countdown.
-      final insights = _withCalendarDueDates(data.insights, data.cards);
+      // Cards and Insights all give the same countdown (one implementation,
+      // owned by `InsightTile`).
+      final insights = withCalendarDueDates(data.insights, data.cards);
       final attention = insights
           .where(
             (insight) =>
@@ -128,7 +140,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
             for (final insight in attention)
               Padding(
                 padding: const EdgeInsets.only(bottom: T.s3),
-                child: InsightTile(insight: insight),
+                child: _tile(context, state, insight),
               ),
             if (other.isNotEmpty) ...[
               const SizedBox(height: T.s4),
@@ -139,22 +151,23 @@ class _InsightsScreenState extends State<InsightsScreen> {
               for (final insight in other)
                 Padding(
                   padding: const EdgeInsets.only(bottom: T.s3),
-                  child: InsightTile(insight: insight),
+                  child: _tile(context, state, insight),
                 ),
             ],
             if (attention.isEmpty && other.isEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: T.s2, left: T.s1),
                 child: Text(
-                  'No insights yet — a few more messages will give this screen '
+                  'No insights yet â€” a few more messages will give this screen '
                   'something to work with.',
                   style: T.bodySmall.copyWith(color: p.inkMuted),
                 ),
               ),
             const SizedBox(height: T.s4),
-            const SectionHeader(
+            SectionHeader(
+              key: _recurringKey,
               title: 'Recurring payments',
-              padding: EdgeInsets.only(bottom: T.s2, left: T.s1),
+              padding: const EdgeInsets.only(bottom: T.s2, left: T.s1),
             ),
             if (data.recurring.isEmpty)
               Padding(
@@ -165,7 +178,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                     const SizedBox(width: T.s2),
                     Expanded(
                       child: Text(
-                        'Nothing recurring detected yet — we need three similar charges.',
+                        'Nothing recurring detected yet â€” we need three similar charges.',
                         style: T.bodySmall.copyWith(color: p.inkMuted),
                       ),
                     ),
@@ -189,7 +202,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
             SectionHeader(
               title: 'Where the money went',
               subtitle:
-                  '${inr(data.summary.spend)} across ${categories.length} '
+                  '${money(data.summary.spend)} across ${categories.length} '
                   '${categories.length == 1 ? 'category' : 'categories'}',
               padding: const EdgeInsets.only(bottom: T.s2, left: T.s1),
             ),
@@ -232,6 +245,36 @@ class _InsightsScreenState extends State<InsightsScreen> {
     );
   }
 
+  /// One insight card, with its action and its dismiss wired. Both lists on this
+  /// screen go through it, so neither can drift from Home's rendering — and the
+  /// engine's `Insight.action` finally has a destination.
+  Widget _tile(BuildContext context, AppState state, Insight insight) {
+    return InsightTile(
+      insight: insight,
+      onAction: insightActionHandler(
+        insight,
+        openActivity: widget.onOpenActivity,
+        openTab: widget.onNavigate,
+        transactions: state.data.transactions,
+        onRecurring: _scrollToRecurring,
+      ),
+      onDismiss: () => state.dismissInsight(insight.id),
+    );
+  }
+
+  /// "See recurring" lands on the section already on this screen instead of
+  /// pretending to navigate somewhere else.
+  void _scrollToRecurring() {
+    final target = _recurringKey.currentContext;
+    if (target == null) return;
+    Scrollable.ensureVisible(
+      target,
+      duration: T.medium,
+      curve: T.curveOut,
+      alignment: 0.1,
+    );
+  }
+
   void _showAlert(BuildContext context, PhishingAlert alert) {
     final p = T.of(context);
     showDialog<void>(
@@ -253,7 +296,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${shortDateWithYear(alert.receivedAt)} · '
+                  '${shortDateWithYear(alert.receivedAt)} Â· '
                   '${clockTime(alert.receivedAt)}',
                   style: T.bodySmall.copyWith(color: p.inkMuted),
                 ),
@@ -285,36 +328,6 @@ class _InsightsScreenState extends State<InsightsScreen> {
       },
     );
   }
-}
-
-/// Re-titles the engine's bill reminders with a calendar-day countdown.
-///
-/// The engine's `daysToDue` is an hours-based difference, so a bill due the day
-/// after tomorrow can read "in 1 days" late in the evening. The card metrics
-/// carry the real due date, and the countdown is re-derived from it here.
-List<Insight> _withCalendarDueDates(
-  List<Insight> insights,
-  List<CardMetrics> cards,
-) => [for (final insight in insights) _calendarDue(insight, cards)];
-
-Insight _calendarDue(Insight insight, List<CardMetrics> cards) {
-  if (!insight.id.startsWith('due:')) return insight;
-  final key = insight.id.substring('due:'.length);
-  for (final card in cards) {
-    if (card.card.key != key) continue;
-    final due = card.dueDate;
-    if (due == null) return insight;
-    return Insight(
-      id: insight.id,
-      title: 'Bill ${billDuePhrase(daysUntilDate(due))}',
-      body: insight.body,
-      tone: insight.tone,
-      chip: insight.chip,
-      amountPaise: insight.amountPaise,
-      action: insight.action,
-    );
-  }
-  return insight;
 }
 
 class _FraudCard extends StatelessWidget {  const _FraudCard({required this.alerts, required this.onOpen});
@@ -538,7 +551,7 @@ class _InsightsSkeleton extends StatelessWidget {
 String _preview(String body) {
   final clean = body.trim().replaceAll(RegExp(r'\s+'), ' ');
   if (clean.length <= 120) return clean;
-  return '${clean.substring(0, 120).trimRight()}…';
+  return '${clean.substring(0, 120).trimRight()}â€¦';
 }
 
 String _humanSignals(String raw) {
@@ -557,5 +570,5 @@ String _humanSignals(String raw) {
   if (words.isEmpty) {
     return 'The wording matches known fake-alert patterns.';
   }
-  return words.join(' · ');
+  return words.join(' Â· ');
 }

@@ -96,7 +96,13 @@ class _CardsScreenState extends State<CardsScreen> {
                     top: 2,
                     bottom: 8,
                   ),
-                  child: CardFace(metrics: cards[index]),
+                  // The face was a picture with no way in. Tapping it opens that
+                  // card's detail sheet (limit, statement day, due day) — the one
+                  // place those facts can be supplied.
+                  child: CardFace(
+                    metrics: cards[index],
+                    onTap: () => _openCard(cards[index]),
+                  ),
                 ),
               ),
             ),
@@ -190,6 +196,13 @@ class _CardsScreenState extends State<CardsScreen> {
       if (next == null || due.isBefore(next)) next = due;
     }
     return next;
+  }
+
+  /// Opens the card's own sheet. Haptic first: this is a real object, and the
+  /// tap should feel like one.
+  void _openCard(CardMetrics metrics) {
+    HapticFeedback.lightImpact();
+    showCardEditSheet(context, metrics.card);
   }
 }
 

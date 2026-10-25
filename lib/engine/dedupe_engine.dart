@@ -24,6 +24,14 @@ class DedupeEngine {
   final int windowSeconds;
   final SenderRegistry registry;
 
+  /// Card-bill payments are notified **twice**, by two different senders, and
+  /// the two alerts are usually hours apart: the bank account debit ("paid
+  /// Rs 3,772 to HDFC Card") and the issuer's "Payment of Rs 3,772 received on
+  /// your HDFC Credit Card XX4821". The general [windowSeconds] is deliberately
+  /// short, so this narrow rule pairs a bill payment by amount alone, up to two
+  /// days apart, and never widens the window for any other kind of row.
+  static const int billWindowSeconds = 48 * 60 * 60;
+
   /// A term-deposit closure prints its own wording on the credit leg and a
   /// plain "debit by transfer" on the TD account leg.
   static final RegExp _closureWording = RegExp(
@@ -86,6 +94,34 @@ class DedupeEngine {
         union(a.key, b.key);
       }
     }
+
+    // Second pass, card bills only: same amount, both issuer/or bank legs of a
+    // bill payment, up to 48 hours apart, regardless of sender. This is a
+    // separate, narrow rule — the general window above is unchanged.
+    final billByAmount = <int, List<Txn>>{};
+    for (final txn in sorted) {
+      if (txn.transferReason == TransferReason.creditCardBill) {
+        billByAmount.putIfAbsent(txn.amountPaise, () => <Txn>[]).add(txn);
+      }
+    }
+    for (final group in billByAmount.values) {
+      if (group.length < 2) continue;
+      for (var i = 0; i < group.length; i++) {
+        for (var j = i + 1; j < group.length; j++) {
+          if (group[j].occurredAtMs - group[i].occurredAtMs >
+              billWindowSeconds * 1000) {
+            break;
+          }
+          // Two alerts that print two different reference ids are two genuine
+          // payments of the same amount, not one event notified twice.
+          if (_refsDistinguish(group[i], group[j])) continue;
+          pairs.add(
+            (a: group[i].key, b: group[j].key, closure: false, opposite: false),
+          );
+          union(group[i].key, group[j].key);
+        }
+      }
+    }
     if (pairs.isEmpty) return sorted;
 
     final transferGroups = <String>{};
@@ -107,9 +143,27 @@ class DedupeEngine {
       final group = entry.value;
       if (group.length < 2) continue;
       final closure = closureGroups.contains(entry.key);
-      var winner = group.first;
-      for (final txn in group.skip(1)) {
-        winner = closure ? _closureWinner(winner, txn) : _richer(winner, txn);
+      // Any group that contains an issuer's card-bill confirmation is a
+      // bill-payment group, however it was paired (the 48-hour amount pass, or
+      // the general window when the two alerts are seconds apart).
+      final bill = group.any(
+        (t) => t.transferReason == TransferReason.creditCardBill,
+      );
+      Txn winner;
+      if (closure) {
+        winner = group.first;
+        for (final txn in group.skip(1)) {
+          winner = _closureWinner(winner, txn);
+        }
+      } else if (bill) {
+        // A card-bill group keeps the issuer leg: it carries the cardKey, and
+        // that is the leg the card screens use to clear the outstanding bill.
+        winner = _billWinner(group);
+      } else {
+        winner = group.first;
+        for (final txn in group.skip(1)) {
+          winner = _richer(winner, txn);
+        }
       }
       for (final txn in group) {
         if (identical(txn, winner)) continue;
@@ -305,6 +359,27 @@ class DedupeEngine {
     }
     return false;
   }
+
+  /// The leg of a card-bill group that must survive: the issuer confirmation,
+  /// identified by a `cardKey`. Keeping the funding-account debit instead hides
+  /// the payment from the card, and a paid bill keeps showing as due.
+  Txn _billWinner(List<Txn> group) {
+    Txn? best;
+    for (final txn in group) {
+      if (txn.transferReason != TransferReason.creditCardBill) continue;
+      if (best == null || _billScore(txn) > _billScore(best)) best = txn;
+    }
+    if (best != null) return best;
+    // No bill leg in the group (cannot happen for a bill seed): use the normal
+    // richer-row rule rather than dropping the event.
+    return group.reduce(_richer);
+  }
+
+  int _billScore(Txn txn) =>
+      (txn.cardKey != null ? 4 : 0) +
+      (txn.instrument == Instrument.creditCard ? 2 : 0) +
+      (txn.issuer != null ? 1 : 0) +
+      (txn.availableLimitPaise != null ? 1 : 0);
 
   Txn _richer(Txn a, Txn b) => _score(a) >= _score(b) ? a : b;
 

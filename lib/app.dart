@@ -161,6 +161,13 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  /// Switches the visible tab. Shared with every screen that has an insight
+  /// action, so "See cards" means the same thing from Home and from Insights.
+  void _openTab(int index) {
+    if (index < 0 || index >= _destinations.length) return;
+    setState(() => _index = index);
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -177,18 +184,21 @@ class _AppShellState extends State<AppShell> {
         index: _index,
         children: [
           HomeScreen(
-            onNavigate: (index) => setState(() => _index = index),
+            onNavigate: _openTab,
             onOpenSettings: _openSettings,
             onOpenActivity: _openActivity,
           ),
           TransactionsScreen(request: _activityRequest),
           const CardsScreen(),
-          const InsightsScreen(),
+          InsightsScreen(
+            onNavigate: _openTab,
+            onOpenActivity: _openActivity,
+          ),
         ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (value) => setState(() => _index = value),
+        onDestinationSelected: _openTab,
         destinations: _destinations,
       ),
     );

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app/design_tokens.dart';
+import '../app/money_format.dart';
 import '../app/widgets/kit.dart';
 import '../data/finance_repository.dart';
 import '../domain/money.dart';
@@ -13,10 +14,12 @@ import '../engine/card_metrics.dart';
 import '../engine/insights_engine.dart';
 import '../engine/monthly_summary.dart';
 import '../state/app_state.dart';
+import 'insight_actions.dart';
 import 'sms_inbox_screen.dart';
 import 'transactions_screen.dart';
 import 'widgets/card_face.dart';
 import 'widgets/charts.dart';
+import 'widgets/insight_tile.dart';
 import 'widgets/money_in_breakdown.dart';
 import 'widgets/txn_common.dart';
 import 'widgets/txn_detail_sheet.dart';
@@ -163,9 +166,18 @@ class HomeScreen extends StatelessWidget {
                   const SizedBox(height: T.s5),
                   Entrance(
                     index: 5,
-                    child: _InsightPreview(
-                      insights: data.insights,
+                    child: _InsightSection(
+                      // One countdown for the whole app: the calendar-day
+                      // rewrite and the "in 1 days" grammar fix live in
+                      // `InsightTile`, together with the chip and the tone.
+                      insights: withCalendarDueDates(
+                        data.insights,
+                        data.cards,
+                      ),
+                      transactions: data.transactions,
                       onSeeAll: () => onNavigate?.call(3),
+                      onTab: onNavigate,
+                      onOpenActivity: onOpenActivity,
                     ),
                   ),
                 ],
@@ -227,25 +239,28 @@ class _HeroCard extends StatelessWidget {
     final left = data.left;
     final stats = <({String label, String value})>[
       if (hasIncome) ...[
-        (label: 'Came in', value: inrCompact(summary.income)),
+        (label: 'Came in', value: money(summary.income)),
         // The same definition Activity and Cards use: spend + cash + card
         // bills, never category spend alone.
-        (label: 'Out this month', value: inrCompact(data.moneyOut)),
+        (label: 'Out this month', value: money(data.moneyOut)),
         (
           label: left.value < 0 ? 'Over' : 'Left',
           // "Over" is a magnitude, so it never carries a minus sign.
-          value: inrCompact(Paise(left.value.abs())),
+          value: money(Paise(left.value.abs())),
         ),
       ] else ...[
-        (label: 'Out this month', value: inrCompact(data.moneyOut)),
+        (label: 'Out this month', value: money(data.moneyOut)),
         if (data.unpaidBillCount > 0)
           (
             label: data.unpaidBillCount == 1
                 ? 'Still due'
                 : 'Still due (${data.unpaidBillCount})',
-            value: inrCompact(data.stillDue),
+            value: money(data.stillDue),
           ),
-        (label: 'Spend / day', value: inrCompact(summary.dailyAverage)),
+        // The one per-day figure on this screen. The hero used to print
+        // "₹812.52 a day" above a stat that said "₹813" — the same value in two
+        // formats, three lines apart.
+        (label: 'Spend / day', value: money(summary.dailyAverage)),
       ],
     ];
 
@@ -255,8 +270,8 @@ class _HeroCard extends StatelessWidget {
     final cash = summary.cashPaise;
     final otherTransfers = summary.transferPaise - cardBills;
     final included = <String>[
-      if (cardBills > 0) '${inrCompact(Paise(cardBills))} card bills',
-      if (cash > 0) '${inrCompact(Paise(cash))} cash',
+      if (cardBills > 0) '${money(Paise(cardBills))} card bills',
+      if (cash > 0) '${money(Paise(cash))} cash',
     ];
     final includedLine = included.isEmpty
         ? null
@@ -283,7 +298,7 @@ class _HeroCard extends StatelessWidget {
     final showPace =
         summary.daysElapsed < summary.daysInMonth &&
         summary.projectedSpendPaise > 0;
-    final paceLabel = 'On pace for ${inrCompact(summary.projectedSpend)}';
+    final paceLabel = 'On pace for ${money(summary.projectedSpend)}';
 
     final provenance = <String>[
       if (data.smsMessagesRead > 0) '${data.smsMessagesRead} messages read',
@@ -479,9 +494,9 @@ class _HeroCard extends StatelessWidget {
                       SizedBox(height: includedLine == null ? T.s3 : 0),
                       _HeroLink(
                         text:
-                            '${inrCompact(Paise(otherTransfers))} transfers not counted',
+                            '${money(Paise(otherTransfers))} transfers not counted',
                         semanticsLabel:
-                            '${inrCompact(Paise(otherTransfers))} moved as transfers and not counted as spending. Show the transfers.',
+                            '${money(Paise(otherTransfers))} moved as transfers and not counted as spending. Show the transfers.',
                         onTap: onOpenActivity == null
                             ? null
                             : () => onOpenActivity!(
@@ -524,8 +539,7 @@ class _HeroCard extends StatelessWidget {
     );
   }
 
-  static String _spoken(Paise amount) =>
-      inr(amount).replaceFirst('₹', '').replaceFirst('-', 'minus ');
+  static String _spoken(Paise amount) => moneySpoken(amount);
 }
 
 /// A tappable line in the hero's receipt. It keeps a 48 dp target even though
@@ -824,10 +838,10 @@ class _AttentionState extends State<_Attention> {
                 ? '${only?.card.displayName ?? 'Card'} bill $dueText'
                 : '$unpaid card bills unpaid',
             body: unpaid == 1
-                ? '${inr(data.stillDue)} total due'
-                      '${minimum != null ? ' · ${inr(minimum)} minimum' : ''}. '
+                ? '${money(data.stillDue)} total due'
+                      '${minimum != null ? ' · ${money(minimum)} minimum' : ''}. '
                       'Paying in full avoids interest.'
-                : '${inr(data.stillDue)} still due across $unpaid cards. '
+                : '${money(data.stillDue)} still due across $unpaid cards. '
                       'Paying in full avoids interest.',
             actionLabel: unpaid == 1 ? 'See card' : 'See cards',
             onAction: () => onNavigate?.call(2),
@@ -1083,14 +1097,32 @@ class _CardStrip extends StatelessWidget {
   }
 }
 
-class _InsightPreview extends StatelessWidget {
-  const _InsightPreview({required this.insights, this.onSeeAll});
+/// "Worth knowing": the two highest-ranked insights, rendered with the **same**
+/// tile the Insights screen uses.
+///
+/// This replaces `_InsightPreview`, a second, degraded copy of `InsightTile` that
+/// dropped the chip, the tone border, the "in 1 days" grammar fix and the
+/// calendar-day bill countdown. That copy is exactly why the same phone could say
+/// "American Express bill due in 2 days" in the banner and "Bill due in 1 days"
+/// three sections below it.
+class _InsightSection extends StatelessWidget {
+  const _InsightSection({
+    required this.insights,
+    required this.transactions,
+    this.onSeeAll,
+    this.onTab,
+    this.onOpenActivity,
+  });
 
   final List<Insight> insights;
+  final List<Txn> transactions;
   final VoidCallback? onSeeAll;
+  final ValueChanged<int>? onTab;
+  final ValueChanged<ActivityRequest>? onOpenActivity;
 
   @override
   Widget build(BuildContext context) {
+    final state = context.read<AppState>();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1100,77 +1132,23 @@ class _InsightPreview extends StatelessWidget {
           onAction: onSeeAll,
           padding: const EdgeInsets.only(bottom: T.s3, left: T.s1),
         ),
-        for (final insight in insights.take(2)) ...[
-          AppCard(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                IconBadge(
-                  icon: _icon(insight.tone),
-                  color: _toneColor(context, insight.tone),
-                  size: 38,
-                  iconSize: 19,
-                ),
-                const SizedBox(width: T.s3),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        insight.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: T.cardTitle.copyWith(
-                          color: T.of(context).ink,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        insight.body,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: T.bodySmall.copyWith(
-                          color: T.of(context).inkMuted,
-                          height: 1.35,
-                        ),
-                      ),
-                      if (insight.amountPaise != null &&
-                          insight.amountPaise != 0) ...[
-                        const SizedBox(height: 6),
-                        MoneyText(
-                          Paise(insight.amountPaise!),
-                          compact: true,
-                          style: T.money.copyWith(fontSize: 13),
-                          color: T.of(context).ink,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
+        for (final insight in insights.take(2))
+          Padding(
+            padding: const EdgeInsets.only(bottom: T.s3),
+            child: InsightTile(
+              insight: insight,
+              onAction: insightActionHandler(
+                insight,
+                openActivity: onOpenActivity,
+                openTab: onTab,
+                transactions: transactions,
+                onRecurring: onTab == null ? null : () => onTab!(3),
+              ),
+              onDismiss: () => state.dismissInsight(insight.id),
             ),
           ),
-          const SizedBox(height: T.s3),
-        ],
       ],
     );
-  }
-
-  static IconData _icon(InsightTone tone) => switch (tone) {
-    InsightTone.warning => Icons.error_rounded,
-    InsightTone.caution => Icons.visibility_rounded,
-    InsightTone.positive => Icons.trending_up_rounded,
-    InsightTone.neutral => Icons.insights_rounded,
-  };
-
-  static Color _toneColor(BuildContext context, InsightTone tone) {
-    final p = T.of(context);
-    return switch (tone) {
-      InsightTone.warning => p.danger,
-      InsightTone.caution => p.caution,
-      InsightTone.positive => p.positive,
-      InsightTone.neutral => p.info,
-    };
   }
 }
 

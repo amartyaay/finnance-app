@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/design_tokens.dart';
+import '../../app/money_format.dart';
 import '../../app/widgets/kit.dart';
 import '../../domain/money.dart';
 import '../../engine/monthly_summary.dart';
@@ -25,9 +26,9 @@ class RecurringRow extends StatelessWidget {
       _ => 'in $days days',
     };
     final semantics =
-        '${series.merchant}. ${inr(series.amount)} every '
+        '${series.merchant}. ${money(series.amount)} every '
         '${series.intervalDays} days. Next ${shortDate(series.nextExpected)}, '
-        '$when. ${inr(Paise(series.annualisedPaise))} a year at this pace.';
+        '$when. ${money(Paise(series.annualisedPaise))} a year at this pace.';
     return Semantics(
       container: true,
       label: semantics,
@@ -66,7 +67,7 @@ class RecurringRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${inr(Paise(series.annualisedPaise))} a year at this pace',
+                  '${money(Paise(series.annualisedPaise))} a year at this pace',
                   style: T.bodySmall.copyWith(color: p.inkMuted),
                 ),
               ],
@@ -121,7 +122,7 @@ class CategoryBreakdownRow extends StatelessWidget {
         ? 'About the same as last month.'
         : '${(change.abs() * 100).round()} percent ${change > 0 ? 'more' : 'less'} than last month.';
     final semantics =
-        '${total.name}. ${inr(total.amount)}, '
+        '${total.name}. ${money(total.amount)}, '
         '${(total.share * 100).round()} percent of spending. $changeWords';
     return Semantics(
       container: true,

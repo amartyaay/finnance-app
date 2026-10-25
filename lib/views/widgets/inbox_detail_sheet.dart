@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/design_tokens.dart';
+import '../../app/money_format.dart';
 import '../../app/widgets/kit.dart';
 import '../../domain/category_catalog.dart';
 import '../../domain/enums.dart';
@@ -254,7 +255,7 @@ class _InboxMessageSheetState extends State<_InboxMessageSheet> {
       if (!mounted) return;
       Navigator.of(context).pop(
         InboxSheetOutcome(
-          'Added ${inr(amount)} at $merchant to your ledger.',
+          'Added ${money(amount)} at $merchant to your ledger.',
         ),
       );
     } catch (_) {

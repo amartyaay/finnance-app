@@ -1,4 +1,4 @@
-// TEMPORARY diagnostic: dumps credit-card-bill legs and their pairing.
+﻿// TEMPORARY diagnostic: dumps credit-card-bill legs and their pairing.
 import 'dart:convert';
 import 'dart:io';
 
@@ -48,12 +48,12 @@ void main(List<String> args) {
     final body = (t.rawBody ?? '').replaceAll(RegExp(r'\s+'), ' ');
     stdout.writeln(
       '${DateTime.fromMillisecondsSinceEpoch(t.occurredAtMs)}  '
-      '₹${(t.amountPaise / 100).toStringAsFixed(2).padLeft(10)}  '
+      'â‚¹${(t.amountPaise / 100).toStringAsFixed(2).padLeft(10)}  '
       '${t.sender}  cardKey=${t.cardKey} last4=${t.last4} issuer=${t.issuer} '
       'merchant=${t.merchant}\n    $body',
     );
   }
-  stdout.writeln('sum counted cardBill: ₹${(total / 100).toStringAsFixed(2)}');
+  stdout.writeln('sum counted cardBill: â‚¹${(total / 100).toStringAsFixed(2)}');
 
   // Group same-amount card-bill rows, regardless of gap.
   final byAmount = <int, List<Txn>>{};
@@ -63,7 +63,7 @@ void main(List<String> args) {
   stdout.writeln('\n--- same-amount groups (all gaps) ---');
   for (final entry in byAmount.entries) {
     if (entry.value.length < 2) continue;
-    stdout.writeln('₹${(entry.key / 100).toStringAsFixed(2)} x${entry.value.length}');
+    stdout.writeln('â‚¹${(entry.key / 100).toStringAsFixed(2)} x${entry.value.length}');
     for (final t in entry.value) {
       final body = (t.rawBody ?? '').replaceAll(RegExp(r'\s+'), ' ');
       final gap = (t.occurredAtMs - entry.value.first.occurredAtMs) / 1000;
@@ -73,6 +73,25 @@ void main(List<String> args) {
         '| ${body.length > 110 ? body.substring(0, 110) : body}',
       );
     }
+  }
+
+  stdout.writeln('\n--- card bill notices ---');
+  for (final item in raw) {
+    final map = item as Map<String, dynamic>;
+    final message = SmsMessage(
+      id: map['id'] as String,
+      sender: map['sender'] as String,
+      body: map['body'] as String,
+      receivedAtMs: map['received_at'] as int,
+    );
+    final sender = registry.resolve(message.sender);
+    final bill = extractor.billNotice(message, sender);
+    if (bill == null) continue;
+    stdout.writeln(
+      '${bill.cardKey} total=â‚¹${(bill.totalDuePaise / 100).toStringAsFixed(2)} '
+      'min=${bill.minimumDuePaise} due=${bill.dueDate} stmtMs=${bill.statementDateMs} '
+      'recv=${bill.receivedAtMs} | ${message.body.substring(0, message.body.length > 80 ? 80 : message.body.length)}',
+    );
   }
 
   // All duplicate merges, for reference, with the winner printed in full.
@@ -85,7 +104,7 @@ void main(List<String> args) {
         'cardKey=${x.cardKey} last4=${x.last4} merchant=${x.merchant} '
         'ref=${x.referenceId} limit=${x.availableLimitPaise} bal=${x.balanceAfterPaise}';
     stdout.writeln(
-      '₹${(t.amountPaise / 100).toStringAsFixed(2)} '
+      'â‚¹${(t.amountPaise / 100).toStringAsFixed(2)} '
       'gap=${((t.occurredAtMs - winner.occurredAtMs) / 1000).toStringAsFixed(0)}s\n'
       '  WINNER ${row(winner)}\n'
       '    ${(winner.rawBody ?? '').replaceAll(RegExp(r'\s+'), ' ')}\n'
@@ -98,7 +117,7 @@ void main(List<String> args) {
   for (final t in counted.where((t) => t.needsReview)) {
     final body = (t.rawBody ?? '').replaceAll(RegExp(r'\s+'), ' ');
     stdout.writeln(
-      '₹${(t.amountPaise / 100).toStringAsFixed(2)} kind=${t.kind.name} '
+      'â‚¹${(t.amountPaise / 100).toStringAsFixed(2)} kind=${t.kind.name} '
       'cat=${t.categoryName} conf=${t.confidence.toStringAsFixed(2)} '
       '| ${body.length > 110 ? body.substring(0, 110) : body}',
     );
@@ -109,9 +128,10 @@ void main(List<String> args) {
     final body = t.rawBody ?? '';
     if (body.contains('12,340') || body.contains('12340')) {
       stdout.writeln(
-        '₹${(t.amountPaise / 100).toStringAsFixed(2)} ${t.kind.name} '
+        'â‚¹${(t.amountPaise / 100).toStringAsFixed(2)} ${t.kind.name} '
         'review=${t.needsReview} | $body',
       );
     }
   }
 }
+

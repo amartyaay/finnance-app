@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../app/design_tokens.dart';
+import '../../app/money_format.dart';
 import '../../app/widgets/kit.dart';
 import '../../domain/money.dart';
 import '../../engine/monthly_summary.dart';
@@ -71,7 +72,7 @@ class CategoryDonut extends StatelessWidget {
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   child: Text(
-                    inrCompact(total),
+                    money(total),
                     style: T.moneyLarge(p.ink).copyWith(fontSize: 19),
                   ),
                 ),
@@ -163,10 +164,10 @@ class CategoryDonut extends StatelessWidget {
       final share = total.value == 0
           ? 0
           : (slice.total.paise / total.value * 100).round();
-      parts.add('${slice.name} ${inr(slice.total.amount)}, $share percent');
+      parts.add('${slice.name} ${money(slice.total.amount)}, $share percent');
     }
     return 'Spending by category, biggest first. ${parts.join('; ')}. '
-        'Total ${inr(total)}.';
+        'Total ${money(total)}.';
   }
 }
 
@@ -194,46 +195,67 @@ class _LegendRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = T.of(context);
-    return Row(
-      children: [
-        Container(
-          width: 9,
-          height: 9,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(3),
-          ),
-        ),
-        const SizedBox(width: T.s2),
-        Expanded(
-          child: Text(
-            total.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: T.bodySmall.copyWith(
-              color: p.inkSecondary,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        const SizedBox(width: T.s1),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // The money column may never take more than half the legend width: the
+        // category name is the label and has to keep room. At a real font the
+        // amount fits in that half; under a wide fallback font it ellipsizes
+        // instead of pushing the row past its bounds — this row was 5.5 px over
+        // at 360 dp, the second automatic-fail-adjacent overflow in round 2.
+        final amountWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth * 0.52
+            : 96.0;
+        return Row(
           children: [
-            Text(
-              inr(total.amount),
-              maxLines: 1,
-              softWrap: false,
-              style: T.money.copyWith(color: p.ink, fontSize: 13),
+            Container(
+              width: 9,
+              height: 9,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(3),
+              ),
             ),
-            Text(
-              '${(share * 100).round()}%',
-              style: T.bodySmall.copyWith(color: p.inkMuted, fontSize: 12),
+            const SizedBox(width: T.s2),
+            Expanded(
+              child: Text(
+                total.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: T.bodySmall.copyWith(
+                  color: p.inkSecondary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const SizedBox(width: T.s1),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: amountWidth),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    money(total.amount),
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    style: T.money.copyWith(color: p.ink, fontSize: 13),
+                  ),
+                  Text(
+                    '${(share * 100).round()}%',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: T.bodySmall.copyWith(
+                      color: p.inkMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -364,9 +386,9 @@ class _DailyBarsState extends State<DailyBars>
 
     final semantics =
         'Daily spending for ${values.length} days. '
-        '${todayValue == null ? '' : 'Today ${inr(Paise(todayValue))}. '}'
-        'Average ${inr(Paise(average))}. '
-        'Highest ${inr(Paise(maxValue))} on ${shortDate(maxDay)}.';
+        '${todayValue == null ? '' : 'Today ${money(Paise(todayValue))}. '}'
+        'Average ${money(Paise(average))}. '
+        'Highest ${money(Paise(maxValue))} on ${shortDate(maxDay)}.';
 
     return Semantics(
       label: semantics,
@@ -412,7 +434,7 @@ class _DailyBarsState extends State<DailyBars>
                               values.length,
                             ),
                           )
-                        : 'Today · ${inrCompact(Paise(todayValue ?? 0))}',
+                        : 'Today · ${money(Paise(todayValue ?? 0))}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: T.bodySmall.copyWith(
@@ -560,8 +582,8 @@ class PaceBars extends StatelessWidget {
     ];
     return Semantics(
       label:
-          'Spent so far ${inr(spend)}. Projected month-end ${inr(projected)}. '
-          'Last month ${inr(previous)}.',
+          'Spent so far ${money(spend)}. Projected month-end ${money(projected)}. '
+          'Last month ${money(previous)}.',
       child: Column(
         children: [
           for (var i = 0; i < rows.length; i++) ...[
@@ -583,7 +605,7 @@ class PaceBars extends StatelessWidget {
                 ),
                 const SizedBox(width: T.s2),
                 Text(
-                  inrCompact(rows[i].amount),
+                  money(rows[i].amount),
                   maxLines: 1,
                   softWrap: false,
                   style: T.money.copyWith(

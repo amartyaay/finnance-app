@@ -207,7 +207,8 @@ class CardMetrics {
   /// A card can be quiet this cycle and still owe a bill; it must stay visible.
   bool get hasBillButNoSpend => hasBill && billDuePaise > 0 && txnCount == 0;
 
-  bool get dueSoon => daysToDue != null && daysToDue! <= 7 && billDuePaise > 0;
+  bool get dueSoon =>
+      daysToDue != null && daysToDue! >= 0 && daysToDue! <= 7 && billDuePaise > 0;
 
   String get utilizationLabel => utilisationBasis.label;
 
@@ -408,13 +409,16 @@ class CardMetricsCalculator {
       dueDate = _nextDayOfMonth(now, card.dueDay!);
     }
     // A bill notice can arrive late; a due date in the past means the *next*
-    // cycle's date, not a negative countdown.
+    // occurrence of that day-of-month, not a negative countdown. Computing the
+    // next occurrence directly (instead of adding months with a 12-iteration
+    // guard) keeps a bill older than a year from leaving `daysToDue` at -526.
     if (dueDate != null) {
-      var guard = 0;
-      while (dueDate!.isBefore(DateTime(now.year, now.month, now.day)) &&
-          guard < 12) {
-        dueDate = DateTime(dueDate.year, dueDate.month + 1, dueDate.day);
-        guard++;
+      final today = DateTime(now.year, now.month, now.day);
+      if (dueDate.isBefore(today)) {
+        final thisMonth = _dayInMonth(today.year, today.month, dueDate.day);
+        dueDate = thisMonth.isBefore(today)
+            ? _dayInMonth(today.year, today.month + 1, dueDate.day)
+            : thisMonth;
       }
     }
     final billDue = totalDue - paidSinceStatement;
@@ -440,7 +444,9 @@ class CardMetricsCalculator {
       statementDate: cycle.end,
       dueDate: dueDate,
       daysToStatement: daysToStatement < 0 ? 0 : daysToStatement,
-      daysToDue: totalDue > 0 ? dueDate?.difference(now).inDays : null,
+      daysToDue: totalDue > 0 && dueDate != null
+          ? dueDate.difference(now).inDays.clamp(0, 3650)
+          : null,
       totalDuePaise: totalDue,
       minimumDuePaise: latestBill?.minimumDuePaise,
       billDuePaise: billDue.clamp(0, 0x1FFFFFFFFFFFFF).toInt(),

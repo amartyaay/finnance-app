@@ -16,6 +16,7 @@
 // anchor. The test still fails if any error is thrown: `errors` must be empty.
 
 import 'package:finnance_app/app.dart';
+import 'package:finnance_app/app/money_format.dart';
 import 'package:finnance_app/data/demo_repository.dart';
 import 'package:finnance_app/data/finance_repository.dart';
 import 'package:finnance_app/domain/money.dart';
@@ -112,7 +113,7 @@ void main() {
     expect(data.summary.byCategory, isNotEmpty);
 
     // The hero renders the exact Indian-grouped amount (MoneyText, no animation).
-    expect(find.text(inr(data.summary.spend)), findsOneWidget);
+    expect(find.text(money(data.summary.spend)), findsOneWidget);
 
     // The category card is below the hero; scroll it into view if needed.
     await tester.scrollUntilVisible(

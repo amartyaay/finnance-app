@@ -192,7 +192,10 @@ class SummaryCalculator {
     final daily = <int>[];
 
     for (final txn in transactions) {
-      if (txn.isDuplicateOfKey != null) continue;
+      // A row the parser was not sure about, or that lost a duplicate merge,
+      // must not move a total before the user confirms it. It stays in the
+      // review queue; `ARCHITECTURE.md §7` promises exactly this.
+      if (txn.isDuplicateOfKey != null || txn.needsReview) continue;
       final at = txn.occurredAt;
       if (at.isBefore(monthStart) || !at.isBefore(monthEnd)) {
         if (at.isBefore(monthStart) &&
@@ -257,7 +260,7 @@ class SummaryCalculator {
     // Previous month, per category, for month-over-month deltas.
     final prevByKind = <SpendCategoryKind, int>{};
     for (final txn in transactions) {
-      if (txn.isDuplicateOfKey != null) continue;
+      if (txn.isDuplicateOfKey != null || txn.needsReview) continue;
       if (txn.kind != TxnKind.spend) continue;
       final at = txn.occurredAt;
       if (at.isBefore(prevStart) || !at.isBefore(monthStart)) continue;

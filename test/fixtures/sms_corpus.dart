@@ -68,9 +68,12 @@ class SmsFixture {
     this.issuer,
     this.cardLastDigits,
     this.last4,
+    this.cardKey,
+    this.moneyInKind,
     this.referenceId,
     this.merchantContains,
     this.isDuplicateGroup,
+    this.receivedOffsetSeconds = 0,
     this.tags = const <String>[],
     this.note = '',
   });
@@ -96,6 +99,13 @@ class SmsFixture {
   /// Account/card tail used for de-duplication and account matching.
   final String? last4;
 
+  /// Expected `issuer|last4` card identity. Asserted whenever non-null: a
+  /// bill-payment pair can only keep the issuer leg if that leg binds a card.
+  final String? cardKey;
+
+  /// Expected `MoneyInKind` name (e.g. `other`, `interest`). Asserted when set.
+  final String? moneyInKind;
+
   final String? referenceId;
 
   /// Token the parsed merchant must contain (doc field: `merchant`).
@@ -103,6 +113,10 @@ class SmsFixture {
 
   /// Non-null when this row must collapse with the other members of the group.
   final String? isDuplicateGroup;
+
+  /// Seconds after the corpus's fixed instant. Only duplicate groups use it:
+  /// the two legs of a card-bill payment are usually hours apart.
+  final int receivedOffsetSeconds;
 
   final List<String> tags;
   final String note;
@@ -745,6 +759,7 @@ const List<SmsFixture> smsCorpus = <SmsFixture>[
     last4: '1234',
     referenceId: 'HDFC5566778899',
     merchantContains: 'ACME TECHNOLOGIES PVT LTD',
+    moneyInKind: 'other',
     confidenceHint: 'high',
     note: 'I. Salary-shaped credit; two lakh-grouped amounts.',
   ),
@@ -1019,6 +1034,7 @@ const List<SmsFixture> smsCorpus = <SmsFixture>[
     issuer: 'ICICI Bank',
     cardLastDigits: '7007',
     last4: '7007',
+    cardKey: 'ICICI Bank|7007',
     referenceId: 'YZDPEN6D1895',
     isDuplicateGroup: 'dup-cardbill-icici-7007',
     confidenceHint: 'high',
@@ -1068,6 +1084,7 @@ const List<SmsFixture> smsCorpus = <SmsFixture>[
     issuer: 'HDFC Bank',
     cardLastDigits: '1234',
     last4: '1234',
+    cardKey: 'HDFC Bank|1234',
     isDuplicateGroup: 'dup-cardbill-hdfc-1234',
     confidenceHint: 'high',
     note: 'I. Family (b): issuer confirmation; same event as H07 — must collapse to one cardPayment.',
@@ -1083,6 +1100,7 @@ const List<SmsFixture> smsCorpus = <SmsFixture>[
     issuer: 'ICICI Bank',
     cardLastDigits: '2815',
     last4: '2815',
+    cardKey: 'ICICI Bank|2815',
     confidenceHint: 'medium',
     note: 'I. Combined issuer+BBPS phrasing; amount is the bill, not a purchase.',
   ),
@@ -1097,9 +1115,64 @@ const List<SmsFixture> smsCorpus = <SmsFixture>[
     issuer: 'Axis Bank',
     cardLastDigits: '931',
     last4: '931',
+    cardKey: 'Axis Bank|931',
     merchantContains: 'CHEQ',
     confidenceHint: 'medium',
     note: 'I. Third-party bill channel (Cheq) with a 3-digit Axis mask.',
+  ),
+  SmsFixture(
+    id: 'H11',
+    sender: 'VK-HDFCBK',
+    body:
+        'Rs.5,861.00 debited from your HDFC Bank A/c **4821 on 17-06-26 to BILLDESK (HDFC Bank Credit Card bill). Avl Bal Rs.7,340.55.',
+    amountPaise: 586100,
+    direction: SmsDirection.transfer,
+    instrument: SmsInstrument.creditCard,
+    issuer: 'HDFC Bank',
+    last4: '4821',
+    merchantContains: 'BILLDESK',
+    isDuplicateGroup: 'dup-cardbill-hdfc-5861',
+    confidenceHint: 'high',
+    note:
+        'O. Bank-account leg of a real HDFC card-bill payment. It prints only the '
+        'account mask, so it carries no cardKey — and that is exactly why the '
+        'issuer leg (H12) must be the survivor.',
+  ),
+  SmsFixture(
+    id: 'H12',
+    sender: 'VK-HDFCBK',
+    body:
+        'DEAR HDFCBANK CARDMEMBER, PAYMENT OF Rs. 5861.00 RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH 6859 ON 17-6-2026.YOUR AVAILABLE LIMIT IS RS. 17428.26',
+    amountPaise: 586100,
+    direction: SmsDirection.transfer,
+    instrument: SmsInstrument.creditCard,
+    issuer: 'HDFC Bank',
+    cardLastDigits: '6859',
+    last4: '6859',
+    cardKey: 'HDFC Bank|6859',
+    isDuplicateGroup: 'dup-cardbill-hdfc-5861',
+    receivedOffsetSeconds: 20 * 60 * 60,
+    confidenceHint: 'high',
+    note:
+        'O. Issuer leg, 20 hours after the bank debit: "credit card ending with '
+        'NNNN" must bind a cardKey (it did not before, because `credit card` '
+        'pre-empted `ending with`).',
+  ),
+  SmsFixture(
+    id: 'H13',
+    sender: 'VK-HDFCBK',
+    body:
+        'HDFC Bank Cardmember, Online Payment of Rs.7683 vide Ref# 212BX6RM0PJ7003 was credited to your card ending 6859 On 31/JUL/2026_value Date 31/JUL/2026',
+    amountPaise: 768300,
+    direction: SmsDirection.transfer,
+    instrument: SmsInstrument.creditCard,
+    issuer: 'HDFC Bank',
+    cardLastDigits: '6859',
+    last4: '6859',
+    cardKey: 'HDFC Bank|6859',
+    referenceId: '212BX6RM0PJ7003',
+    confidenceHint: 'high',
+    note: 'O. Second real issuer template ("credited to your card ending").',
   ),
 
   // ─── I. Autopay / mandate / SI / EMI ───────────────────────────────────────
@@ -1511,6 +1584,7 @@ const List<SmsFixture> smsCorpus = <SmsFixture>[
     issuer: 'HDFC Bank',
     cardLastDigits: '1234',
     last4: '1234',
+    cardKey: 'HDFC Bank|1234',
     referenceId: 'CRED77889900',
     isDuplicateGroup: 'dup-cardbill-hdfc-7500',
     confidenceHint: 'high',
@@ -1527,6 +1601,7 @@ const List<SmsFixture> smsCorpus = <SmsFixture>[
     issuer: 'HDFC Bank',
     cardLastDigits: '1234',
     last4: '1234',
+    cardKey: 'HDFC Bank|1234',
     isDuplicateGroup: 'dup-cardbill-hdfc-7500',
     confidenceHint: 'high',
     note: 'Issuer confirmation of the same CRED payment — canonical for available-limit math.',

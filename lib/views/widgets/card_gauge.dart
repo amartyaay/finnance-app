@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/design_tokens.dart';
+import '../../app/money_format.dart';
 import '../../app/widgets/kit.dart';
 import '../../domain/money.dart';
 import '../../engine/card_metrics.dart';
@@ -62,7 +63,7 @@ class CardSummaryCard extends StatelessWidget {
         : Paise((limit.value * utilization!).round());
     final caption = utilization == null
         ? 'Add a card limit to see total utilisation.'
-        : 'of ${inr(limit)} across $limitedCards '
+        : 'of ${money(limit)} across $limitedCards '
               '${limitedCards == 1 ? 'card' : 'cards'} with a limit';
     final limitNote = limitedCards == cards.length
         ? 'All limits set'
@@ -133,7 +134,7 @@ class CardSummaryCard extends StatelessWidget {
                     Text(
                       used == null
                           ? 'Set a limit on each card below.'
-                          : '${inr(used)} used · ${inr(Paise((limit.value - used.value).clamp(0, limit.value)))} available',
+                          : '${money(used)} used · ${money(Paise((limit.value - used.value).clamp(0, limit.value)))} available',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: T.bodySmall.copyWith(color: p.inkMuted),
@@ -159,7 +160,7 @@ class CardSummaryCard extends StatelessWidget {
               Expanded(
                 child: _SummaryStat(
                   label: 'Total due',
-                  value: inrCompact(totalDue),
+                  value: moneyCompact(totalDue),
                   align: CrossAxisAlignment.start,
                 ),
               ),

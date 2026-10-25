@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../app/design_tokens.dart';
-import '../../domain/money.dart';
+import '../../app/money_format.dart';
 import '../../engine/card_metrics.dart';
 import 'txn_common.dart';
 
@@ -117,14 +117,14 @@ class CardFace extends StatelessWidget {
     }
     if (metrics.totalDuePaise > 0) {
       buffer.write(
-        '${inr(metrics.totalDue)} due${metrics.dueDate == null ? '' : ' by ${shortDate(metrics.dueDate!)}'}. ',
+        '${money(metrics.totalDue)} due${metrics.dueDate == null ? '' : ' by ${shortDate(metrics.dueDate!)}'}. ',
       );
     } else {
       buffer.write('No bill due. ');
     }
     if (metrics.limit.value > 0) {
       buffer.write(
-        '${inr(metrics.outstanding)} outstanding of ${inr(metrics.limit)} limit.',
+        '${money(metrics.outstanding)} outstanding of ${money(metrics.limit)} limit.',
       );
     }
     return buffer.toString();
@@ -239,8 +239,8 @@ class _FullFace extends StatelessWidget {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       hasBill
-                          ? inr(metrics.totalDue)
-                          : inr(metrics.spentThisCycle),
+                          ? money(metrics.totalDue)
+                          : money(metrics.spentThisCycle),
                       maxLines: 1,
                       softWrap: false,
                       style: TextStyle(
@@ -473,7 +473,7 @@ class _FaceGauge extends StatelessWidget {
                 ),
               ),
               Text(
-                percent == null ? '—' : '$percent%',
+                percent == null ? 'Ã¢â‚¬â€' : '$percent%',
                 maxLines: 1,
                 style: T.money.copyWith(
                   color: ink,

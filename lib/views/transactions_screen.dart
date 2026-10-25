@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../app/design_tokens.dart';
+import '../app/money_format.dart';
 import '../app/widgets/kit.dart';
 import '../domain/enums.dart';
 import '../domain/money.dart';
@@ -24,25 +24,32 @@ class ActivityRequest {
   const ActivityRequest({
     this.serial = 0,
     this.category,
+    this.query,
     this.transfersOnly = false,
     this.needsReviewOnly = false,
   });
 
   final int serial;
   final SpendCategoryKind? category;
+
+  /// A merchant or category name to search for, so "duplicate charge at X" can
+  /// land on the rows for X instead of the whole month.
+  final String? query;
+
   final bool transfersOnly;
   final bool needsReviewOnly;
 
   ActivityRequest withSerial(int value) => ActivityRequest(
     serial: value,
     category: category,
+    query: query,
     transfersOnly: transfersOnly,
     needsReviewOnly: needsReviewOnly,
   );
 }
 
 /// Activity: the month's ledger, grouped by day, with search and one-tap
-/// filtering. Amounts are never coloured red — spending is normal, not an error.
+/// filtering. Amounts are never coloured red â€” spending is normal, not an error.
 class TransactionsScreen extends StatefulWidget {
   const TransactionsScreen({
     super.key,
@@ -86,7 +93,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     _kindFilter = request.category;
     _transfersOnly = request.transfersOnly;
     _needsReviewOnly = request.needsReviewOnly;
-    _search.clear();
+    _search.text = request.query ?? '';
   }
 
   @override
@@ -223,13 +230,13 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                             label: isCurrentMonth
                                 ? 'Out this month'
                                 : 'Out in ${_monthName(monthStart)}',
-                            value: inrCompact(summary.moneyOut),
+                            value: money(summary.moneyOut),
                           ),
                         ),
                         Expanded(
                           child: _ActivityStat(
                             label: 'Income',
-                            value: inrCompact(summary.income),
+                            value: money(summary.income),
                           ),
                         ),
                         Expanded(
@@ -303,96 +310,56 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
               ),
             ),
             const SizedBox(height: T.s3),
-            SizedBox(
-              height: 48,
-              child: Stack(
-                children: [
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    clipBehavior: Clip.none,
-                    child: Row(
-                      children: [
-                        _FilterChip(
-                          label: 'All',
-                          selected:
-                              _kindFilter == null &&
-                              !_transfersOnly &&
-                              !_needsReviewOnly,
-                          onTap: () => setState(() {
-                            _kindFilter = null;
-                            _transfersOnly = false;
-                            _needsReviewOnly = false;
-                          }),
-                        ),
-                        if (hasTransfers) ...[
-                          const SizedBox(width: T.s2),
-                          _FilterChip(
-                            label: 'Transfers',
-                            icon: Icons.swap_horiz_rounded,
-                            selected: _transfersOnly,
-                            onTap: () => setState(() {
-                              _transfersOnly = !_transfersOnly;
-                              _kindFilter = null;
-                              _needsReviewOnly = false;
-                            }),
-                          ),
-                        ],
-                        for (final entry in categories.entries)
-                          if (!hasTransfers || entry.value != 'Transfers') ...[
-                            const SizedBox(width: T.s2),
-                            _FilterChip(
-                              label: entry.value,
-                              selected: _kindFilter == entry.key,
-                              onTap: () => setState(() {
-                                _kindFilter = _kindFilter == entry.key
-                                    ? null
-                                    : entry.key;
-                                _transfersOnly = false;
-                                _needsReviewOnly = false;
-                              }),
-                            ),
-                          ],
-                        if (state.data.needsReview.isNotEmpty) ...[
-                          const SizedBox(width: T.s2),
-                          _FilterChip(
-                            label: 'Needs review',
-                            icon: Icons.flag_rounded,
-                            selected: _needsReviewOnly,
-                            onTap: () => setState(() {
-                              _needsReviewOnly = !_needsReviewOnly;
-                              _kindFilter = null;
-                              _transfersOnly = false;
-                            }),
-                          ),
-                        ],
-                        const SizedBox(width: T.s5),
-                      ],
-                    ),
+            ChipStrip(
+              children: [
+                FilterChipView(
+                  label: 'All',
+                  selected:
+                      _kindFilter == null &&
+                      !_transfersOnly &&
+                      !_needsReviewOnly,
+                  onTap: () => setState(() {
+                    _kindFilter = null;
+                    _transfersOnly = false;
+                    _needsReviewOnly = false;
+                  }),
+                ),
+                if (hasTransfers)
+                  FilterChipView(
+                    label: 'Transfers',
+                    icon: Icons.swap_horiz_rounded,
+                    selected: _transfersOnly,
+                    onTap: () => setState(() {
+                      _transfersOnly = !_transfersOnly;
+                      _kindFilter = null;
+                      _needsReviewOnly = false;
+                    }),
                   ),
-                  // A soft edge fade: the chip row scrolls, but it should not
-                  // look like a chip was guillotined at the screen edge.
-                  Positioned(
-                    top: 0,
-                    bottom: 0,
-                    right: 0,
-                    width: 48,
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                            colors: [
-                              p.bg.withValues(alpha: 0),
-                              p.bg,
-                            ],
-                          ),
-                        ),
-                      ),
+                for (final entry in categories.entries)
+                  if (!hasTransfers || entry.value != 'Transfers')
+                    FilterChipView(
+                      label: entry.value,
+                      selected: _kindFilter == entry.key,
+                      onTap: () => setState(() {
+                        _kindFilter = _kindFilter == entry.key
+                            ? null
+                            : entry.key;
+                        _transfersOnly = false;
+                        _needsReviewOnly = false;
+                      }),
                     ),
+                if (state.data.needsReview.isNotEmpty)
+                  FilterChipView(
+                    label: 'Needs review',
+                    icon: Icons.flag_rounded,
+                    selected: _needsReviewOnly,
+                    onTap: () => setState(() {
+                      _needsReviewOnly = !_needsReviewOnly;
+                      _kindFilter = null;
+                      _transfersOnly = false;
+                    }),
                   ),
-                ],
-              ),
+              ],
             ),
             const SizedBox(height: T.s1),
             if (visible.isEmpty)
@@ -507,7 +474,7 @@ class _ActivityStat extends StatelessWidget {
 
 /// The two explanations under Activity's figures: what the "out" total includes,
 /// and every rupee that came in, grouped by why it arrived. This is the line
-/// that stops "no income" on Home and "+₹3,939 in" here from contradicting.
+/// that stops "no income" on Home and "+â‚¹3,939 in" here from contradicting.
 class _ActivityCaption extends StatelessWidget {
   const _ActivityCaption({
     required this.periodLabel,
@@ -524,19 +491,18 @@ class _ActivityCaption extends StatelessWidget {
     final p = T.of(context);
     final included = <String>[
       if (summary.cardBillPaymentPaise > 0)
-        '${inrCompact(Paise(summary.cardBillPaymentPaise))} card bills',
-      if (summary.cashPaise > 0)
-        '${inrCompact(Paise(summary.cashPaise))} cash',
+        '${money(Paise(summary.cardBillPaymentPaise))} card bills',
+      if (summary.cashPaise > 0) '${money(Paise(summary.cashPaise))} cash',
     ];
     final lines = <String?>[
       if (included.isNotEmpty)
-        '$periodLabel includes ${included.join(' · ')}',
+        '$periodLabel includes ${included.join(' Â· ')}',
       moneyIn.isEmpty
           ? (summary.hasTrueIncome
                 ? null
                 : 'No salary, refund or transfer messages this month.')
           : 'Money in: ${moneyInLine(moneyIn)}'
-                '${summary.hasTrueIncome ? '' : ' · Salary: none found'}',
+                '${summary.hasTrueIncome ? '' : ' Â· Salary: none found'}',
       if (!summary.hasTrueIncome && moneyIn.isNotEmpty)
         'Only salary and interest count as income; refunds and transfers do not.',
     ].whereType<String>().toList(growable: false);
@@ -563,73 +529,6 @@ class _ActivityCaption extends StatelessWidget {
 }
 
 String _monthName(DateTime date) => monthYearLabel(date).split(' ').first;
-
-class _FilterChip extends StatelessWidget {  const _FilterChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    this.icon,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = T.of(context);
-    return Semantics(
-      button: true,
-      selected: selected,
-      child: GestureDetector(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          onTap();
-        },
-        child: Container(
-          height: 48,
-          alignment: Alignment.center,
-          child: AnimatedContainer(
-            duration: T.fast,
-            curve: T.curveOut,
-            height: 34,
-            padding: const EdgeInsets.symmetric(horizontal: T.s3),
-            decoration: BoxDecoration(
-              color: selected ? p.ink : p.surface,
-              borderRadius: BorderRadius.circular(T.r5),
-              border: Border.all(
-                color: selected ? p.ink : p.outlineVariant,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (icon != null) ...[
-                  Icon(
-                    icon,
-                    size: 14,
-                    color: selected ? p.bg : p.inkSecondary,
-                  ),
-                  const SizedBox(width: 5),
-                ],
-                Text(
-                  label,
-                  maxLines: 1,
-                  style: T.bodySmall.copyWith(
-                    color: selected ? p.bg : p.inkSecondary,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _EmptyActivity extends StatelessWidget {
   const _EmptyActivity({required this.state});

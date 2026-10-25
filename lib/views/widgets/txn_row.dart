@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/design_tokens.dart';
+import '../../app/money_format.dart';
 import '../../app/widgets/kit.dart';
 import '../../domain/enums.dart';
 import '../../domain/money.dart';
@@ -59,7 +60,7 @@ class TxnRow extends StatelessWidget {
     final semantics = [
       txn.title,
       details,
-      '${prefix == '+' ? 'plus ' : prefix == '−' ? 'minus ' : ''}${inr(txn.amount)}',
+      '${prefix == '+' ? 'plus ' : prefix == '−' ? 'minus ' : ''}${money(txn.amount)}',
       if (merged) 'Merged duplicate',
       if (!merged && txn.needsReview) 'Needs review',
     ].join('. ');
@@ -154,9 +155,9 @@ class TxnDayHeader extends StatelessWidget {
     final p = T.of(context);
     final hasOutflow = outflow.isPositive;
     final total = hasOutflow
-        ? inr(outflow)
+        ? money(outflow)
         : inflow.isPositive
-        ? '+${inr(inflow)}'
+        ? '+${money(inflow)}'
         : null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(T.s2, T.s5, T.s2, T.s2),

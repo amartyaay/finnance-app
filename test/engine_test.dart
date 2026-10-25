@@ -39,6 +39,8 @@ Txn _txn({
   String? duplicateOfKey,
   String? categoryName,
   SpendCategoryKind categoryKind = SpendCategoryKind.other,
+  TransferReason transferReason = TransferReason.none,
+  bool needsReview = false,
 }) {
   return Txn(
     key: 'test-key-${_keySeq++}',
@@ -56,6 +58,8 @@ Txn _txn({
     isDuplicateOfKey: duplicateOfKey,
     categoryName: categoryName,
     categoryKind: categoryKind,
+    transferReason: transferReason,
+    needsReview: needsReview,
   );
 }
 
@@ -154,6 +158,23 @@ void main() {
       expect(summary.spendPaise, 99000);
       expect(summary.txnCount, 1);
       expect(summary.previousSpendPaise, 0);
+    });
+
+    test('an unconfirmed (needsReview) row is not counted until reviewed', () {
+      // ARCHITECTURE.md §7: a row the parser could not confirm must not move a
+      // total in a hidden way. Proved defect: a ₹12,340 needsReview row was
+      // added straight into spend.
+      final txns = <Txn>[
+        _txn(at: DateTime(2026, 3, 4), amountPaise: 500000, merchant: 'Amazon'),
+        _txn(
+          at: DateTime(2026, 3, 5),
+          amountPaise: 1234000,
+          needsReview: true,
+        ),
+      ];
+      final summary = const SummaryCalculator().forMonth(txns, now);
+      expect(summary.spendPaise, 500000);
+      expect(summary.txnCount, 1);
     });
 
     test('savingsRate is net income over income, zero without income', () {
@@ -352,6 +373,48 @@ void main() {
       expect(metrics.availableLimitPaise, 8500000);
     });
 
+    test('a stale bill has no negative countdown and is not "due soon"', () {
+      // Proved: a bill whose due date was more than a year old produced
+      // daysToDue = -526 with dueSoon = true (the 12-iteration roll-forward
+      // gave up). The next occurrence must be computed, then clamped at 0.
+      final staleBill = CardBillNotice(
+        cardKey: card.key,
+        totalDuePaise: 7257085,
+        minimumDuePaise: 1278600,
+        dueDateMs: DateTime(2024, 5, 18).millisecondsSinceEpoch,
+        statementDateMs: DateTime(2024, 4, 30).millisecondsSinceEpoch,
+      );
+      final metrics = calculator.compute(
+        card: card,
+        transactions: const <Txn>[],
+        now: DateTime(2026, 10, 25),
+        latestBill: staleBill,
+      );
+
+      // 18 Oct is behind us, so the next occurrence is 18 Nov 2026.
+      expect(metrics.dueDate, DateTime(2026, 11, 18));
+      expect(metrics.daysToDue, 24);
+      expect(metrics.daysToDue!, greaterThanOrEqualTo(0));
+      expect(metrics.dueSoon, isFalse);
+    });
+
+    test('dueSoon only fires for a genuinely imminent unpaid bill', () {
+      CardMetrics withDue(DateTime due) => calculator.compute(
+        card: card,
+        transactions: const <Txn>[],
+        now: now,
+        latestBill: CardBillNotice(
+          cardKey: card.key,
+          totalDuePaise: 500000,
+          dueDateMs: due.millisecondsSinceEpoch,
+          statementDateMs: now.millisecondsSinceEpoch,
+        ),
+      );
+
+      expect(withDue(DateTime(2026, 3, 18)).dueSoon, isTrue);
+      expect(withDue(DateTime(2026, 4, 30)).dueSoon, isFalse);
+    });
+
     test('a refund (income) reduces outstanding', () {
       final metrics = calculator.compute(
         card: card,
@@ -478,6 +541,121 @@ void main() {
       final marked = engine.mark(<Txn>[first, second]);
       // A bank sending the same alert twice is a real double charge, not a
       // duplicate notification, so both rows must survive.
+      expect(marked.where((t) => t.isDuplicateOfKey != null), isEmpty);
+    });
+
+    // ---- Card-bill payments (the double-count bug) --------------------------
+
+    test('a bill payment is paired across 36 h and the issuer leg survives', () {
+      // The real defect: the bank debit and the issuer's "payment received"
+      // arrive hours apart, so the 180 s window never paired them, and both
+      // rows counted in moneyOut. ₹3,772 became 754,400 paise.
+      final bankLeg = _txn(
+        at: t0,
+        amountPaise: 377200,
+        kind: TxnKind.transfer,
+        transferReason: TransferReason.creditCardBill,
+        instrument: Instrument.bankAccount,
+        sender: 'HDFCBK',
+        merchant: 'BILLDESK',
+        last4: '4821',
+      );
+      final issuerLeg = _txn(
+        at: t0.add(const Duration(hours: 36)),
+        amountPaise: 377200,
+        kind: TxnKind.transfer,
+        transferReason: TransferReason.creditCardBill,
+        instrument: Instrument.creditCard,
+        sender: 'HDFCBK',
+        cardKey: 'HDFC Bank|4821',
+        last4: '4821',
+        availableLimitPaise: 7330440,
+      );
+
+      final marked = engine.mark(<Txn>[bankLeg, issuerLeg]);
+      final duplicates = marked.where((t) => t.isDuplicateOfKey != null).toList();
+      final survivors = marked.where((t) => t.isDuplicateOfKey == null).toList();
+
+      expect(marked.length, 2);
+      expect(survivors.length, 1);
+      expect(duplicates.single.key, bankLeg.key);
+      expect(survivors.single.cardKey, 'HDFC Bank|4821');
+      expect(survivors.single.transferReason, TransferReason.creditCardBill);
+
+      // The guarantee that matters: one payment, one card-bill rupee.
+      final summary = const SummaryCalculator().forMonth(marked, t0);
+      expect(summary.cardBillPaymentPaise, 377200);
+      expect(summary.moneyOutPaise, 377200);
+    });
+
+    test('an SBI debit and an Axis payment 47 s apart keep the Axis leg', () {
+      // Proved wrong survivor: the SBI UPI debit won the group, the Axis
+      // "payment received" (the only leg with a cardKey) was dropped, and the
+      // ₹72,570.85 bill kept showing as due.
+      final sbi = _txn(
+        at: t0,
+        amountPaise: 7257085,
+        kind: TxnKind.transfer,
+        instrument: Instrument.upi,
+        sender: 'SBIUPI',
+        merchant: 'PhonePe',
+      );
+      final axis = _txn(
+        at: t0.add(const Duration(seconds: 47)),
+        amountPaise: 7257085,
+        kind: TxnKind.transfer,
+        transferReason: TransferReason.creditCardBill,
+        instrument: Instrument.creditCard,
+        sender: 'AXISBK',
+        cardKey: 'Axis Bank|5365',
+        last4: '5365',
+      );
+
+      final marked = engine.mark(<Txn>[sbi, axis]);
+      final duplicates = marked.where((t) => t.isDuplicateOfKey != null).toList();
+      final survivors = marked.where((t) => t.isDuplicateOfKey == null).toList();
+
+      expect(survivors.single.cardKey, 'Axis Bank|5365');
+      expect(survivors.single.transferReason, TransferReason.creditCardBill);
+      expect(duplicates.single.key, sbi.key);
+    });
+
+    test('bill legs more than 48 h apart are not one event', () {
+      Txn leg(DateTime at) => _txn(
+        at: at,
+        amountPaise: 500000,
+        kind: TxnKind.transfer,
+        transferReason: TransferReason.creditCardBill,
+        instrument: Instrument.creditCard,
+        sender: 'HDFCBK',
+        cardKey: 'HDFC Bank|1234',
+      );
+
+      final marked = engine.mark(<Txn>[
+        leg(t0),
+        leg(t0.add(const Duration(hours: 49))),
+      ]);
+      // The narrow bill rule is capped at 48 h; the general 180 s window is
+      // deliberately untouched, so these stay two rows.
+      expect(marked.where((t) => t.isDuplicateOfKey != null), isEmpty);
+    });
+
+    test('two bill legs with different reference ids are two payments', () {
+      Txn leg(DateTime at, String ref) => _txn(
+        at: at,
+        amountPaise: 500000,
+        kind: TxnKind.transfer,
+        transferReason: TransferReason.creditCardBill,
+        instrument: Instrument.creditCard,
+        sender: 'HDFCBK',
+        cardKey: 'HDFC Bank|1234',
+        referenceId: ref,
+      );
+
+      final marked = engine.mark(<Txn>[
+        leg(t0, 'REF000001'),
+        leg(t0.add(const Duration(hours: 30)), 'REF000002'),
+      ]);
       expect(marked.where((t) => t.isDuplicateOfKey != null), isEmpty);
     });
   });

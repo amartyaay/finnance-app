@@ -79,6 +79,6 @@ String moneyCompact(Paise amount) {
 String moneySpoken(Paise amount) {
   final shown = money(amount);
   return shown
-      .replaceFirst('$_rupee', '')
+      .replaceFirst(_rupee, '')
       .replaceFirst('-', 'minus ');
 }

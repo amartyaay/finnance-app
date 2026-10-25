@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/design_tokens.dart';
+import '../../app/money_format.dart';
 import '../../app/widgets/kit.dart';
 import '../../domain/money.dart';
 import '../../engine/card_metrics.dart';
@@ -53,7 +54,7 @@ class _CardLimitRow extends StatelessWidget {
     final card = metrics.card;
     final limit = card.creditLimitPaise;
     final facts = <String>[
-      limit == null ? 'Limit not set' : inr(Paise(limit)),
+      limit == null ? 'Limit not set' : money(Paise(limit)),
       card.statementDay == null
           ? 'statement day not set'
           : 'statement ${card.statementDay}',

@@ -23,6 +23,7 @@ import 'package:finnance_app/engine/card_metrics.dart';
 import 'package:finnance_app/services/sms_reader.dart';
 import 'package:finnance_app/state/app_state.dart';
 import 'package:finnance_app/viewmodels/theme_view_model.dart';
+import 'package:finnance_app/views/sms_inbox_screen.dart';
 import 'package:finnance_app/views/widgets/card_face.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -228,6 +229,7 @@ final List<_Screen> _screens = [
   _Screen(
     name: 'All messages',
     open: (tester) async {
+      // Reached the way a user reaches it: Settings > All messages.
       await tester.tap(find.byTooltip('Settings'));
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
@@ -239,9 +241,17 @@ final List<_Screen> _screens = [
       await tester.tap(find.text('All messages'));
       await tester.pumpAndSettle();
     },
-    anchor: find.byType(TextField),
+    anchor: find.text('All messages'),
   ),
 ];
+
+/// Push a route through the running app, for a state that has no in-app door
+/// (an empty Home has no app bar, so Settings cannot be opened from it).
+Future<void> _push(WidgetTester tester, Route<void> route) async {
+  final navigator = tester.state<NavigatorState>(find.byType(Navigator).first);
+  navigator.push(route);
+  await tester.pumpAndSettle();
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -302,7 +312,7 @@ void main() {
     await _scrollToEnd(tester, harness);
 
     await _tapTab(tester, 'Activity');
-    expect(find.text('No transactions yet'), findsWidgets);
+    expect(find.text('Nothing here yet'), findsOneWidget);
     await _scrollToEnd(tester, harness);
 
     await _tapTab(tester, 'Cards');
@@ -328,16 +338,7 @@ void main() {
       repository: _EmptyRepository(_fixedNow),
     );
 
-    await tester.tap(find.byTooltip('Settings'));
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('All messages'),
-      160,
-      scrollable: _verticalScrollView(),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('All messages'));
-    await tester.pumpAndSettle();
+    await _push(tester, SmsInboxScreen.route());
     harness.drain();
 
     expect(find.text('Messages stay on this phone'), findsOneWidget);
