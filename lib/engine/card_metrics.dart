@@ -215,6 +215,12 @@ class CardMetrics {
   String get liveLabel => _pct(liveUtilization);
   String get projectedLabel => _pct(projectedUtilization);
 
+  /// Basis label shown next to [projectedLabel].
+  String get projectedBasisLabel =>
+      utilisationBasis == UtilizationBasis.unknown
+      ? 'No limit set'
+      : 'Projected at next statement';
+
   /// One sentence that always mentions an unpaid bill. This is what the card
   /// tile should show — "nothing to do" while ₹42,000 is due was the bug.
   String get advice {
@@ -247,8 +253,13 @@ class CardMetrics {
     return Paise((target - used).clamp(0, limit));
   }
 
-  static String _pct(double? value) =>
-      value == null ? '—' : '${(value * 100).round()}%';
+  static String _pct(double? value) {
+    if (value == null) return '—';
+    final pct = value * 100;
+    // A real but tiny utilisation must not read as "0%".
+    if (pct > 0 && pct < 1) return '<1%';
+    return '${pct.round()}%';
+  }
 
   static const List<String> _months = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',

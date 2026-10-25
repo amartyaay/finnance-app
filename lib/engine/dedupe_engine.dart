@@ -228,6 +228,19 @@ class DedupeEngine {
 
     final debitLike = a.kind == TxnKind.spend || a.kind == TxnKind.cash;
 
+    // Two *movements* (not purchases) from the same bank, for the same amount,
+    // with no merchant and no reference either side, inside the window: one
+    // event notified twice. A SIP confirmation re-sent two minutes later with a
+    // fresh tracking link is the real case; a spend is never merged this way.
+    if (sameSender &&
+        !debitLike &&
+        a.merchant == null &&
+        b.merchant == null &&
+        a.referenceId == null &&
+        b.referenceId == null) {
+      return true;
+    }
+
     if (sameSender && debitLike) {
       if (!merchantOk) return false;
       // A repeated debit alert from the same sender, for the same amount, with

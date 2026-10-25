@@ -293,7 +293,9 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
           'min_due': bill.minimumDuePaise,
           'due_date': bill.dueDateMs,
           'statement_date': bill.statementDateMs,
-          'created_at': now.millisecondsSinceEpoch,
+          // The SMS time, not the scan time: after a rescan every bill would
+          // otherwise look "just received" and the wrong statement would win.
+          'created_at': bill.receivedAtMs ?? now.millisecondsSinceEpoch,
         }, conflictAlgorithm: ConflictAlgorithm.ignore);
       }
 
@@ -346,7 +348,7 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
   /// Stored in `app_meta`; together with the schema version it decides whether
   /// the stored ledger has to be re-derived. Bump this on every rule change
   /// that alters what a message becomes.
-  static const int parserVersion = 6;
+  static const int parserVersion = 8;
 
   @override
   Future<IngestResult> reparseAll() async {
