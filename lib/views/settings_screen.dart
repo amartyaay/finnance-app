@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 
 import '../app/design_tokens.dart';
 import '../app/widgets/kit.dart';
+import '../domain/merchant_rule.dart';
 import '../state/app_state.dart';
 import '../viewmodels/theme_view_model.dart';
+import 'sms_inbox_screen.dart';
 import 'widgets/settings_tile.dart';
 import 'widgets/txn_common.dart';
 
@@ -102,6 +104,13 @@ class SettingsScreen extends StatelessWidget {
                       : chevron,
                   onTap: state.isScanning ? null : state.scanInbox,
                 ),
+                SettingsTile(
+                  icon: Icons.forum_rounded,
+                  title: 'All messages',
+                  subtitle: 'Review and categorise any SMS. Optional.',
+                  trailing: chevron,
+                  onTap: () => SmsInboxScreen.open(context),
+                ),
                 const SettingsTile(
                   icon: Icons.file_upload_rounded,
                   title: 'Import CSV',
@@ -126,6 +135,13 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: T.s5),
+            const SectionHeader(
+              title: 'Learned categories',
+              subtitle: 'Rules you taught by fixing a category',
+              padding: EdgeInsets.only(bottom: T.s2, left: T.s1),
+            ),
+            const _LearnedCategories(),
             const SizedBox(height: T.s5),
             const SectionHeader(
               title: 'Demo',
@@ -314,3 +330,212 @@ String _lastScanLabel(DateTime? lastScanAt) {
   return 'Last scan ${shortDateWithYear(lastScanAt)} at '
       '${clockTime(lastScanAt)}';
 }
+
+/// The rules the owner taught by fixing a category, newest-first by use count,
+/// with the undo the app has always been missing. Ten is the cap: a longer list
+/// belongs on its own screen, not in Settings.
+class _LearnedCategories extends StatefulWidget {
+  const _LearnedCategories();
+
+  @override
+  State<_LearnedCategories> createState() => _LearnedCategoriesState();
+}
+
+class _LearnedCategoriesState extends State<_LearnedCategories> {
+  static const int _maxShown = 10;
+
+  Future<List<MerchantRule>>? _rules;
+  Object? _loadedFor;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = T.of(context);
+    final state = context.watch<AppState>();
+    // A fixed category changes the ledger, so refetch whenever it changes; the
+    // list can never show a rule the undo below already deleted.
+    if (!identical(state.data, _loadedFor)) {
+      _loadedFor = state.data;
+      _rules = state.merchantRules();
+    }
+
+    return FutureBuilder<List<MerchantRule>>(
+      future: _rules,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const AppCard(
+            child: SkeletonBox(height: 52, radius: T.r2),
+          );
+        }
+        final rules = snapshot.data ?? const <MerchantRule>[];
+        if (rules.isEmpty) {
+          return AppCard(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                IconBadge(
+                  icon: Icons.school_rounded,
+                  color: p.inkSecondary,
+                  size: 36,
+                  iconSize: 19,
+                ),
+                const SizedBox(width: T.s3),
+                Expanded(
+                  child: Text(
+                    'Nothing learned yet — fixing a category here teaches the '
+                    'app.',
+                    style: T.bodySmall.copyWith(
+                      color: p.inkMuted,
+                      height: 1.45,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final shown = rules.take(_maxShown).toList(growable: false);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(T.r3),
+                child: Column(
+                  children: [
+                    for (var i = 0; i < shown.length; i++) ...[
+                      if (i > 0)
+                        Divider(
+                          height: 1,
+                          indent: 64,
+                          color: p.outlineVariant,
+                        ),
+                      _RuleRow(
+                        rule: shown[i],
+                        onForget: () => _forget(shown[i]),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            if (rules.length > shown.length)
+              Padding(
+                padding: const EdgeInsets.only(top: T.s2, left: T.s1),
+                child: Text(
+                  '${rules.length - shown.length} more learned rules not shown',
+                  style: T.bodySmall.copyWith(
+                    color: p.inkMuted,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _forget(MerchantRule rule) async {
+    final state = context.read<AppState>();
+    final p = T.of(context);
+    final label = _merchantLabel(rule);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Forget this rule?'),
+        content: Text(
+          'New payments from $label will go back to the automatic category. '
+          'Payments already categorised stay as they are.',
+          style: T.body.copyWith(color: p.inkSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: p.danger,
+              foregroundColor: p.isDark ? T.brandDeep : Colors.white,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Forget'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await state.forgetMerchantRule(rule.signature);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Forgot the rule for $label.')),
+    );
+  }
+}
+
+class _RuleRow extends StatelessWidget {
+  const _RuleRow({required this.rule, required this.onForget});
+
+  final MerchantRule rule;
+  final VoidCallback onForget;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = T.of(context);
+    final label = _merchantLabel(rule);
+    final uses = rule.hits;
+    return Row(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: T.s4),
+          child: IconBadge(
+            icon: categoryIcon(rule.categoryKind),
+            color: categoryColor(context, rule.categoryKind),
+            size: 36,
+            iconSize: 19,
+          ),
+        ),
+        const SizedBox(width: T.s3),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: T.s3),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: T.cardTitle.copyWith(color: p.ink),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  '${rule.categoryName} · $uses ${uses == 1 ? 'use' : 'uses'}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: T.bodySmall.copyWith(color: p.inkMuted, height: 1.35),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Icon-only action: the tooltip is the semantics label TalkBack reads.
+        IconButton(
+          onPressed: onForget,
+          tooltip: 'Forget rule for $label',
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          icon: Icon(Icons.delete_outline_rounded, color: p.inkMuted),
+        ),
+      ],
+    );
+  }
+}
+
+String _merchantLabel(MerchantRule rule) {
+  final merchant = rule.sampleMerchant?.trim();
+  if (merchant != null && merchant.isNotEmpty) return merchant;
+  return rule.signature;
+}
+

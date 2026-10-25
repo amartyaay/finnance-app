@@ -12,6 +12,7 @@ import '../engine/card_metrics.dart';
 import '../engine/insights_engine.dart';
 import '../engine/monthly_summary.dart';
 import '../state/app_state.dart';
+import 'sms_inbox_screen.dart';
 import 'widgets/card_face.dart';
 import 'widgets/charts.dart';
 import 'widgets/txn_common.dart';
@@ -43,8 +44,8 @@ class HomeScreen extends StatelessWidget {
     final summary = data.summary;
     final hasAttention =
         data.phishingAlerts.isNotEmpty ||
-        data.cards.any((c) => c.dueSoon) ||
-        data.needsReview.isNotEmpty;
+        data.unpaidBillCount > 0 ||
+        data.needsReviewCount > 0;
 
     return RefreshIndicator(
       onRefresh: state.scanInbox,
@@ -110,22 +111,13 @@ class HomeScreen extends StatelessWidget {
               children: [
                 Entrance(
                   index: 0,
-                  child: _HeroCard(
-                    summary: summary,
-                    smsRead: data.smsMessagesRead,
-                    needsReview: data.needsReview.length,
-                    lastScanAt: data.lastScanAt,
-                  ),
+                  child: _HeroCard(data: data),
                 ),
                 if (hasAttention) ...[
                   const SizedBox(height: T.s3),
                   Entrance(
                     index: 1,
-                    child: _Attention(
-                      data: data,
-                      onNavigate: onNavigate,
-                      onReview: () => onNavigate?.call(1),
-                    ),
+                    child: _Attention(data: data, onNavigate: onNavigate),
                   ),
                 ],
                 const SizedBox(height: T.s4),
@@ -174,7 +166,7 @@ class HomeScreen extends StatelessWidget {
                 const SizedBox(height: T.s5),
                 _PrivacyFooter(
                   smsRead: data.smsMessagesRead,
-                  needsReview: data.needsReview.length,
+                  needsReview: data.needsReviewCount,
                 ),
               ],
             ),
@@ -222,39 +214,67 @@ class HomeScreen extends StatelessWidget {
 }
 
 class _HeroCard extends StatelessWidget {
-  const _HeroCard({
-    required this.summary,
-    required this.smsRead,
-    required this.needsReview,
-    required this.lastScanAt,
-  });
+  const _HeroCard({required this.data});
 
-  final MonthlySummary summary;
-  final int smsRead;
-  final int needsReview;
-  final DateTime? lastScanAt;
+  final HomeData data;
 
   @override
   Widget build(BuildContext context) {
     final p = T.of(context);
+    final summary = data.summary;
     final change = summary.monthOverMonth;
     final up = change > 0;
-    final net = summary.net;
 
+    // True income only. When no salary/interest credit exists there is no honest
+    // "left over", so the row reports what left the accounts and what is still
+    // owed instead of deriving a figure from ₹0.
+    final hasIncome = data.hasTrueIncome;
+    final left = data.left;
     final stats = <({String label, String value})>[
-                      (label: 'Came in', value: inrCompact(summary.income)),
-                      (
-                        label: net.value < 0 ? 'Over' : 'Left over',
-                        // "Over" is a magnitude, so it never carries a minus sign.
-                        value: inrCompact(Paise(net.value.abs())),
-                      ),
-                      (label: 'Spend / day', value: inrCompact(summary.dailyAverage)),
+      if (hasIncome) ...[
+        (label: 'Came in', value: inrCompact(summary.income)),
+        (
+          label: left.value < 0 ? 'Over' : 'Left',
+          // "Over" is a magnitude, so it never carries a minus sign.
+          value: inrCompact(Paise(left.value.abs())),
+        ),
+      ] else ...[
+        (label: 'Out this month', value: inrCompact(data.moneyOut)),
+        if (data.unpaidBillCount > 0)
+          (
+            label: data.unpaidBillCount == 1
+                ? 'Bill due'
+                : 'Bills due (${data.unpaidBillCount})',
+            value: inrCompact(data.stillDue),
+          ),
+      ],
+      (label: 'Spend / day', value: inrCompact(summary.dailyAverage)),
     ];
 
+    // Every part of the footnote is a model field, and each one says whether it
+    // is inside the spend headline or deliberately outside it.
+    final cardBills = summary.cardBillPaymentPaise;
+    final cash = summary.cashPaise;
+    final otherTransfers = summary.transferPaise - cardBills;
+    final included = <String>[
+      if (cardBills > 0) '${inrCompact(Paise(cardBills))} card bills',
+      if (cash > 0) '${inrCompact(Paise(cash))} cash',
+    ];
+    final footnote = <String>[
+      if (included.isNotEmpty)
+        hasIncome
+            ? 'Left is after ${included.join(' + ')}'
+            : 'Out this month includes ${included.join(' + ')}',
+      if (otherTransfers > 0)
+        '${inrCompact(Paise(otherTransfers))} transfers not counted',
+    ].join(' · ');
+
     final provenance = <String>[
-      if (smsRead > 0) '$smsRead messages read',
-      needsReview > 0 ? '$needsReview to confirm' : 'all clear',
-      if (lastScanAt != null) 'as of ${clockTime(lastScanAt!)}',
+      if (data.smsMessagesRead > 0) '${data.smsMessagesRead} messages read',
+      data.needsReviewCount > 0
+          ? '${data.needsReviewCount} to confirm'
+          : 'all clear',
+      if (data.lastScanAt != null) 'as of ${clockTime(data.lastScanAt!)}',
     ].join(' · ');
 
     final previousMonth = DateTime(
@@ -265,12 +285,21 @@ class _HeroCard extends StatelessWidget {
         '${(change.abs() * 100).round()}% vs '
         '${MediaQuery.textScalerOf(context).scale(12) / 12 >= 1.2 ? HomeScreen._monthShort(previousMonth) : 'last month'}';
 
-    final spoken =
-        '${monthYearLabel(summary.monthStart)}. Spent ${_spoken(summary.spend)}. '
-        '${inr(summary.dailyAverage)} a day. '
-        '${summary.previousSpendPaise > 0 ? '${(change.abs() * 100).round()} percent ${up ? 'more' : 'less'} than last month. ' : ''}'
-        '${_spoken(summary.income)} came in; '
-        '${net.value < 0 ? '${_spoken(Paise(net.value.abs()))} over' : '${_spoken(Paise(net.value.abs()))} left'}.';
+    final spoken = <String>[
+      monthYearLabel(summary.monthStart),
+      'Spent ${_spoken(summary.spend)}',
+      '${inr(summary.dailyAverage)} a day',
+      if (summary.previousSpendPaise > 0)
+        '${(change.abs() * 100).round()} percent ${up ? 'more' : 'less'} than last month',
+      if (hasIncome)
+        '${_spoken(summary.income)} came in; ${left.value < 0 ? '${_spoken(Paise(left.value.abs()))} over' : '${_spoken(Paise(left.value.abs()))} left'}'
+      else
+        'No income messages found, so there is no left over figure. ${_spoken(data.moneyOut)} went out of your accounts',
+      if (!hasIncome && data.unpaidBillCount > 0)
+        '${_spoken(data.stillDue)} still due across ${data.unpaidBillCount} ${data.unpaidBillCount == 1 ? 'card bill' : 'card bills'}',
+      if (data.refunds.value > 0)
+        '${_spoken(data.refunds)} refunded, not counted as income',
+    ].join('. ');
 
     return Semantics(
       container: true,
@@ -430,10 +459,37 @@ class _HeroCard extends StatelessWidget {
                         );
                       },
                     ),
-                    if (summary.transferPaise > 0) ...[
+                    if (!hasIncome) ...[
                       const SizedBox(height: T.s3),
                       Text(
-                        'Excludes ${inrCompact(Paise(summary.transferPaise))} in card bills and transfers',
+                        'No income messages found this month, so there is no '
+                        '"left over" figure.',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: T.bodySmall.copyWith(
+                          color: p.heroMuted,
+                          fontSize: 12,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                    if (data.refunds.value > 0) ...[
+                      const SizedBox(height: T.s3),
+                      Text(
+                        '${inr(data.refunds)} refunded, not counted as income',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: T.bodySmall.copyWith(
+                          color: p.heroMuted,
+                          fontSize: 12,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                    if (footnote.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        footnote,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: T.bodySmall.copyWith(
@@ -540,6 +596,7 @@ class _CompactNotice extends StatelessWidget {
     required this.body,
     required this.actionLabel,
     required this.onAction,
+    this.onDismiss,
   });
 
   final PillTone tone;
@@ -548,6 +605,9 @@ class _CompactNotice extends StatelessWidget {
   final String body;
   final String actionLabel;
   final VoidCallback? onAction;
+
+  /// When set, a 48 dp close button appears; the caller hides the notice.
+  final VoidCallback? onDismiss;
 
   @override
   Widget build(BuildContext context) {
@@ -614,25 +674,39 @@ class _CompactNotice extends StatelessWidget {
             ),
             child: Text(actionLabel, maxLines: 1),
           ),
+          if (onDismiss != null)
+            IconButton(
+              onPressed: onDismiss,
+              tooltip: 'Dismiss',
+              icon: Icon(Icons.close_rounded, size: 18, color: fg),
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              padding: EdgeInsets.zero,
+            ),
         ],
       ),
     );
   }
 }
 
-class _Attention extends StatelessWidget {
-  const _Attention({
-    required this.data,
-    required this.onReview,
-    this.onNavigate,
-  });
+class _Attention extends StatefulWidget {
+  const _Attention({required this.data, this.onNavigate});
 
   final HomeData data;
-  final VoidCallback onReview;
   final ValueChanged<int>? onNavigate;
 
   @override
+  State<_Attention> createState() => _AttentionState();
+}
+
+class _AttentionState extends State<_Attention> {
+  /// Dismissed for this visit only: nothing is stored, nothing blocks, and the
+  /// same banner comes back on the next launch.
+  bool _reviewHidden = false;
+
+  @override
   Widget build(BuildContext context) {
+    final data = widget.data;
+    final onNavigate = widget.onNavigate;
     final widgets = <Widget>[];
 
     for (final alert in data.phishingAlerts.take(1)) {
@@ -652,43 +726,53 @@ class _Attention extends StatelessWidget {
       );
     }
 
-    for (final card in data.cards.where((c) => c.dueSoon).take(1)) {
-      final days = card.daysToDue ?? 0;
-      final dueText = days <= 0
-          ? 'due today'
-          : days == 1
-          ? 'due tomorrow'
-          : 'due in $days days';
+    // The headline "Bills due" figure is [HomeData.stillDue]; this banner quotes
+    // the same sum, so the two can never disagree.
+    final unpaid = data.unpaidBillCount;
+    if (unpaid > 0) {
+      CardMetrics? only;
+      if (unpaid == 1) {
+        for (final card in data.cards) {
+          if (card.billDuePaise > 0) only = card;
+        }
+      }
+      final days = only?.dueDate == null ? null : daysUntilDate(only!.dueDate!);
+      final dueText = days == null ? 'unpaid' : billDuePhrase(days);
+      final minimum = only?.minimumDue;
       widgets.add(
         Padding(
           padding: const EdgeInsets.only(bottom: T.s3),
           child: _CompactNotice(
-            tone: PillTone.caution,
+            tone: days != null && days <= 7 ? PillTone.caution : PillTone.info,
             icon: Icons.event_available_rounded,
-            title: '${card.card.displayName} bill $dueText',
-            body:
-                '${inr(card.totalDue)} total due${card.minimumDue != null ? ' · ${inr(card.minimumDue!)} minimum' : ''}. '
-                'Paying in full avoids interest.',
-            actionLabel: 'See card',
+            title: unpaid == 1
+                ? '${only?.card.displayName ?? 'Card'} bill $dueText'
+                : '$unpaid card bills unpaid',
+            body: unpaid == 1
+                ? '${inr(data.stillDue)} total due'
+                      '${minimum != null ? ' · ${inr(minimum)} minimum' : ''}. '
+                      'Paying in full avoids interest.'
+                : '${inr(data.stillDue)} still due across $unpaid cards. '
+                      'Paying in full avoids interest.',
+            actionLabel: unpaid == 1 ? 'See card' : 'See cards',
             onAction: () => onNavigate?.call(2),
           ),
         ),
       );
     }
 
-    if (data.needsReview.isNotEmpty) {
+    if (data.needsReviewCount > 0 && !_reviewHidden) {
       widgets.add(
         Padding(
           padding: const EdgeInsets.only(bottom: T.s3),
           child: _CompactNotice(
             tone: PillTone.info,
             icon: Icons.help_rounded,
-            title:
-                '${data.needsReview.length} payment${data.needsReview.length == 1 ? '' : 's'} to confirm',
-            body:
-                'We parsed these but could not name the merchant with confidence.',
+            title: '${data.needsReviewCount} to confirm',
+            body: 'We could not name the merchant with confidence.',
             actionLabel: 'Review',
-            onAction: onReview,
+            onAction: () => SmsInboxScreen.open(context),
+            onDismiss: () => setState(() => _reviewHidden = true),
           ),
         ),
       );
@@ -1021,7 +1105,11 @@ class _RecentList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = T.of(context);
-    final recent = transactions.take(5).toList(growable: false);
+    // The ledger arrives oldest-first (dedupe preserves its own ordering), so
+    // sort for display: "Recent" is the newest five, not the first five.
+    final recent = [...transactions]
+      ..sort((a, b) => b.occurredAtMs.compareTo(a.occurredAtMs));
+    final top = recent.take(5).toList(growable: false);
     return AppCard(
       padding: const EdgeInsets.fromLTRB(T.s2, T.s3, T.s2, T.s1),
       child: Column(
@@ -1036,12 +1124,12 @@ class _RecentList extends StatelessWidget {
             ),
           ),
           const SizedBox(height: T.s1),
-          for (var i = 0; i < recent.length; i++) ...[
+          for (var i = 0; i < top.length; i++) ...[
             TxnRow(
-              txn: recent[i],
-              onTap: () => showTransactionDetail(context, recent[i]),
+              txn: top[i],
+              onTap: () => showTransactionDetail(context, top[i]),
             ),
-            if (i != recent.length - 1)
+            if (i != top.length - 1)
               Divider(height: 1, indent: 64, color: p.outlineVariant),
           ],
         ],

@@ -33,8 +33,18 @@ class TxnRow extends StatelessWidget {
     final categoryLabel = txn.categoryName?.trim().isNotEmpty == true
         ? txn.categoryName!.trim()
         : categoryKindLabel(txn.categoryKind);
+    // An inflow is described by what it actually is — a refund, a cashback, a
+    // P2P credit or a card-bill credit is money in, but calling it "Income"
+    // would contradict a hero that correctly says no income arrived.
+    final moneyIn = txn.moneyInKind;
+    final descriptor = moneyIn.isInflow ? moneyIn.label : categoryLabel;
+    // "Credit-card bill payment · Card bill payment" repeats itself; keep the
+    // descriptor only when the merchant line does not already say it.
+    final showDescriptor = !txn.title.toLowerCase().contains(
+      descriptor.toLowerCase(),
+    );
     final details = <String>[
-      categoryLabel,
+      if (showDescriptor) descriptor,
       txn.instrument.label,
       if (txn.last4 != null && txn.last4!.isNotEmpty) '•••• ${txn.last4}',
     ].join(' · ');

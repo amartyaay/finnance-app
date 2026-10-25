@@ -5,6 +5,7 @@ import '../app/design_tokens.dart';
 import '../app/widgets/kit.dart';
 import '../data/finance_repository.dart';
 import '../domain/money.dart';
+import '../engine/card_metrics.dart';
 import '../engine/insights_engine.dart';
 import '../state/app_state.dart';
 import 'widgets/insight_breakdowns.dart';
@@ -13,8 +14,20 @@ import 'widgets/txn_common.dart';
 
 /// Insights: what needs attention, what is recurring, and where the money went.
 /// Every claim on this screen is backed by a number the engine computed.
-class InsightsScreen extends StatelessWidget {
+class InsightsScreen extends StatefulWidget {
   const InsightsScreen({super.key});
+
+  @override
+  State<InsightsScreen> createState() => _InsightsScreenState();
+}
+
+class _InsightsScreenState extends State<InsightsScreen> {
+  /// True once a load has finished since this screen mounted.
+  ///
+  /// The skeleton is the only honest state until then: an empty snapshot exists
+  /// while the first scan runs, and painting "Nothing to analyse yet" over it is
+  /// a claim the app has not checked yet. That flash is what this removes.
+  bool _settled = false;
 
   @override
   Widget build(BuildContext context) {
@@ -22,8 +35,16 @@ class InsightsScreen extends StatelessWidget {
     final data = state.data;
     final p = T.of(context);
 
+    if (!_settled && !state.isLoading && !state.isScanning) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_settled) setState(() => _settled = true);
+      });
+    }
+    final booting =
+        data.isEmpty && (state.isLoading || state.isScanning || !_settled);
+
     final Widget body;
-    if (state.isLoading && data.isEmpty) {
+    if (booting) {
       body = const _InsightsSkeleton();
     } else if (data.isEmpty) {
       body = ListView(
@@ -44,14 +65,18 @@ class InsightsScreen extends StatelessWidget {
         ],
       );
     } else {
-      final attention = data.insights
+      // The engine counts elapsed hours, so a bill due on 27 Oct reads "in 1
+      // days" on the evening of the 25th. Count calendar days here so Home,
+      // Cards and Insights all give the same countdown.
+      final insights = _withCalendarDueDates(data.insights, data.cards);
+      final attention = insights
           .where(
             (insight) =>
                 insight.tone == InsightTone.warning ||
                 insight.tone == InsightTone.caution,
           )
           .toList(growable: false);
-      final other = data.insights
+      final other = insights
           .where(
             (insight) =>
                 insight.tone == InsightTone.positive ||
@@ -262,8 +287,37 @@ class InsightsScreen extends StatelessWidget {
   }
 }
 
-class _FraudCard extends StatelessWidget {
-  const _FraudCard({required this.alerts, required this.onOpen});
+/// Re-titles the engine's bill reminders with a calendar-day countdown.
+///
+/// The engine's `daysToDue` is an hours-based difference, so a bill due the day
+/// after tomorrow can read "in 1 days" late in the evening. The card metrics
+/// carry the real due date, and the countdown is re-derived from it here.
+List<Insight> _withCalendarDueDates(
+  List<Insight> insights,
+  List<CardMetrics> cards,
+) => [for (final insight in insights) _calendarDue(insight, cards)];
+
+Insight _calendarDue(Insight insight, List<CardMetrics> cards) {
+  if (!insight.id.startsWith('due:')) return insight;
+  final key = insight.id.substring('due:'.length);
+  for (final card in cards) {
+    if (card.card.key != key) continue;
+    final due = card.dueDate;
+    if (due == null) return insight;
+    return Insight(
+      id: insight.id,
+      title: 'Bill ${billDuePhrase(daysUntilDate(due))}',
+      body: insight.body,
+      tone: insight.tone,
+      chip: insight.chip,
+      amountPaise: insight.amountPaise,
+      action: insight.action,
+    );
+  }
+  return insight;
+}
+
+class _FraudCard extends StatelessWidget {  const _FraudCard({required this.alerts, required this.onOpen});
 
   final List<PhishingAlert> alerts;
   final ValueChanged<PhishingAlert> onOpen;

@@ -160,3 +160,28 @@ String daysUntilLabel(int days) {
   if (days == 1) return 'due tomorrow';
   return 'in $days days';
 }
+
+/// Whole **calendar** days until [due].
+///
+/// `CardMetrics.daysToDue` measures elapsed hours from an instant, so a bill due
+/// tomorrow at midnight reads as 0 days at 11 pm tonight. The view counts dates
+/// instead, so a bill is only "today" on the day it is actually due.
+int daysUntilDate(DateTime due, {DateTime? now}) {
+  final clock = now ?? DateTime.now();
+  final today = DateTime(clock.year, clock.month, clock.day);
+  final target = DateTime(due.year, due.month, due.day);
+  return target.difference(today).inDays;
+}
+
+/// `due today` / `due tomorrow` / `due in 1 day` / `due in 6 days` /
+/// `2 days overdue`. Exactly one day is always singular, so no bill label can
+/// read "due in 1 days".
+String billDuePhrase(int days) {
+  if (days < 0) {
+    final overdue = days.abs();
+    return '$overdue ${overdue == 1 ? 'day' : 'days'} overdue';
+  }
+  if (days == 0) return 'due today';
+  if (days == 1) return 'due tomorrow';
+  return 'due in $days days';
+}

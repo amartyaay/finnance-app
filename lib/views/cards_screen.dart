@@ -255,8 +255,9 @@ class _BillRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = T.of(context);
     final due = metrics.dueDate;
-    final days = metrics.daysToDue;
     final hasBill = metrics.totalDuePaise > 0;
+    // Calendar days, not elapsed hours: a bill due tomorrow is never "today".
+    final days = hasBill && due != null ? daysUntilDate(due) : metrics.daysToDue;
     final tone = metrics.dueSoon ? p.caution : p.positive;
     final dueLabel = due == null
         ? 'No date set'
