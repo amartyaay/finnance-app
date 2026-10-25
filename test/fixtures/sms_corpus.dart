@@ -1045,8 +1045,11 @@ const List<SmsFixture> smsCorpus = <SmsFixture>[
     body:
         'Rs.5,000.00 debited from your HDFC Bank A/c **4821 on 12-05-24 to BILLDESK (HDFC Bank Credit Card bill). Avl Bal Rs.7,340.55.',
     amountPaise: 500000,
-    direction: SmsDirection.expense,
-    instrument: SmsInstrument.account,
+    // The fixture's own note says "not consumption", but it asserted expense.
+    // A card-bill payment settles earlier spending, so it is a transfer, and it
+    // is attributed to the card (that is what keeps utilisation honest).
+    direction: SmsDirection.transfer,
+    instrument: SmsInstrument.creditCard,
     issuer: 'HDFC Bank',
     last4: '4821',
     merchantContains: 'BILLDESK',
@@ -1165,7 +1168,9 @@ const List<SmsFixture> smsCorpus = <SmsFixture>[
     body:
         'INR 23,456.00 debited from your Axis Bank A/c XX5678 on 05-05-24 towards EMI for loan AXISLOAN1234. Avl Bal INR 1,12,480.00.',
     amountPaise: 2345600,
-    direction: SmsDirection.expense,
+    // An EMI debit is debt service, not consumption: the purchase it settles was
+    // already counted when it happened. Booked as a transfer (docs/research/03).
+    direction: SmsDirection.transfer,
     instrument: SmsInstrument.account,
     issuer: 'Axis Bank',
     last4: '5678',
