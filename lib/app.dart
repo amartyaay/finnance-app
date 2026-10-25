@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'app/theme.dart';
 import 'state/app_state.dart';
+import 'state/statements_controller.dart';
 import 'viewmodels/theme_view_model.dart';
 import 'views/cards_screen.dart';
 import 'views/home_screen.dart';
@@ -28,7 +29,11 @@ class FinanceApp extends StatefulWidget {
     this.appState,
     this.themeViewModel,
     this.autoInitialize = true,
+    this.statements,
   });
+
+  /// Injected by tests; the app builds its own.
+  final StatementsController? statements;
 
   final AppState? appState;
   final ThemeViewModel? themeViewModel;
@@ -41,6 +46,8 @@ class FinanceApp extends StatefulWidget {
 class _FinanceAppState extends State<FinanceApp> {
   late final AppState _appState = widget.appState ?? AppState();
   late final ThemeViewModel _theme = widget.themeViewModel ?? ThemeViewModel();
+  late final StatementsController _statements =
+      widget.statements ?? StatementsController();
 
   @override
   void initState() {
@@ -68,6 +75,7 @@ class _FinanceAppState extends State<FinanceApp> {
       providers: [
         ChangeNotifierProvider<AppState>.value(value: _appState),
         ChangeNotifierProvider<ThemeViewModel>.value(value: _theme),
+        ChangeNotifierProvider<StatementsController>.value(value: _statements),
       ],
       child: Consumer<ThemeViewModel>(
         builder: (context, theme, _) => MaterialApp(

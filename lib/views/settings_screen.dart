@@ -7,6 +7,7 @@ import '../domain/merchant_rule.dart';
 import '../state/app_state.dart';
 import '../viewmodels/theme_view_model.dart';
 import 'sms_inbox_screen.dart';
+import 'statements_screen.dart';
 import 'widgets/settings_tile.dart';
 import 'widgets/txn_common.dart';
 
@@ -103,6 +104,13 @@ class SettingsScreen extends StatelessWidget {
                         )
                       : chevron,
                   onTap: state.isScanning ? null : state.scanInbox,
+                ),
+                SettingsTile(
+                  icon: Icons.account_balance_rounded,
+                  title: 'Salary & statements',
+                  subtitle: 'Import an SBI statement PDF; see each month salary to salary.',
+                  trailing: chevron,
+                  onTap: () => StatementsScreen.open(context),
                 ),
                 SettingsTile(
                   icon: Icons.forum_rounded,

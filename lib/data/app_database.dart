@@ -258,6 +258,52 @@ class AppDatabase {
         value TEXT NOT NULL
       )
     ''');
+
+    // Imported bank statements (SBI first). A second source of truth next to
+    // SMS: rows carry the bank's running balance and are verified against it.
+    // `file_hash` makes re-importing the same file a no-op; `row_key` makes an
+    // overlapping statement of the same account add only the new rows.
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS statements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        file_hash TEXT NOT NULL UNIQUE,
+        bank TEXT NOT NULL,
+        account_key TEXT NOT NULL,
+        account_mask TEXT,
+        holder_name TEXT,
+        period_from INTEGER,
+        period_to INTEGER,
+        opening_paise INTEGER,
+        closing_paise INTEGER,
+        rows_total INTEGER NOT NULL,
+        rows_verified INTEGER NOT NULL,
+        imported_at INTEGER NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS statement_rows (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        row_key TEXT NOT NULL UNIQUE,
+        statement_id INTEGER NOT NULL,
+        account_key TEXT NOT NULL,
+        txn_date INTEGER NOT NULL,
+        description TEXT NOT NULL,
+        reference TEXT,
+        debit_paise INTEGER NOT NULL,
+        credit_paise INTEGER NOT NULL,
+        balance_paise INTEGER,
+        verified INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        counterparty TEXT,
+        category_name TEXT NOT NULL,
+        category_kind TEXT NOT NULL,
+        salary_override INTEGER
+      )
+    ''');
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS statement_rows_account_idx
+      ON statement_rows(account_key, txn_date)
+    ''');
   }
 
   /// Applies only additive migrations, then recomputes the v8 review flags.

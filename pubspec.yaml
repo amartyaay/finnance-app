@@ -40,6 +40,9 @@ dependencies:
   intl: ^0.20.2
   path: ^1.9.1
   shared_preferences: ^2.5.3
+  pdfrx: 2.4.7 # exact: newer pdfrx_engine needs meta 1.18 (Flutter >= 3.47)
+  file_picker: ^13.2.0
+  crypto: ^3.0.7
 
 dev_dependencies:
   flutter_test:
