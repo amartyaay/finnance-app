@@ -248,9 +248,9 @@ class CardMetricsCalculator {
 
     return CardMetrics(
       card: card,
-      spentThisCyclePaise: thisCycle.clamp(0, 1 << 62),
-      spentLastCyclePaise: lastCycle.clamp(0, 1 << 62),
-      outstandingPaise: effectiveOutstanding.clamp(0, 1 << 62),
+      spentThisCyclePaise: thisCycle.clamp(0, 0x7FFFFFFFFFFFFFFF),
+      spentLastCyclePaise: lastCycle.clamp(0, 0x7FFFFFFFFFFFFFFF),
+      outstandingPaise: effectiveOutstanding.clamp(0, 0x7FFFFFFFFFFFFFFF),
       availableLimitPaise: available,
       utilization: utilization,
       band: bandFor(utilization, limit),

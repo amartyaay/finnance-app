@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../design_tokens.dart';
@@ -5,7 +7,7 @@ import '../../domain/money.dart';
 
 /// Small shared widget kit. Screens compose these so spacing, radii and type
 /// stay consistent without each screen re-inventing them.
-class AppCard extends StatelessWidget {
+class AppCard extends StatefulWidget {
   const AppCard({
     super.key,
     required this.child,
@@ -26,30 +28,82 @@ class AppCard extends StatelessWidget {
   final double radius;
 
   @override
+  State<AppCard> createState() => _AppCardState();
+}
+
+class _AppCardState extends State<AppCard> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final content = Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: color ?? scheme.surface,
-        borderRadius: BorderRadius.circular(radius),
-        border: border ? Border.all(color: scheme.outlineVariant) : null,
-        boxShadow: shadow ? T.shadowSoft : null,
-      ),
-      child: child,
+    final p = T.of(context);
+    final decoration = BoxDecoration(
+      color: widget.color ?? p.surface,
+      borderRadius: BorderRadius.circular(widget.radius),
+      border: widget.border
+          ? Border.all(color: p.outlineVariant)
+          : null,
+      boxShadow: widget.shadow ? p.shadowSoft : null,
     );
-    if (onTap == null) return content;
+    final padded = Padding(padding: widget.padding, child: widget.child);
+
+    if (widget.onTap == null) {
+      return DecoratedBox(
+        decoration: decoration,
+        child: padded,
+      );
+    }
+
     return Semantics(
       button: true,
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(radius),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(radius),
-          child: content,
+      child: AnimatedScale(
+        scale: _pressed ? 0.985 : 1,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: DecoratedBox(
+          decoration: decoration,
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: widget.onTap,
+              borderRadius: BorderRadius.circular(widget.radius),
+              onTapDown: (_) => setState(() => _pressed = true),
+              onTapUp: (_) => setState(() => _pressed = false),
+              onTapCancel: () => setState(() => _pressed = false),
+              child: padded,
+            ),
+          ),
         ),
       ),
+    );
+  }
+}
+
+/// A tinted canvas. Use this for one section per screen so the page has a
+/// second surface tone instead of a wall of identical white boxes.
+class SoftSection extends StatelessWidget {
+  const SoftSection({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(T.s4),
+    this.radius = T.r4,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = T.of(context);
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        gradient: p.tintGradient,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: p.primary.withValues(alpha: 0.10)),
+      ),
+      child: child,
     );
   }
 }
@@ -58,33 +112,68 @@ class SectionHeader extends StatelessWidget {
   const SectionHeader({
     super.key,
     required this.title,
+    this.subtitle,
     this.action,
     this.onAction,
     this.padding = const EdgeInsets.only(bottom: T.s3),
   });
 
   final String title;
+  final String? subtitle;
   final String? action;
   final VoidCallback? onAction;
   final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final p = T.of(context);
     return Padding(
       padding: padding,
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Expanded(child: Text(title, style: T.cardTitle.copyWith(color: scheme.onSurface))),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: T.sectionTitle.copyWith(color: p.ink),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle!,
+                    style: T.bodySmall.copyWith(color: p.inkMuted),
+                  ),
+                ],
+              ],
+            ),
+          ),
           if (action != null)
             TextButton(
               onPressed: onAction,
               style: TextButton.styleFrom(
-                minimumSize: const Size(0, 36),
+                foregroundColor: p.primary,
+                minimumSize: const Size(44, 44),
                 padding: const EdgeInsets.symmetric(horizontal: T.s2),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                tapTargetSize: MaterialTapTargetSize.padded,
+                textStyle: T.bodySmall.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5,
+                  color: p.primary,
+                ),
               ),
-              child: Text(action!),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(action!),
+                  const SizedBox(width: 2),
+                  Icon(Icons.chevron_right_rounded, size: 16, color: p.primary),
+                ],
+              ),
             ),
         ],
       ),
@@ -92,8 +181,10 @@ class SectionHeader extends StatelessWidget {
   }
 }
 
-/// Money text with optional animated count-up from a previous value.
-class MoneyText extends StatelessWidget {
+/// Money, set the way a financial product should set it: the rupee mark is
+/// small and quiet, the integer carries the weight, paise are smaller and
+/// muted. Animated only when the value changes after the first frame.
+class MoneyText extends StatefulWidget {
   const MoneyText(
     this.amount, {
     super.key,
@@ -101,6 +192,7 @@ class MoneyText extends StatelessWidget {
     this.color,
     this.compact = false,
     this.animate = false,
+    this.prefix,
   });
 
   final Paise amount;
@@ -109,21 +201,131 @@ class MoneyText extends StatelessWidget {
   final bool compact;
   final bool animate;
 
+  /// A leading sign such as `+` or `−`, kept out of [amount] so the number
+  /// itself stays a magnitude.
+  final String? prefix;
+
+  @override
+  State<MoneyText> createState() => _MoneyTextState();
+}
+
+class _MoneyTextState extends State<MoneyText>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: T.medium,
+    value: 1,
+  );
+  late int _from = widget.amount.value;
+  late int _to = widget.amount.value;
+  int _value = widget.amount.value;
+
+  @override
+  void initState() {
+    super.initState();
+    _value = widget.amount.value;
+    _controller.addListener(_tick);
+  }
+
+  void _tick() {
+    setState(() {
+      _value = (_from + (_to - _from) * T.curveOut.transform(_controller.value))
+          .round();
+    });
+  }
+
+  @override
+  void didUpdateWidget(MoneyText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.amount.value == _to) return;
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (!widget.animate || reduceMotion) {
+      _controller.stop();
+      _from = widget.amount.value;
+      _to = widget.amount.value;
+      _value = widget.amount.value;
+      return;
+    }
+    _from = _value;
+    _to = widget.amount.value;
+    _controller.duration = T.medium;
+    _controller.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_tick);
+    _controller.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final textStyle = (style ?? T.money).copyWith(color: color ?? scheme.onSurface);
-    final text = compact ? inrCompact(amount) : inr(amount);
-    if (!animate) return Text(text, style: textStyle);
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: T.slow,
-      curve: T.curveOut,
-      builder: (context, value, _) => Text(
-        compact
-            ? inrCompact(Paise((amount.value * value).round()))
-            : inr(Paise((amount.value * value).round())),
-        style: textStyle,
+    final p = T.of(context);
+    final base = (widget.style ?? T.money).copyWith(
+      color: widget.color ?? widget.style?.color ?? p.ink,
+    );
+
+    if (widget.compact) {
+      final text = widget.animate && _value != widget.amount.value
+          ? inrCompact(Paise(_value))
+          : inrCompact(widget.amount);
+      return Text(
+        '${widget.prefix ?? ''}$text',
+        style: base,
+        maxLines: 1,
+        softWrap: false,
+      );
+    }
+
+    final parts = inrParts(
+      widget.animate && _value != widget.amount.value
+          ? Paise(_value)
+          : widget.amount,
+    );
+    final color = base.color ?? p.ink;
+    final symbol = base.copyWith(
+      fontSize: (base.fontSize ?? 15.5) * 0.66,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0,
+      color: color.withValues(alpha: 0.62),
+    );
+    final minor = base.copyWith(
+      fontSize: (base.fontSize ?? 15.5) * 0.62,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0,
+      color: color.withValues(alpha: 0.62),
+    );
+    final spokenParts = inrParts(widget.amount);
+    final spoken = '${spokenParts.major}${spokenParts.minor ?? ''}';
+    final spokenPrefix = widget.prefix == '+'
+        ? 'plus '
+        : widget.prefix == '−'
+        ? 'minus '
+        : '';
+
+    return Semantics(
+      label:
+          '$spokenPrefix${widget.amount.value < 0 ? 'minus ' : ''}rupees $spoken',
+      excludeSemantics: true,
+      child: Text.rich(
+        TextSpan(
+          style: base,
+          children: [
+            if (widget.prefix != null)
+              TextSpan(
+                text: widget.prefix,
+                style: base.copyWith(color: color.withValues(alpha: 0.85)),
+              ),
+            TextSpan(text: parts.symbol, style: symbol),
+            TextSpan(text: parts.major),
+            if (parts.minor != null)
+              TextSpan(text: parts.minor, style: minor),
+          ],
+        ),
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.clip,
       ),
     );
   }
@@ -147,18 +349,19 @@ class Pill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = T.of(context);
     final (bg, fg) = switch (tone) {
-      PillTone.neutral => (Theme.of(context).colorScheme.surfaceContainerHigh, T.inkSecondary),
-      PillTone.positive => (T.positiveSoft, T.positive),
-      PillTone.caution => (T.cautionSoft, T.caution),
-      PillTone.danger => (T.dangerSoft, T.danger),
-      PillTone.info => (T.infoSoft, T.info),
-      PillTone.brand => (T.primarySoft, T.primary),
+      PillTone.neutral => (p.surfaceMuted, p.inkSecondary),
+      PillTone.positive => (p.positiveSoft, p.positive),
+      PillTone.caution => (p.cautionSoft, p.caution),
+      PillTone.danger => (p.dangerSoft, p.danger),
+      PillTone.info => (p.infoSoft, p.info),
+      PillTone.brand => (p.primarySoft, p.primary),
     };
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: dense ? T.s2 : T.s3,
-        vertical: dense ? 3 : 5,
+        vertical: dense ? 4 : 5,
       ),
       decoration: BoxDecoration(
         color: bg,
@@ -168,13 +371,15 @@ class Pill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: dense ? 12 : 14, color: fg),
+            Icon(icon, size: dense ? 13 : 14, color: fg),
             const SizedBox(width: 4),
           ],
           Text(
             label,
+            maxLines: 1,
+            softWrap: false,
             style: TextStyle(
-              fontSize: dense ? 10.5 : 11.5,
+              fontSize: dense ? 12 : 12,
               fontWeight: FontWeight.w600,
               color: fg,
               letterSpacing: 0.1,
@@ -182,6 +387,40 @@ class Pill extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A soft tinted square that holds a single icon. Keeps icon weight and tile
+/// radius consistent across every screen.
+class IconBadge extends StatelessWidget {
+  const IconBadge({
+    super.key,
+    required this.icon,
+    this.color,
+    this.size = 40,
+    this.iconSize = 20,
+    this.radius = T.r2,
+  });
+
+  final IconData icon;
+  final Color? color;
+  final double size;
+  final double iconSize;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = T.of(context);
+    final tone = color ?? p.primary;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: p.isDark ? 0.18 : 0.11),
+        borderRadius: BorderRadius.circular(radius),
+      ),
+      child: Icon(icon, size: iconSize, color: tone),
     );
   }
 }
@@ -208,28 +447,27 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final p = T.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: T.s6, vertical: T.s7),
+      padding: const EdgeInsets.symmetric(horizontal: T.s6, vertical: T.s6),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: scheme.primaryContainer,
-              borderRadius: BorderRadius.circular(T.r4),
-            ),
-            child: Icon(icon, color: scheme.onPrimaryContainer, size: 26),
-          ),
-          const SizedBox(height: T.s4),
-          Text(title, textAlign: TextAlign.center, style: T.title.copyWith(color: scheme.onSurface)),
-          const SizedBox(height: T.s2),
+          _EmptyIllustration(icon: icon),
+          const SizedBox(height: T.s5),
           Text(
-            body,
+            title,
             textAlign: TextAlign.center,
-            style: T.body.copyWith(color: scheme.onSurfaceVariant),
+            style: T.title.copyWith(color: p.ink),
+          ),
+          const SizedBox(height: T.s2),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 300),
+            child: Text(
+              body,
+              textAlign: TextAlign.center,
+              style: T.body.copyWith(color: p.inkSecondary),
+            ),
           ),
           if (actionLabel != null) ...[
             const SizedBox(height: T.s5),
@@ -245,12 +483,83 @@ class EmptyState extends StatelessWidget {
   }
 }
 
+/// A quiet illustration: concentric orbits and a dot field behind the icon.
+/// Drawn once, static, no assets.
+class _EmptyIllustration extends StatelessWidget {
+  const _EmptyIllustration({required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = T.of(context);
+    return SizedBox(
+      width: 132,
+      height: 132,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          RepaintBoundary(
+            child: CustomPaint(
+              size: const Size.square(132),
+              painter: _OrbitPainter(
+                ring: p.primary.withValues(alpha: p.isDark ? 0.34 : 0.22),
+                dot: p.accent.withValues(alpha: p.isDark ? 0.5 : 0.32),
+                core: p.primarySoft,
+              ),
+            ),
+          ),
+          Icon(icon, size: 38, color: p.primary),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrbitPainter extends CustomPainter {
+  const _OrbitPainter({required this.ring, required this.dot, required this.core});
+
+  final Color ring;
+  final Color dot;
+  final Color core;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..color = ring;
+    canvas.drawCircle(center, size.width * 0.30, paint);
+    canvas.drawCircle(center, size.width * 0.43, paint..color = ring.withValues(alpha: 0.45));
+    canvas.drawCircle(
+      center,
+      size.width * 0.19,
+      Paint()..color = core,
+    );
+    final dotPaint = Paint()..color = dot;
+    for (var i = 0; i < 8; i++) {
+      final angle = i * math.pi / 4 + 0.35;
+      final radius = size.width * 0.43;
+      canvas.drawCircle(
+        center + Offset(math.cos(angle), math.sin(angle)) * radius,
+        i.isEven ? 3 : 2,
+        dotPaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_OrbitPainter oldDelegate) =>
+      oldDelegate.ring != ring || oldDelegate.dot != dot || oldDelegate.core != core;
+}
+
 class NoticeBanner extends StatelessWidget {
   const NoticeBanner({
     super.key,
     required this.title,
     required this.body,
-    this.icon = Icons.info_outline_rounded,
+    this.icon = Icons.info_rounded,
     this.tone = PillTone.info,
     this.actionLabel,
     this.onAction,
@@ -265,15 +574,16 @@ class NoticeBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = T.of(context);
     final (bg, fg) = switch (tone) {
-      PillTone.danger => (T.dangerSoft, T.danger),
-      PillTone.caution => (T.cautionSoft, T.caution),
-      PillTone.positive => (T.positiveSoft, T.positive),
-      PillTone.brand => (T.primarySoft, T.primary),
-      _ => (T.infoSoft, T.info),
+      PillTone.danger => (p.dangerSoft, p.danger),
+      PillTone.caution => (p.cautionSoft, p.caution),
+      PillTone.positive => (p.positiveSoft, p.positive),
+      PillTone.brand => (p.primarySoft, p.primary),
+      _ => (p.infoSoft, p.info),
     };
     return Container(
-      padding: const EdgeInsets.all(T.s4),
+      padding: const EdgeInsets.fromLTRB(T.s4, T.s3, T.s3, T.s3),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(T.r3),
@@ -281,7 +591,7 @@ class NoticeBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: fg, size: 20),
+          Icon(icon, color: fg, size: 19),
           const SizedBox(width: T.s3),
           Expanded(
             child: Column(
@@ -289,22 +599,39 @@ class NoticeBanner extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: T.cardTitle.copyWith(color: fg, fontWeight: FontWeight.w700),
+                  style: T.cardTitle.copyWith(
+                    color: fg,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 2),
-                Text(body, style: T.body.copyWith(color: fg.withValues(alpha: 0.9), fontSize: 13)),
+                Text(
+                  body,
+                  style: T.bodySmall.copyWith(
+                    color: fg.withValues(alpha: 0.92),
+                    fontSize: 12.5,
+                    height: 1.38,
+                  ),
+                ),
                 if (actionLabel != null) ...[
                   const SizedBox(height: T.s2),
                   GestureDetector(
                     onTap: onAction,
-                    child: Text(
-                      actionLabel!,
-                      style: T.body.copyWith(
-                        color: fg,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                        decoration: TextDecoration.underline,
-                        decorationColor: fg,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: T.s1),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            actionLabel!,
+                            style: T.bodySmall.copyWith(
+                              color: fg,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                          Icon(Icons.arrow_forward_rounded, size: 14, color: fg),
+                        ],
                       ),
                     ),
                   ),
@@ -318,46 +645,143 @@ class NoticeBanner extends StatelessWidget {
   }
 }
 
-/// A thin horizontal bar used in category breakdowns.
-class ShareBar extends StatelessWidget {
+/// A thin horizontal bar used in category and utilisation breakdowns.
+class ShareBar extends StatefulWidget {
   const ShareBar({
     super.key,
     required this.share,
     required this.color,
     this.height = 6,
+    this.animate = true,
+    this.ticks = false,
   });
 
   final double share;
   final Color color;
   final double height;
+  final bool animate;
+  final bool ticks;
+
+  @override
+  State<ShareBar> createState() => _ShareBarState();
+}
+
+class _ShareBarState extends State<ShareBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: T.slow,
+    value: 1,
+  );
+  late double _from = 0;
+  late double _to = widget.share.clamp(0.0, 1.0);
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.animate) {
+      _controller.value = 0;
+      _controller.forward();
+    }
+  }
+
+  @override
+  void didUpdateWidget(ShareBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = widget.share.clamp(0.0, 1.0);
+    if ((next - _to).abs() < 0.0001) return;
+    _from = _current;
+    _to = next;
+    if (!widget.animate) {
+      _controller.value = 1;
+      return;
+    }
+    _controller.forward(from: 0);
+  }
+
+  double get _current => _from + (_to - _from) * T.curveOut.transform(_controller.value);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(height),
-      child: Stack(
-        children: [
-          Container(height: height, color: scheme.surfaceContainerHigh),
-          FractionallySizedBox(
-            widthFactor: share.clamp(0.0, 1.0),
-            child: Container(
-              height: height,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(height),
+    final p = T.of(context);
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final value = widget.animate ? _current : _to;
+        return SizedBox(
+          height: widget.height,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: p.surfaceSunken,
+                  borderRadius: BorderRadius.circular(widget.height),
+                ),
               ),
-            ),
+              FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: value.clamp(0.0, 1.0),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: widget.color,
+                    borderRadius: BorderRadius.circular(widget.height),
+                  ),
+                ),
+              ),
+              if (widget.ticks)
+                CustomPaint(
+                  painter: _TickPainter(
+                    color: p.inkMuted.withValues(alpha: 0.40),
+                  ),
+                ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
 
-/// Skeleton placeholder used while the first load runs.
+class _TickPainter extends CustomPainter {
+  const _TickPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1;
+    for (final mark in const [0.30, 0.50, 0.75]) {
+      final x = size.width * mark;
+      canvas.drawLine(
+        Offset(x, size.height * 0.15),
+        Offset(x, size.height * 0.85),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_TickPainter oldDelegate) => oldDelegate.color != color;
+}
+
+/// Skeleton placeholder used while the first load runs. Its pulse is the only
+/// ambient loop in the app.
 class SkeletonBox extends StatefulWidget {
-  const SkeletonBox({super.key, this.height = 16, this.width = double.infinity, this.radius = 8});
+  const SkeletonBox({
+    super.key,
+    this.height = 16,
+    this.width = double.infinity,
+    this.radius = 8,
+  });
 
   final double height;
   final double width;
@@ -367,10 +791,11 @@ class SkeletonBox extends StatefulWidget {
   State<SkeletonBox> createState() => _SkeletonBoxState();
 }
 
-class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStateMixin {
+class _SkeletonBoxState extends State<SkeletonBox>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1200),
+    duration: const Duration(milliseconds: 1100),
   )..repeat(reverse: true);
 
   @override
@@ -381,20 +806,96 @@ class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final p = T.of(context);
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (reduceMotion) {
+      return Container(
+        height: widget.height,
+        width: widget.width,
+        decoration: BoxDecoration(
+          color: p.surfaceMuted,
+          borderRadius: BorderRadius.circular(widget.radius),
+        ),
+      );
+    }
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) => Container(
         height: widget.height,
         width: widget.width,
         decoration: BoxDecoration(
-          color: Color.lerp(
-            scheme.surfaceContainerLow,
-            scheme.surfaceContainerHigh,
-            _controller.value,
-          ),
+          color: Color.lerp(p.surfaceMuted, p.surfaceSunken, _controller.value),
           borderRadius: BorderRadius.circular(widget.radius),
         ),
+      ),
+    );
+  }
+}
+
+/// Staggered entrance for page sections: a short fade and rise, 240 ms,
+/// ease-out, never a bounce. Runs once, and not at all when the platform asks
+/// for reduced motion.
+class Entrance extends StatefulWidget {
+  const Entrance({
+    super.key,
+    required this.child,
+    this.index = 0,
+    this.duration = const Duration(milliseconds: 240),
+  });
+
+  final Widget child;
+  final int index;
+  final Duration duration;
+
+  @override
+  State<Entrance> createState() => _EntranceState();
+}
+
+class _EntranceState extends State<Entrance>
+    with SingleTickerProviderStateMixin {
+  static const _stagger = Duration(milliseconds: 38);
+
+  late final Duration _total =
+      widget.duration + _stagger * math.min(widget.index, 7);
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: _total,
+  );
+  late final Animation<double> _animation = CurvedAnimation(
+    parent: _controller,
+    curve: Interval(
+      math.min(0.35, (widget.index * 0.06)),
+      1,
+      curve: T.curveOut,
+    ),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _controller.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (reduceMotion) return widget.child;
+    return FadeTransition(
+      opacity: _animation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.035),
+          end: Offset.zero,
+        ).animate(_animation),
+        child: widget.child,
       ),
     );
   }

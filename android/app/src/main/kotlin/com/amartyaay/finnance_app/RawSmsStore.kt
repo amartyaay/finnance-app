@@ -23,6 +23,17 @@ class RawSmsStore(context: Context) :
         createTables(db)
     }
 
+    /**
+     * The Dart side owns the schema version and migrates the file forward
+     * (`sqflite` writes `user_version`). If the receiver then opens a file that
+     * is *newer* than this helper's version, the default implementation throws
+     * and every SMS after the first app launch is lost. Re-assert the tables
+     * instead: this helper only ever touches its own two.
+     */
+    override fun onDowngrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        createTables(db)
+    }
+
     override fun onOpen(db: SQLiteDatabase) {
         super.onOpen(db)
         createTables(db)
@@ -98,7 +109,7 @@ class RawSmsStore(context: Context) :
 
     companion object {
         const val DATABASE_NAME = "finance_sms.db"
-        private const val DATABASE_VERSION = 6
+        private const val DATABASE_VERSION = 7
 
         /** Identity of a message independent of the inbox row id. */
         fun contentIdOf(sender: String, body: String, receivedAtMs: Long): String {

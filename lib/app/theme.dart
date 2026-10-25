@@ -5,34 +5,36 @@ import 'design_tokens.dart';
 
 ThemeData buildAppTheme({Brightness brightness = Brightness.light}) {
   final dark = brightness == Brightness.dark;
+  final p = dark ? FinanceColors.dark : FinanceColors.light;
+
   final scheme = ColorScheme(
     brightness: brightness,
-    primary: dark ? const Color(0xFF5FD3AC) : T.primary,
-    onPrimary: dark ? const Color(0xFF00281C) : T.inkOnPrimary,
-    primaryContainer: dark ? const Color(0xFF0B3B2E) : T.primarySoft,
+    primary: p.primary,
+    onPrimary: p.inkOnPrimary,
+    primaryContainer: p.primarySoft,
     onPrimaryContainer: dark ? const Color(0xFFB8F0DC) : const Color(0xFF064434),
-    secondary: T.accent,
-    onSecondary: Colors.white,
-    secondaryContainer: dark ? const Color(0xFF3B2A12) : T.accentSoft,
+    secondary: p.accent,
+    onSecondary: dark ? const Color(0xFF2B1904) : Colors.white,
+    secondaryContainer: p.accentSoft,
     onSecondaryContainer: dark ? const Color(0xFFF3D8AF) : const Color(0xFF5C3607),
-    tertiary: T.info,
-    onTertiary: Colors.white,
-    tertiaryContainer: dark ? const Color(0xFF17303F) : T.infoSoft,
+    tertiary: p.info,
+    onTertiary: dark ? const Color(0xFF08202E) : Colors.white,
+    tertiaryContainer: p.infoSoft,
     onTertiaryContainer: dark ? const Color(0xFFC7E2F5) : const Color(0xFF103B57),
-    error: T.danger,
-    onError: Colors.white,
-    errorContainer: dark ? const Color(0xFF43120F) : T.dangerSoft,
+    error: p.danger,
+    onError: dark ? const Color(0xFF2B0906) : Colors.white,
+    errorContainer: p.dangerSoft,
     onErrorContainer: dark ? const Color(0xFFF9D6D2) : const Color(0xFF6E1710),
-    surface: dark ? const Color(0xFF101412) : T.surface,
-    onSurface: dark ? const Color(0xFFECF1ED) : T.ink,
-    surfaceContainerLowest: dark ? const Color(0xFF0B0E0C) : const Color(0xFFFBFCFA),
-    surfaceContainerLow: dark ? const Color(0xFF161B18) : T.surfaceMuted,
-    surfaceContainer: dark ? const Color(0xFF1B211D) : const Color(0xFFF2F5EF),
-    surfaceContainerHigh: dark ? const Color(0xFF232A25) : T.surfaceSunken,
-    surfaceContainerHighest: dark ? const Color(0xFF2B332D) : const Color(0xFFE3E8DF),
-    onSurfaceVariant: dark ? const Color(0xFFBFC9C2) : T.inkSecondary,
-    outline: dark ? const Color(0xFF3B443E) : const Color(0xFFCBD4CB),
-    outlineVariant: dark ? const Color(0xFF2A312C) : const Color(0xFFE1E7DD),
+    surface: p.surface,
+    onSurface: p.ink,
+    surfaceContainerLowest: dark ? const Color(0xFF050D0A) : const Color(0xFFFBFCFA),
+    surfaceContainerLow: p.surfaceMuted,
+    surfaceContainer: dark ? const Color(0xFF152A20) : const Color(0xFFF2F5EF),
+    surfaceContainerHigh: p.surfaceSunken,
+    surfaceContainerHighest: dark ? const Color(0xFF22392C) : const Color(0xFFE3E8DF),
+    onSurfaceVariant: p.inkSecondary,
+    outline: p.outline,
+    outlineVariant: p.outlineVariant,
     shadow: Colors.black,
     scrim: Colors.black,
     inverseSurface: dark ? const Color(0xFFECF1ED) : const Color(0xFF1C2420),
@@ -44,16 +46,14 @@ ThemeData buildAppTheme({Brightness brightness = Brightness.light}) {
     useMaterial3: true,
     brightness: brightness,
     colorScheme: scheme,
-    scaffoldBackgroundColor: dark ? const Color(0xFF0B0E0C) : T.bg,
+    scaffoldBackgroundColor: p.bg,
+    canvasColor: p.bg,
     splashFactory: InkSparkle.splashFactory,
   );
 
   return base.copyWith(
     textTheme: base.textTheme
-        .apply(
-          bodyColor: scheme.onSurface,
-          displayColor: scheme.onSurface,
-        )
+        .apply(bodyColor: scheme.onSurface, displayColor: scheme.onSurface)
         .copyWith(
           displaySmall: T.display.copyWith(color: scheme.onSurface),
           headlineSmall: T.title.copyWith(color: scheme.onSurface),
@@ -62,11 +62,13 @@ ThemeData buildAppTheme({Brightness brightness = Brightness.light}) {
           bodySmall: T.bodySmall.copyWith(color: scheme.onSurfaceVariant),
           labelLarge: T.label.copyWith(color: scheme.onSurfaceVariant),
         ),
+    iconTheme: IconThemeData(color: p.inkSecondary, size: 22),
     appBarTheme: AppBarTheme(
       backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       centerTitle: false,
+      titleSpacing: T.s5,
       titleTextStyle: T.title.copyWith(color: scheme.onSurface),
       systemOverlayStyle: dark
           ? SystemUiOverlayStyle.light
@@ -88,7 +90,11 @@ ThemeData buildAppTheme({Brightness brightness = Brightness.light}) {
         minimumSize: const Size(0, 48),
         padding: const EdgeInsets.symmetric(horizontal: T.s5),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(T.r2)),
-        textStyle: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
+        textStyle: const TextStyle(
+          fontSize: 14.5,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.1,
+        ),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -104,36 +110,45 @@ ThemeData buildAppTheme({Brightness brightness = Brightness.light}) {
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: scheme.primary,
+        minimumSize: const Size(0, 44),
         textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(T.r1)),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: scheme.surfaceContainerLow,
+      fillColor: p.surfaceMuted,
       contentPadding: const EdgeInsets.symmetric(
         horizontal: T.s4,
         vertical: T.s3,
       ),
-      hintStyle: T.body.copyWith(color: scheme.onSurfaceVariant),
+      hintStyle: T.body.copyWith(color: p.inkMuted),
+      prefixIconColor: p.inkMuted,
+      suffixIconColor: p.inkMuted,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(T.r2),
-        borderSide: BorderSide(color: scheme.outlineVariant),
+        borderSide: BorderSide(color: p.outlineVariant),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(T.r2),
-        borderSide: BorderSide(color: scheme.outlineVariant),
+        borderSide: BorderSide(color: p.outlineVariant),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(T.r2),
-        borderSide: BorderSide(color: scheme.primary, width: 1.6),
+        borderSide: BorderSide(color: p.primary, width: 1.6),
       ),
     ),
     chipTheme: ChipThemeData(
-      backgroundColor: scheme.surfaceContainerLow,
-      side: BorderSide(color: scheme.outlineVariant),
+      backgroundColor: p.surfaceMuted,
+      selectedColor: p.ink,
+      side: BorderSide(color: p.outlineVariant),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(T.r5)),
-      labelStyle: T.bodySmall.copyWith(color: scheme.onSurface, fontSize: 12.5),
+      labelStyle: T.bodySmall.copyWith(color: p.ink, fontSize: 12.5),
+      secondaryLabelStyle: T.bodySmall.copyWith(
+        color: p.bg,
+        fontSize: 12.5,
+        fontWeight: FontWeight.w600,
+      ),
       padding: const EdgeInsets.symmetric(horizontal: T.s2, vertical: 2),
     ),
     dividerTheme: DividerThemeData(
@@ -149,40 +164,84 @@ ThemeData buildAppTheme({Brightness brightness = Brightness.light}) {
       insetPadding: const EdgeInsets.all(T.s4),
     ),
     navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: scheme.surface,
-      indicatorColor: scheme.primaryContainer,
+      backgroundColor: p.surface,
+      surfaceTintColor: Colors.transparent,
+      indicatorColor: p.primarySoft,
+      indicatorShape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(T.r2),
+      ),
       elevation: 0,
-      height: 68,
+      height: 72,
       labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       labelTextStyle: WidgetStateProperty.resolveWith(
         (states) => T.label.copyWith(
-          color: states.contains(WidgetState.selected)
-              ? scheme.primary
-              : scheme.onSurfaceVariant,
+          color: states.contains(WidgetState.selected) ? p.primary : p.inkMuted,
           fontWeight: states.contains(WidgetState.selected)
               ? FontWeight.w700
               : FontWeight.w500,
-          fontSize: 11,
+          fontSize: 12,
+          letterSpacing: 0.1,
         ),
       ),
       iconTheme: WidgetStateProperty.resolveWith(
         (states) => IconThemeData(
-          size: 22,
-          color: states.contains(WidgetState.selected)
-              ? scheme.primary
-              : scheme.onSurfaceVariant,
+          size: 23,
+          color: states.contains(WidgetState.selected) ? p.primary : p.inkMuted,
         ),
       ),
     ),
     dialogTheme: DialogThemeData(
-      backgroundColor: scheme.surface,
+      backgroundColor: p.surface,
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(T.r4)),
     ),
     bottomSheetTheme: BottomSheetThemeData(
-      backgroundColor: scheme.surface,
+      backgroundColor: p.surface,
+      surfaceTintColor: Colors.transparent,
       showDragHandle: true,
+      dragHandleColor: p.outline,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(T.r5)),
+      ),
+    ),
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: p.primary,
+      linearTrackColor: p.surfaceSunken,
+      circularTrackColor: p.surfaceSunken,
+    ),
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? p.primary
+            : p.surface,
+      ),
+      trackColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? p.primarySoft
+            : p.surfaceSunken,
+      ),
+      trackOutlineColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? p.primary.withValues(alpha: 0.35)
+            : p.outline,
+      ),
+    ),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: ButtonStyle(
+        foregroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? p.inkOnPrimary
+              : p.inkSecondary,
+        ),
+        backgroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? p.primary
+              : p.surfaceMuted,
+        ),
+        side: WidgetStatePropertyAll(BorderSide(color: p.outlineVariant)),
+        textStyle: const WidgetStatePropertyAll(
+          TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
       ),
     ),
     pageTransitionsTheme: const PageTransitionsTheme(

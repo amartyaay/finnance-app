@@ -1,21 +1,23 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../app/design_tokens.dart';
 import '../../app/widgets/kit.dart';
 import '../../domain/money.dart';
 import '../../engine/card_metrics.dart';
+import 'charts.dart';
 import 'txn_common.dart';
 
 /// Band colour, used for the ring and the utilisation bars. Colour never travels
 /// alone here — every place that paints it also prints the band's word.
-Color utilizationBandColor(UtilizationBand band) => switch (band) {
-  UtilizationBand.excellent || UtilizationBand.healthy => T.positive,
-  UtilizationBand.watch => T.caution,
-  UtilizationBand.high || UtilizationBand.critical => T.danger,
-  UtilizationBand.unknown => T.inkMuted,
-};
+Color utilizationBandColor(UtilizationBand band, BuildContext context) {
+  final p = T.of(context);
+  return switch (band) {
+    UtilizationBand.excellent || UtilizationBand.healthy => p.positive,
+    UtilizationBand.watch => p.caution,
+    UtilizationBand.high || UtilizationBand.critical => p.danger,
+    UtilizationBand.unknown => p.inkMuted,
+  };
+}
 
 PillTone utilizationBandTone(UtilizationBand band) => switch (band) {
   UtilizationBand.excellent || UtilizationBand.healthy => PillTone.positive,
@@ -24,120 +26,9 @@ PillTone utilizationBandTone(UtilizationBand band) => switch (band) {
   UtilizationBand.unknown => PillTone.neutral,
 };
 
-/// The aggregate utilisation arc. This is the only ring in the app: lists use a
-/// plain bar because a ring per row is decoration, not information.
-class UtilizationRing extends StatelessWidget {
-  const UtilizationRing({
-    super.key,
-    required this.utilization,
-    required this.color,
-    this.size = 120,
-    this.stroke = 10,
-  });
-
-  final double? utilization;
-  final Color color;
-  final double size;
-  final double stroke;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    // The ring and its label are the same number: the aggregate utilisation that
-    // the Cards screen received. Never derive this from a per-card cycle total.
-    final percent = utilization == null ? null : (utilization! * 100).round();
-    final percentStyle = T.moneyLarge(scheme.onSurface).copyWith(fontSize: 24);
-    return Semantics(
-      label: percent == null
-          ? 'Total utilisation unknown until a card limit is set'
-          : 'Total utilisation $percent percent',
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _UtilizationRingPainter(
-                  value: (utilization ?? 0).clamp(0.0, 1.0).toDouble(),
-                  color: color,
-                  track: scheme.surfaceContainerHigh,
-                  stroke: stroke,
-                ),
-              ),
-            ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // "100%" at 1.3x is wider than the ring; scale the glyphs a
-                // touch rather than let the label paint outside the arc.
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    percent == null ? '—' : '$percent%',
-                    maxLines: 1,
-                    style: percentStyle,
-                  ),
-                ),
-                Text(
-                  'used',
-                  style: T.label.copyWith(color: scheme.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _UtilizationRingPainter extends CustomPainter {
-  _UtilizationRingPainter({
-    required this.value,
-    required this.color,
-    required this.track,
-    required this.stroke,
-  });
-
-  final double value;
-  final Color color;
-  final Color track;
-  final double stroke;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Rect.fromCircle(
-      center: size.center(Offset.zero),
-      radius: (size.shortestSide - stroke) / 2,
-    );
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawArc(rect, 0, math.pi * 2, false, paint..color = track);
-    if (value <= 0) return;
-    canvas.drawArc(
-      rect,
-      -math.pi / 2,
-      math.pi * 2 * value,
-      false,
-      paint..color = color,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_UtilizationRingPainter oldDelegate) =>
-      oldDelegate.value != value ||
-      oldDelegate.color != color ||
-      oldDelegate.track != track ||
-      oldDelegate.stroke != stroke;
-}
-
-/// Header of the Cards screen: total utilisation, the limit it is measured
-/// against, and the three numbers people open a card screen for.
+/// The aggregate card summary: one ring, one caption, three numbers. This is
+/// the only ring on the screen — individual cards carry their own small gauge
+/// on the face itself.
 class CardSummaryCard extends StatelessWidget {
   const CardSummaryCard({
     super.key,
@@ -158,51 +49,120 @@ class CardSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    // The ring only has a denominator for cards whose limit is known; the
-    // caption must count the same cards, or the screen contradicts itself when
-    // one card has no limit set yet.
+    final p = T.of(context);
     final limitedCards = cards
         .where((c) => (c.card.creditLimitPaise ?? 0) > 0)
         .length;
+    final percent = utilization == null
+        ? null
+        : (utilization! * 100).round();
+    final color = utilizationBandColor(band, context);
     final caption = utilization == null
         ? 'Add a card limit to see total utilisation.'
         : 'of ${inr(limit)} limit across $limitedCards '
               '${limitedCards == 1 ? 'card' : 'cards'}';
+
     return AppCard(
-      padding: const EdgeInsets.fromLTRB(T.s4, T.s5, T.s4, T.s4),
+      padding: const EdgeInsets.all(T.s4),
       child: Column(
         children: [
-          UtilizationRing(
-            utilization: utilization,
-            color: utilizationBandColor(band),
-          ),
-          const SizedBox(height: T.s3),
-          Text(
-            caption,
-            textAlign: TextAlign.center,
-            style: T.bodySmall.copyWith(color: scheme.onSurfaceVariant),
+          Row(
+            children: [
+              UtilizationArc(
+                value: utilization,
+                color: color,
+                track: p.surfaceSunken,
+                size: 92,
+                stroke: 9,
+                center: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      percent == null ? '—' : '$percent%',
+                      maxLines: 1,
+                      style: T.moneyLarge(p.ink).copyWith(fontSize: 21),
+                    ),
+                    Text(
+                      'used',
+                      style: T.bodySmall.copyWith(
+                        color: p.inkMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: T.s4),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: T.s2,
+                      runSpacing: T.s1,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Pill(
+                          band.label,
+                          tone: utilizationBandTone(band),
+                          dense: true,
+                        ),
+                        Text(
+                          '${cards.length} ${cards.length == 1 ? 'card' : 'cards'}',
+                          style: T.bodySmall.copyWith(
+                            color: p.inkMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      caption,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: T.bodySmall.copyWith(color: p.inkSecondary),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      utilization == null
+                          ? 'Set a limit on each card below.'
+                          : '${inr(Paise((limit.value * utilization!).round()))} outstanding in total.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: T.bodySmall.copyWith(color: p.inkMuted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: T.s4),
-          Divider(height: 1, color: scheme.outlineVariant),
+          Divider(height: 1, color: p.outlineVariant),
           const SizedBox(height: T.s3),
           Row(
             children: [
               Expanded(
-                child: _SummaryStat(label: 'Cards', value: '${cards.length}'),
+                child: _SummaryStat(
+                  label: 'Cards',
+                  value: '${cards.length}',
+                  align: CrossAxisAlignment.start,
+                ),
               ),
-              _StatDivider(color: scheme.outlineVariant),
+              _StatDivider(color: p.outlineVariant),
               Expanded(
                 child: _SummaryStat(
                   label: 'Total due',
                   value: inrCompact(totalDue),
+                  align: CrossAxisAlignment.start,
                 ),
               ),
-              _StatDivider(color: scheme.outlineVariant),
+              _StatDivider(color: p.outlineVariant),
               Expanded(
                 child: _SummaryStat(
                   label: 'Next due',
                   value: nextDue == null ? '—' : shortDate(nextDue!),
+                  align: CrossAxisAlignment.start,
                 ),
               ),
             ],
@@ -214,29 +174,34 @@ class CardSummaryCard extends StatelessWidget {
 }
 
 class _SummaryStat extends StatelessWidget {
-  const _SummaryStat({required this.label, required this.value});
+  const _SummaryStat({
+    required this.label,
+    required this.value,
+    required this.align,
+  });
 
   final String label;
   final String value;
+  final CrossAxisAlignment align;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final p = T.of(context);
     return Column(
+      crossAxisAlignment: align,
       children: [
         Text(
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: T.label.copyWith(color: scheme.onSurfaceVariant),
+          style: T.label.copyWith(color: p.inkMuted, letterSpacing: 0.2),
         ),
         const SizedBox(height: 3),
         Text(
           value,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: T.cardTitle.copyWith(color: scheme.onSurface),
+          style: T.cardTitle.copyWith(color: p.ink, fontSize: 16),
         ),
       ],
     );
@@ -250,6 +215,11 @@ class _StatDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(width: 1, height: 32, color: color);
+    return Container(
+      width: 1,
+      height: 34,
+      margin: const EdgeInsets.symmetric(horizontal: T.s3),
+      color: color,
+    );
   }
 }

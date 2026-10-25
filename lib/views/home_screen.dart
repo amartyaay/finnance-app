@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -11,6 +13,9 @@ import '../engine/card_metrics.dart';
 import '../engine/insights_engine.dart';
 import '../engine/monthly_summary.dart';
 import '../state/app_state.dart';
+import 'widgets/card_face.dart';
+import 'widgets/charts.dart';
+import 'widgets/txn_common.dart';
 
 /// The dashboard. Answers three questions in one screen, in this order:
 /// how much have I spent, is anything wrong, and where did it go.
@@ -34,6 +39,12 @@ class HomeScreen extends StatelessWidget {
       return _EmptyHome(state: state);
     }
 
+    final summary = data.summary;
+    final hasAttention =
+        data.phishingAlerts.isNotEmpty ||
+        data.cards.any((c) => c.dueSoon) ||
+        data.needsReview.isNotEmpty;
+
     return RefreshIndicator(
       onRefresh: state.scanInbox,
       child: CustomScrollView(
@@ -50,28 +61,33 @@ class HomeScreen extends StatelessWidget {
                 Text(
                   _greeting(),
                   style: T.bodySmall.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    color: T.of(context).inkMuted,
+                    fontSize: 12,
                   ),
                 ),
-                Text(_monthLabel(data.summary.monthStart), style: T.title),
+                Text(
+                  monthYearLabel(summary.monthStart),
+                  style: T.title.copyWith(color: T.of(context).ink),
+                ),
               ],
             ),
             actions: [
               if (state.isDemo)
                 Padding(
-                  padding: const EdgeInsets.only(right: T.s2),
+                  padding: const EdgeInsets.only(right: T.s1),
                   child: Center(
                     child: ActionChip(
                       label: const Text('Demo'),
                       onPressed: state.exitDemo,
-                      avatar: const Icon(Icons.science_outlined, size: 16),
+                      avatar: const Icon(Icons.science_rounded, size: 15),
+                      visualDensity: VisualDensity.compact,
                     ),
                   ),
                 ),
               IconButton(
                 tooltip: 'Settings',
                 onPressed: onOpenSettings,
-                icon: const Icon(Icons.account_circle_outlined),
+                icon: const Icon(Icons.account_circle_rounded),
               ),
               IconButton(
                 tooltip: 'Scan SMS',
@@ -84,45 +100,75 @@ class HomeScreen extends StatelessWidget {
                       )
                     : const Icon(Icons.sync_rounded),
               ),
-              const SizedBox(width: T.s2),
+              const SizedBox(width: T.s1),
             ],
           ),
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(T.s5, T.s2, T.s5, 96),
+            padding: const EdgeInsets.fromLTRB(T.s5, T.s2, T.s5, 104),
             sliver: SliverList.list(
               children: [
-                _HeroCard(summary: data.summary),
-                const SizedBox(height: T.s4),
-                _Attention(
-                  data: data,
-                  onNavigate: onNavigate,
-                  onReview: () => onNavigate?.call(1),
+                Entrance(
+                  index: 0,
+                  child: _HeroCard(
+                    summary: summary,
+                    smsRead: data.smsMessagesRead,
+                    needsReview: data.needsReview.length,
+                    lastScanAt: data.lastScanAt,
+                  ),
                 ),
-                if (data.summary.byCategory.isNotEmpty) ...[
+                if (hasAttention) ...[
+                  const SizedBox(height: T.s3),
+                  Entrance(
+                    index: 1,
+                    child: _Attention(
+                      data: data,
+                      onNavigate: onNavigate,
+                      onReview: () => onNavigate?.call(1),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: T.s4),
+                Entrance(
+                  index: 2,
+                  child: _PaceSection(summary: summary),
+                ),
+                if (summary.byCategory.isNotEmpty) ...[
                   const SizedBox(height: T.s4),
-                  _CategoryCard(
-                    summary: data.summary,
-                    onSeeAll: () => onNavigate?.call(3),
+                  Entrance(
+                    index: 3,
+                    child: _CategoryCard(
+                      summary: summary,
+                      onSeeAll: () => onNavigate?.call(3),
+                    ),
                   ),
                 ],
                 if (data.cards.isNotEmpty) ...[
-                  const SizedBox(height: T.s4),
-                  _CardStrip(
-                    cards: data.cards,
-                    onOpen: () => onNavigate?.call(2),
+                  const SizedBox(height: T.s5),
+                  Entrance(
+                    index: 4,
+                    child: _CardStrip(
+                      cards: data.cards,
+                      onOpen: () => onNavigate?.call(2),
+                    ),
                   ),
                 ],
                 if (data.insights.isNotEmpty) ...[
-                  const SizedBox(height: T.s4),
-                  _InsightPreview(
-                    insights: data.insights,
-                    onSeeAll: () => onNavigate?.call(3),
+                  const SizedBox(height: T.s5),
+                  Entrance(
+                    index: 5,
+                    child: _InsightPreview(
+                      insights: data.insights,
+                      onSeeAll: () => onNavigate?.call(3),
+                    ),
                   ),
                 ],
-                const SizedBox(height: T.s4),
-                _RecentList(
-                  transactions: data.transactions,
-                  onSeeAll: () => onNavigate?.call(1),
+                const SizedBox(height: T.s5),
+                Entrance(
+                  index: 6,
+                  child: _RecentList(
+                    transactions: data.transactions,
+                    onSeeAll: () => onNavigate?.call(1),
+                  ),
                 ),
                 const SizedBox(height: T.s5),
                 _PrivacyFooter(
@@ -144,39 +190,28 @@ class HomeScreen extends StatelessWidget {
     if (hour < 17) return 'Good afternoon';
     return 'Good evening';
   }
-
-  static String _monthLabel(DateTime month) {
-    const names = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-    return '${names[month.month - 1]} ${month.year}';
-  }
 }
 
 class _HeroCard extends StatelessWidget {
-  const _HeroCard({required this.summary});
+  const _HeroCard({
+    required this.summary,
+    required this.smsRead,
+    required this.needsReview,
+    required this.lastScanAt,
+  });
 
   final MonthlySummary summary;
+  final int smsRead;
+  final int needsReview;
+  final DateTime? lastScanAt;
 
   @override
   Widget build(BuildContext context) {
+    final p = T.of(context);
     final change = summary.monthOverMonth;
     final up = change > 0;
     final net = summary.net;
 
-    // One source for the three stats: the parent lays them out as a row or as a
-    // two-column wrap, so the cell itself never assumes a fixed width.
     final stats = <({String label, String value})>[
       (label: 'Came in', value: inrCompact(summary.income)),
       (
@@ -187,162 +222,199 @@ class _HeroCard extends StatelessWidget {
       (label: 'Per day', value: inrCompact(summary.dailyAverage)),
     ];
 
-    return Container(
-      padding: const EdgeInsets.all(T.s5),
-      decoration: BoxDecoration(
-        gradient: T.heroGradient,
-        borderRadius: BorderRadius.circular(T.r4),
-        boxShadow: T.shadowCard,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Wrap, not Row: at 1.3x the label and the delta pill are each close to
-          // the full card width, so the pill drops to its own run instead of
-          // overflowing the header.
-          Wrap(
-            spacing: T.s2,
-            runSpacing: T.s2,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
+    final provenance = <String>[
+      if (smsRead > 0) '$smsRead messages read',
+      needsReview > 0 ? '$needsReview to confirm' : 'all clear',
+      if (lastScanAt != null) 'as of ${clockTime(lastScanAt!)}',
+    ].join(' · ');
+
+    final spoken =
+        '${monthYearLabel(summary.monthStart)}. Spent ${_spoken(summary.spend)}. '
+        '${inr(summary.dailyAverage)} a day. '
+        '${summary.previousSpendPaise > 0 ? '${(change.abs() * 100).round()} percent ${up ? 'more' : 'less'} than last month. ' : ''}'
+        '${_spoken(summary.income)} came in; '
+        '${net.value < 0 ? '${_spoken(Paise(net.value.abs()))} over' : '${_spoken(Paise(net.value.abs()))} left'}.';
+
+    return Semantics(
+      container: true,
+      label: spoken,
+      excludeSemantics: true,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: p.heroGradient,
+          borderRadius: BorderRadius.circular(T.r4),
+          boxShadow: p.shadowCard,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(T.r4),
+          child: Stack(
             children: [
-              Text(
-                'SPENT THIS MONTH',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: T.label.copyWith(
-                  color: Colors.white.withValues(alpha: 0.78),
-                  letterSpacing: 1.1,
+              Positioned.fill(
+                child: RepaintBoundary(
+                  child: CustomPaint(
+                    painter: _HeroPatternPainter(
+                      ring: Colors.white.withValues(alpha: 0.055),
+                      glow: Colors.white.withValues(alpha: 0.06),
+                    ),
+                  ),
                 ),
               ),
-              if (summary.previousSpendPaise > 0)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: T.s2,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(T.r5),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        up
-                            ? Icons.trending_up_rounded
-                            : Icons.trending_down_rounded,
-                        size: 14,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          '${(change.abs() * 100).round()}% vs last month',
+              Padding(
+                padding: const EdgeInsets.all(T.s5),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: T.s2,
+                      runSpacing: T.s2,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          'SPENT THIS MONTH',
                           maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                           style: T.label.copyWith(
-                            color: Colors.white,
-                            letterSpacing: 0,
+                            color: Colors.white.withValues(alpha: 0.74),
+                            letterSpacing: 1.3,
+                            fontSize: 12,
                           ),
+                        ),
+                        if (summary.previousSpendPaise > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: T.s2,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.16),
+                              borderRadius: BorderRadius.circular(T.r5),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  up
+                                      ? Icons.trending_up_rounded
+                                      : Icons.trending_down_rounded,
+                                  size: 14,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${(change.abs() * 100).round()}% vs last month',
+                                  maxLines: 1,
+                                  style: T.label.copyWith(
+                                    color: Colors.white,
+                                    letterSpacing: 0,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: T.s3),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: MoneyText(
+                        summary.spend,
+                        animate: true,
+                        style: T.heroNumber,
+                      ),
+                    ),
+                    const SizedBox(height: T.s1),
+                    Text(
+                      '${inr(summary.dailyAverage)} a day · '
+                      '${summary.daysElapsed} of ${summary.daysInMonth} days',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: T.body.copyWith(
+                        color: Colors.white.withValues(alpha: 0.84),
+                        fontSize: 13.5,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      provenance,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: T.bodySmall.copyWith(
+                        color: Colors.white.withValues(alpha: 0.62),
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: T.s4),
+                    Divider(
+                      color: Colors.white.withValues(alpha: 0.16),
+                      height: 1,
+                    ),
+                    const SizedBox(height: T.s3),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final scale =
+                            MediaQuery.textScalerOf(context).scale(14) / 14;
+                        // Three money columns only fit side by side at body
+                        // size. Once text grows, reflow to two columns so
+                        // values are not elided into unreadable stubs.
+                        final twoColumns =
+                            constraints.maxWidth < 260 || scale >= 1.2;
+                        if (!twoColumns) {
+                          return Row(
+                            children: [
+                              for (final stat in stats)
+                                Expanded(
+                                  child: _HeroStat(
+                                    label: stat.label,
+                                    value: stat.value,
+                                  ),
+                                ),
+                            ],
+                          );
+                        }
+                        final cellWidth =
+                            (constraints.maxWidth - T.s4) / 2;
+                        return Wrap(
+                          spacing: T.s4,
+                          runSpacing: T.s3,
+                          children: [
+                            for (final stat in stats)
+                              SizedBox(
+                                width: cellWidth,
+                                child: _HeroStat(
+                                  label: stat.label,
+                                  value: stat.value,
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                    if (summary.transferPaise > 0) ...[
+                      const SizedBox(height: T.s3),
+                      Text(
+                        'Excludes ${inrCompact(Paise(summary.transferPaise))} in card bills and transfers',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: T.bodySmall.copyWith(
+                          color: Colors.white.withValues(alpha: 0.6),
+                          fontSize: 12,
+                          height: 1.35,
                         ),
                       ),
                     ],
-                  ),
+                  ],
                 ),
+              ),
             ],
           ),
-          const SizedBox(height: T.s3),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: MoneyText(
-              summary.spend,
-              animate: false,
-              style: T.heroNumber,
-            ),
-          ),
-          const SizedBox(height: T.s2),
-          Text(
-            summary.daysElapsed >= 3
-                ? 'On track for about ${inr(summary.projectedSpend)} by ${summary.daysInMonth} ${_monthShort(summary.monthStart)}'
-                : '${summary.txnCount} payments so far',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: T.body.copyWith(
-              color: Colors.white.withValues(alpha: 0.82),
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: T.s4),
-          Divider(color: Colors.white.withValues(alpha: 0.18), height: 1),
-          const SizedBox(height: T.s4),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
-              // Three money columns only fit side by side at body size. Once
-              // text grows, reflow to two columns so values are not elided into
-              // unreadable stubs.
-              final twoColumns = constraints.maxWidth < 260 || scale >= 1.2;
-              if (!twoColumns) {
-                return Row(
-                  children: [
-                    for (final stat in stats)
-                      Expanded(
-                        child: _HeroStat(label: stat.label, value: stat.value),
-                      ),
-                  ],
-                );
-              }
-              final cellWidth = (constraints.maxWidth - T.s4) / 2;
-              return Wrap(
-                spacing: T.s4,
-                runSpacing: T.s3,
-                children: [
-                  for (final stat in stats)
-                    SizedBox(
-                      width: cellWidth,
-                      child: _HeroStat(label: stat.label, value: stat.value),
-                    ),
-                ],
-              );
-            },
-          ),
-          if (summary.transferPaise > 0) ...[
-            const SizedBox(height: T.s3),
-            Text(
-              'Excludes ${inrCompact(Paise(summary.transferPaise))} in card bills and transfers',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: T.bodySmall.copyWith(
-                color: Colors.white.withValues(alpha: 0.72),
-                fontSize: 12,
-                height: 1.35,
-              ),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
 
-  static String _monthShort(DateTime month) {
-    const names = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return names[month.month - 1];
-  }
+  static String _spoken(Paise amount) =>
+      inr(amount).replaceFirst('₹', '').replaceFirst('-', 'minus ');
 }
 
 class _HeroStat extends StatelessWidget {
@@ -362,18 +434,20 @@ class _HeroStat extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: T.label.copyWith(
-            color: Colors.white.withValues(alpha: 0.7),
+            color: Colors.white.withValues(alpha: 0.66),
             fontSize: 12,
+            letterSpacing: 0.3,
           ),
         ),
         const SizedBox(height: 3),
         Text(
           value,
           maxLines: 1,
+          softWrap: false,
           overflow: TextOverflow.ellipsis,
           style: T.money.copyWith(
             color: Colors.white,
-            fontSize: 15.5,
+            fontSize: 16,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -382,10 +456,42 @@ class _HeroStat extends StatelessWidget {
   }
 }
 
+class _HeroPatternPainter extends CustomPainter {
+  const _HeroPatternPainter({required this.ring, required this.glow});
+
+  final Color ring;
+  final Color glow;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..color = ring;
+    final center = Offset(size.width * 1.02, size.height * 0.04);
+    for (var i = 1; i <= 4; i++) {
+      canvas.drawCircle(center, size.width * 0.12 * i, paint);
+    }
+    final glowPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [glow, glow.withValues(alpha: 0)],
+      ).createShader(
+        Rect.fromCircle(
+          center: Offset(size.width * 0.15, size.height * 0.95),
+          radius: size.width * 0.55,
+        ),
+      );
+    canvas.drawRect(Offset.zero & size, glowPaint);
+  }
+
+  @override
+  bool shouldRepaint(_HeroPatternPainter oldDelegate) =>
+      oldDelegate.ring != ring || oldDelegate.glow != glow;
+}
+
 /// A one-row alert: icon, title plus at most two lines of body, trailing text
-/// action. The old stacked banner pushed the category section below the fold on
-/// a 412x915 phone, so the action moved to the right edge and the copy is
-/// bounded instead of allowed to wrap freely.
+/// action. Compact enough that three of them still leave the spend chart above
+/// the fold on a 412x915 phone.
 class _CompactNotice extends StatelessWidget {
   const _CompactNotice({
     required this.tone,
@@ -405,18 +511,20 @@ class _CompactNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = T.of(context);
     final (bg, fg) = switch (tone) {
-      PillTone.danger => (T.dangerSoft, T.danger),
-      PillTone.caution => (T.cautionSoft, T.caution),
-      PillTone.positive => (T.positiveSoft, T.positive),
-      PillTone.brand => (T.primarySoft, T.primary),
-      _ => (T.infoSoft, T.info),
+      PillTone.danger => (p.dangerSoft, p.danger),
+      PillTone.caution => (p.cautionSoft, p.caution),
+      PillTone.positive => (p.positiveSoft, p.positive),
+      PillTone.brand => (p.primarySoft, p.primary),
+      _ => (p.infoSoft, p.info),
     };
     return Container(
       padding: const EdgeInsets.fromLTRB(T.s3, T.s2, T.s1, T.s2),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(T.r3),
+        border: Border.all(color: fg.withValues(alpha: 0.12)),
       ),
       child: Row(
         children: [
@@ -529,7 +637,7 @@ class _Attention extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: T.s3),
           child: _CompactNotice(
             tone: PillTone.info,
-            icon: Icons.help_outline_rounded,
+            icon: Icons.help_rounded,
             title:
                 '${data.needsReview.length} payment${data.needsReview.length == 1 ? '' : 's'} to confirm',
             body:
@@ -546,6 +654,7 @@ class _Attention extends StatelessWidget {
   }
 
   void _showPhishing(BuildContext context, PhishingAlert alert) {
+    final p = T.of(context);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -563,17 +672,20 @@ class _Attention extends StatelessWidget {
                   icon: Icons.gpp_bad_rounded,
                 ),
                 const Spacer(),
-                Text(_timeOfDay(alert.receivedAt), style: T.bodySmall),
+                Text(clockTime(alert.receivedAt), style: T.bodySmall),
               ],
             ),
             const SizedBox(height: T.s4),
-            Text('From ${alert.sender}', style: T.cardTitle),
+            Text(
+              'From ${alert.sender}',
+              style: T.cardTitle.copyWith(color: p.ink),
+            ),
             const SizedBox(height: T.s3),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(T.s3),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerLow,
+                color: p.surfaceMuted,
                 borderRadius: BorderRadius.circular(T.r2),
               ),
               child: Text(
@@ -584,7 +696,10 @@ class _Attention extends StatelessWidget {
             const SizedBox(height: T.s4),
             Text(
               'Why this was flagged',
-              style: T.cardTitle.copyWith(fontWeight: FontWeight.w700),
+              style: T.cardTitle.copyWith(
+                fontWeight: FontWeight.w700,
+                color: p.ink,
+              ),
             ),
             const SizedBox(height: T.s2),
             Text(
@@ -611,11 +726,79 @@ class _Attention extends StatelessWidget {
       ),
     );
   }
+}
 
-  static String _timeOfDay(DateTime date) {
-    final hour = date.hour % 12 == 0 ? 12 : date.hour % 12;
-    final minute = date.minute.toString().padLeft(2, '0');
-    return '$hour:$minute ${date.hour < 12 ? 'am' : 'pm'}';
+class _PaceSection extends StatelessWidget {
+  const _PaceSection({required this.summary});
+
+  final MonthlySummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = T.of(context);
+    final dayCount = math.max(
+      summary.daysElapsed,
+      summary.dailySpend.length,
+    ).clamp(1, summary.daysInMonth);
+    final daily = List<int>.generate(
+      dayCount,
+      (i) => i < summary.dailySpend.length ? summary.dailySpend[i] : 0,
+    );
+    final previous = summary.previousSpend;
+
+    return SoftSection(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  "This month's pace",
+                  style: T.sectionTitle.copyWith(
+                    color: p.ink,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              const SizedBox(width: T.s2),
+              Pill(
+                '${summary.daysElapsed} of ${summary.daysInMonth} days',
+                tone: PillTone.brand,
+                dense: true,
+              ),
+            ],
+          ),
+          const SizedBox(height: T.s3),
+          DailyBars(
+            values: daily,
+            month: summary.monthStart,
+            todayIndex: (summary.daysElapsed - 1).clamp(0, daily.length - 1),
+            height: 82,
+          ),
+          const SizedBox(height: T.s3),
+          Divider(height: 1, color: p.primary.withValues(alpha: 0.14)),
+          const SizedBox(height: T.s3),
+          PaceBars(
+            spend: summary.spend,
+            projected: summary.projectedSpend,
+            previous: previous,
+          ),
+          if (summary.daysElapsed < summary.daysInMonth) ...[
+            const SizedBox(height: T.s3),
+            Text(
+              'Projection assumes the rest of the month spends like the first '
+              '${summary.daysElapsed} days.',
+              style: T.bodySmall.copyWith(
+                color: p.inkMuted,
+                fontSize: 12,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 
@@ -627,98 +810,23 @@ class _CategoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final top = summary.byCategory.take(5).toList(growable: false);
-
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SectionHeader(
             title: 'Where it went',
-            action: 'All categories',
+            action: 'Insights',
             onAction: onSeeAll,
             padding: EdgeInsets.zero,
           ),
           const SizedBox(height: T.s2),
-          for (var i = 0; i < top.length; i++) ...[
-            _CategoryRow(category: top[i], color: T.chart[i % T.chart.length]),
-            if (i != top.length - 1) const SizedBox(height: T.s3),
-          ],
+          CategoryDonut(
+            categories: summary.byCategory,
+            total: summary.spend,
+          ),
         ],
       ),
-    );
-  }
-}
-
-class _CategoryRow extends StatelessWidget {
-  const _CategoryRow({required this.category, required this.color});
-
-  final CategoryTotal category;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final change = category.change;
-    // Only a material move earns the extra pill; below 25% the amount and the
-    // category name are the information that matters.
-    final showChange = change.abs() >= 0.25 && category.previousPaise > 0;
-    return Column(
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            ),
-            const SizedBox(width: T.s2),
-            Expanded(
-              child: Text(
-                category.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: T.body.copyWith(
-                  color: scheme.onSurface,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            const SizedBox(width: T.s2),
-            // The amount is never flexed or ellipsized: it wins the row.
-            Text(
-              inr(category.amount),
-              maxLines: 1,
-              style: T.money.copyWith(fontSize: 14),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Padding(
-          padding: const EdgeInsets.only(left: 18),
-          child: Row(
-            children: [
-              Expanded(
-                child: ShareBar(share: category.share, color: color),
-              ),
-              if (showChange) ...[
-                const SizedBox(width: T.s2),
-                Semantics(
-                  label:
-                      '${change > 0 ? 'Up' : 'Down'} ${(change.abs() * 100).round()} percent vs last month',
-                  child: ExcludeSemantics(
-                    child: Pill(
-                      '${change > 0 ? '▲' : '▼'} ${(change.abs() * 100).round()}%',
-                      dense: true,
-                      tone: change > 0 ? PillTone.caution : PillTone.positive,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
@@ -734,18 +842,12 @@ class _CardStrip extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: T.s1),
-          child: SectionHeader(
-            title: 'Cards',
-            action: 'Manage',
-            onAction: onOpen,
-            padding: EdgeInsets.zero,
-          ),
+        SectionHeader(
+          title: 'Cards',
+          action: 'Manage',
+          onAction: onOpen,
+          padding: const EdgeInsets.only(bottom: T.s2, left: T.s1),
         ),
-        // A horizontal ListView needs a fixed height; at 1.3x the card content
-        // is taller than that fixed box. An intrinsic Row inside a horizontal
-        // scroll view lets the strip grow with the text instead of clipping it.
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           clipBehavior: Clip.none,
@@ -754,7 +856,14 @@ class _CardStrip extends StatelessWidget {
             children: [
               for (var i = 0; i < cards.length; i++) ...[
                 if (i > 0) const SizedBox(width: T.s3),
-                _MiniCard(metrics: cards[i], onTap: onOpen),
+                SizedBox(
+                  width: cards.length == 1 ? null : 238,
+                  child: CardFace(
+                    metrics: cards[i],
+                    compact: true,
+                    onTap: onOpen,
+                  ),
+                ),
               ],
             ],
           ),
@@ -762,107 +871,6 @@ class _CardStrip extends StatelessWidget {
       ],
     );
   }
-}
-
-class _MiniCard extends StatelessWidget {
-  const _MiniCard({required this.metrics, this.onTap});
-
-  final CardMetrics metrics;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final utilization = metrics.utilization;
-    final color = _bandColor(metrics.band);
-
-    return SizedBox(
-      width: 244,
-      child: AppCard(
-        onTap: onTap,
-        padding: const EdgeInsets.all(T.s4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    metrics.card.displayName,
-                    maxLines: 1,
-                    style: T.cardTitle,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Text(metrics.card.masked, maxLines: 1, style: T.bodySmall),
-              ],
-            ),
-            const SizedBox(height: T.s3),
-            // Percent, "used" and the band word wrap as a group so a long band
-            // label ("Excellent") moves to the next run at 1.3x instead of
-            // pushing the number out of the card.
-            Wrap(
-              spacing: T.s2,
-              runSpacing: T.s1,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      utilization == null
-                          ? '—'
-                          : '${(utilization * 100).round()}%',
-                      maxLines: 1,
-                      style: T.moneyLarge(
-                        utilization == null ? scheme.onSurface : color,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 3),
-                      child: Text('used', style: T.bodySmall),
-                    ),
-                  ],
-                ),
-                Pill(
-                  metrics.band.label,
-                  tone: _bandTone(metrics.band),
-                  dense: true,
-                ),
-              ],
-            ),
-            const SizedBox(height: T.s2),
-            ShareBar(share: utilization ?? 0, color: color, height: 5),
-            const SizedBox(height: T.s2),
-            Text(
-              utilization == null
-                  ? 'Add the card limit for utilisation'
-                  : '${inrCompact(metrics.outstanding)} of ${inrCompact(metrics.limit)}',
-              style: T.bodySmall,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static Color _bandColor(UtilizationBand band) => switch (band) {
-    UtilizationBand.excellent || UtilizationBand.healthy => T.positive,
-    UtilizationBand.watch => T.caution,
-    UtilizationBand.high || UtilizationBand.critical => T.danger,
-    UtilizationBand.unknown => T.inkMuted,
-  };
-
-  static PillTone _bandTone(UtilizationBand band) => switch (band) {
-    UtilizationBand.excellent || UtilizationBand.healthy => PillTone.positive,
-    UtilizationBand.watch => PillTone.caution,
-    UtilizationBand.high || UtilizationBand.critical => PillTone.danger,
-    UtilizationBand.unknown => PillTone.neutral,
-  };
 }
 
 class _InsightPreview extends StatelessWidget {
@@ -876,42 +884,55 @@ class _InsightPreview extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: T.s1),
-          child: SectionHeader(
-            title: 'Worth knowing',
-            action: 'All insights',
-            onAction: onSeeAll,
-            padding: EdgeInsets.zero,
-          ),
+        SectionHeader(
+          title: 'Worth knowing',
+          action: 'All insights',
+          onAction: onSeeAll,
+          padding: const EdgeInsets.only(bottom: T.s3, left: T.s1),
         ),
         for (final insight in insights.take(2)) ...[
           AppCard(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 4,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: insight.tone == InsightTone.positive
-                        ? T.positive
-                        : insight.tone == InsightTone.warning
-                        ? T.danger
-                        : insight.tone == InsightTone.caution
-                        ? T.caution
-                        : T.info,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
+                IconBadge(
+                  icon: _icon(insight.tone),
+                  color: _toneColor(context, insight.tone),
+                  size: 38,
+                  iconSize: 19,
                 ),
                 const SizedBox(width: T.s3),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(insight.title, style: T.cardTitle),
+                      Text(
+                        insight.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: T.cardTitle.copyWith(
+                          color: T.of(context).ink,
+                        ),
+                      ),
                       const SizedBox(height: 2),
-                      Text(insight.body, style: T.bodySmall),
+                      Text(
+                        insight.body,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: T.bodySmall.copyWith(
+                          color: T.of(context).inkMuted,
+                          height: 1.35,
+                        ),
+                      ),
+                      if (insight.amountPaise != null &&
+                          insight.amountPaise != 0) ...[
+                        const SizedBox(height: 6),
+                        MoneyText(
+                          Paise(insight.amountPaise!),
+                          style: T.money.copyWith(fontSize: 13),
+                          color: T.of(context).ink,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -923,6 +944,23 @@ class _InsightPreview extends StatelessWidget {
       ],
     );
   }
+
+  static IconData _icon(InsightTone tone) => switch (tone) {
+    InsightTone.warning => Icons.error_rounded,
+    InsightTone.caution => Icons.visibility_rounded,
+    InsightTone.positive => Icons.trending_up_rounded,
+    InsightTone.neutral => Icons.insights_rounded,
+  };
+
+  static Color _toneColor(BuildContext context, InsightTone tone) {
+    final p = T.of(context);
+    return switch (tone) {
+      InsightTone.warning => p.danger,
+      InsightTone.caution => p.caution,
+      InsightTone.positive => p.positive,
+      InsightTone.neutral => p.info,
+    };
+  }
 }
 
 class _RecentList extends StatelessWidget {
@@ -933,9 +971,10 @@ class _RecentList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = T.of(context);
     final recent = transactions.take(5).toList(growable: false);
     return AppCard(
-      padding: const EdgeInsets.fromLTRB(T.s4, T.s4, T.s4, T.s2),
+      padding: const EdgeInsets.fromLTRB(T.s4, T.s3, T.s4, T.s2),
       child: Column(
         children: [
           SectionHeader(
@@ -947,10 +986,7 @@ class _RecentList extends StatelessWidget {
           for (var i = 0; i < recent.length; i++) ...[
             _RecentRow(txn: recent[i]),
             if (i != recent.length - 1)
-              Divider(
-                height: 1,
-                color: Theme.of(context).colorScheme.outlineVariant,
-              ),
+              Divider(height: 1, color: p.outlineVariant),
           ],
         ],
       ),
@@ -965,23 +1001,20 @@ class _RecentRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final color = T.chart[txn.categoryKind.index % T.chart.length];
+    final p = T.of(context);
+    final color = categoryColor(context, txn.categoryKind);
     final isIncome = txn.kind == TxnKind.income;
     final isTransfer = txn.kind == TxnKind.transfer;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: T.s3),
+      padding: const EdgeInsets.symmetric(vertical: T.s2 + 2),
       child: Row(
         children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(T.r2),
-            ),
-            child: Icon(_iconFor(txn.categoryKind), size: 19, color: color),
+          IconBadge(
+            icon: categoryIcon(txn.categoryKind),
+            color: color,
+            size: 38,
+            iconSize: 19,
           ),
           const SizedBox(width: T.s3),
           Expanded(
@@ -991,8 +1024,8 @@ class _RecentRow extends StatelessWidget {
                 Text(
                   txn.title,
                   style: T.body.copyWith(
-                    color: scheme.onSurface,
-                    fontWeight: FontWeight.w500,
+                    color: p.ink,
+                    fontWeight: FontWeight.w600,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1000,7 +1033,7 @@ class _RecentRow extends StatelessWidget {
                 const SizedBox(height: 1),
                 Text(
                   _subtitle(txn),
-                  style: T.bodySmall.copyWith(color: scheme.onSurfaceVariant),
+                  style: T.bodySmall.copyWith(color: p.inkMuted),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -1008,20 +1041,19 @@ class _RecentRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: T.s2),
-          Text(
-            '${isIncome
+          MoneyText(
+            txn.amount,
+            prefix: isIncome
                 ? '+'
                 : isTransfer
-                ? ''
-                : '−'}${inr(txn.amount)}',
-            style: T.money.copyWith(
-              fontSize: 14,
-              color: isIncome
-                  ? T.primary
-                  : isTransfer
-                  ? scheme.onSurfaceVariant
-                  : scheme.onSurface,
-            ),
+                ? null
+                : '−',
+            style: T.money.copyWith(fontSize: 14),
+            color: isIncome
+                ? p.primary
+                : isTransfer
+                ? p.inkMuted
+                : p.ink,
           ),
         ],
       ),
@@ -1044,45 +1076,9 @@ class _RecentRow extends StatelessWidget {
         date.year == today.year &&
         date.month == today.month &&
         date.day == today.day;
-    final hour = date.hour % 12 == 0 ? 12 : date.hour % 12;
-    final minute = date.minute.toString().padLeft(2, '0');
-    final clock = '$hour:$minute ${date.hour < 12 ? 'am' : 'pm'}';
-    if (isToday) return clock;
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${date.day} ${months[date.month - 1]}';
+    if (isToday) return clockTime(date);
+    return shortDate(date);
   }
-
-  static IconData _iconFor(SpendCategoryKind kind) => switch (kind) {
-    SpendCategoryKind.food => Icons.restaurant_rounded,
-    SpendCategoryKind.groceries => Icons.shopping_basket_rounded,
-    SpendCategoryKind.transport => Icons.directions_car_rounded,
-    SpendCategoryKind.shopping => Icons.shopping_bag_rounded,
-    SpendCategoryKind.bills => Icons.receipt_long_rounded,
-    SpendCategoryKind.rent => Icons.home_rounded,
-    SpendCategoryKind.entertainment => Icons.movie_rounded,
-    SpendCategoryKind.health => Icons.favorite_rounded,
-    SpendCategoryKind.education => Icons.school_rounded,
-    SpendCategoryKind.travel => Icons.flight_takeoff_rounded,
-    SpendCategoryKind.fuel => Icons.local_gas_station_rounded,
-    SpendCategoryKind.investments => Icons.trending_up_rounded,
-    SpendCategoryKind.transfers => Icons.swap_horiz_rounded,
-    SpendCategoryKind.income => Icons.south_west_rounded,
-    SpendCategoryKind.cash => Icons.atm_rounded,
-    SpendCategoryKind.other => Icons.circle_outlined,
-  };
 }
 
 class _PrivacyFooter extends StatelessWidget {
@@ -1093,7 +1089,7 @@ class _PrivacyFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final p = T.of(context);
     final parts = <String>[
       if (smsRead > 0) '$smsRead messages read',
       if (needsReview > 0) '$needsReview to confirm',
@@ -1102,13 +1098,13 @@ class _PrivacyFooter extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(Icons.lock_outline_rounded, size: 14, color: muted),
+        Icon(Icons.lock_rounded, size: 14, color: p.inkMuted),
         const SizedBox(width: 6),
         Flexible(
           child: Text(
             parts.join(' · '),
             textAlign: TextAlign.center,
-            style: T.bodySmall.copyWith(color: muted),
+            style: T.bodySmall.copyWith(color: p.inkMuted, fontSize: 12),
           ),
         ),
       ],
@@ -1160,13 +1156,15 @@ class _HomeSkeleton extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.all(T.s5),
         children: const [
-          SkeletonBox(height: 34, width: 180),
+          SkeletonBox(height: 30, width: 190),
           SizedBox(height: T.s5),
-          SkeletonBox(height: 200, radius: 20),
+          SkeletonBox(height: 300, radius: T.r4),
           SizedBox(height: T.s4),
-          SkeletonBox(height: 120, radius: 16),
+          SkeletonBox(height: 64, radius: T.r3),
+          SizedBox(height: T.s3),
+          SkeletonBox(height: 288, radius: T.r4),
           SizedBox(height: T.s4),
-          SkeletonBox(height: 180, radius: 16),
+          SkeletonBox(height: 238, radius: T.r3),
         ],
       ),
     );
