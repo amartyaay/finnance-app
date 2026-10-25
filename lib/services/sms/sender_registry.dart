@@ -88,13 +88,18 @@ class SenderRegistry {
     'MFUTRL': (name: 'Mutual funds', kind: 'broker'),
     'AIRTEL': (name: 'Airtel', kind: 'telecom'),
     'JIO': (name: 'Jio', kind: 'telecom'),
+    'JIOPAY': (name: 'Jio', kind: 'telecom'),
+    'AIRINF': (name: 'Airtel', kind: 'telecom'),
+    'AIRBNK': (name: 'Airtel Payments Bank', kind: 'bank'),
+    'CBSSBI': (name: 'SBI', kind: 'bank'),
     'VIIN': (name: 'Vi', kind: 'telecom'),
   };
 
   /// Merchant-side headers: these send the *shop's* receipt, not the user's
   /// bank alert, so they can never create a ledger row on their own.
   static const Set<String> merchantSenders = {
-    'SWIGGY', 'ZEPTON', 'FLPKRT', 'BLNKIT', 'JIOHTT', 'CDMILK',
+    'SWIGGY', 'ZEPTON', 'FLPKRT', 'BLNKIT', 'JIOHTT', 'CDMILK', 'PHRMSY',
+    'GOVTAP',
   };
 
   /// Benefit-card headers (meal/flexi cards). They report the user's own wallet

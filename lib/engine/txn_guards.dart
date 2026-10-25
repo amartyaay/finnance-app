@@ -19,6 +19,10 @@ class TxnGuards {
 
     final lower = body.toLowerCase();
     if (SmsGuards.notMovedYet(lower)) return false;
+    // A biller's receipt has no money verb ("Recharge successful"); it was
+    // admitted by `SmsGuards.paidReceipt`, and the dedupe engine drops it
+    // whenever a bank alert reports the same payment.
+    if (txn.sourceType == TxnSourceType.receipt) return true;
     if (!SmsGuards.moneyMoved(lower)) return false;
     if (SmsGuards.merchantReceipt(lower) && !_hasBankEvidence(txn)) return false;
     if (txn.sender != null && !_hasBankEvidence(txn)) {

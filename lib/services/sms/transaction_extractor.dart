@@ -39,8 +39,8 @@ class TransactionExtractor {
 
   static final RegExp _walletLoad = RegExp(
     r'\b(?:upi\s*lite|wallet|paytm\s*wallet|amazon\s*pay\s*balance|mobikwik)\b.{0,50}'
-    r'\b(?:top\s*up|topup|load(?:ed)?|add(?:ed)?\s*(?:money|cash)|recharge|credit)\b|'
-    r'\b(?:top\s*up|topup|load(?:ed)?)\b.{0,40}\b(?:upi\s*lite|wallet)\b|'
+    r'\b(?:top[\s-]*up|topup|load(?:ed)?|add(?:ed)?\s*(?:money|cash)|recharge|credit)\b|'
+    r'\b(?:top[\s-]*up|topup|load(?:ed)?)\b.{0,40}\b(?:upi\s*lite|wallet)\b|'
     r'\badd(?:ed)?\s+to\s+(?:your\s+)?(?:paytm|amazon\s*pay|mobikwik|phonepe|google\s*pay)?\s*wallet\b',
     caseSensitive: false,
   );
@@ -100,12 +100,14 @@ class TransactionExtractor {
     r'\bclosure of (?:td|fd|term\s*deposit|fixed\s*deposit)\b|'
     r'\b(?:td|fd)\s*closure\b|\bon account of closure\b|'
     r'\b(?:maturity|matured)\b.{0,30}\b(?:proceeds|credited|paid)\b|'
-    r'\bredemption\b|\bswitched?\s+out\b',
+    r'\bredemption\b|\bswitched?\s+out\b|'
+    // Broker payouts (sale proceeds, unused margin) are the user's own money.
+    r'\b(?:gr[o0]ww|zerodha|upstox|angel one|angel broking|icici securities)\b',
     caseSensitive: false,
   );
 
   static final RegExp _refundWord = RegExp(
-    r'\b(?:refund(?:ed)?|reversal|reversed|chargeback|returned)\b',
+    r'\b(?:refund(?:ed)?|reversal|reversed|chargeback|returned|vref)\b',
     caseSensitive: false,
   );
 
@@ -211,6 +213,11 @@ class TransactionExtractor {
     caseSensitive: false,
   );
 
+  static final RegExp _bracketRrn = RegExp(
+    r'\(\s*upi\s*(?:ref\s*)?(\d{12})\s*\)',
+    caseSensitive: false,
+  );
+
   static final RegExp _orderRef = RegExp(
     r'\border(?:\s*id)?(?:\s*is|:|\s)\s*([A-Z0-9][A-Z0-9-]{5,24})\b|'
     r'\b([A-Z0-9][A-Z0-9-]{5,24})\s+is your order id\b',
@@ -218,7 +225,7 @@ class TransactionExtractor {
   );
 
   static final RegExp _refKeyword = RegExp(
-    r'\b(?:ref(?:erence)?|utr|rrn|txn(?:\s*(?:id|no\.?|#))?|transaction\s*(?:id|no\.?)|'
+    r'\b(?:ref(?:erence)?|refno|utr|rrn|txn(?:\s*(?:id|no\.?|#))?|transaction\s*(?:id|no\.?)|'
     r'trf\s*ref|imps\s*ref|neft\s*ref|cheque\s*(?:no\.?)?|nach(?:\s*mandate)?|mandate|loan)\b'
     r'\s*(?:no\.?|id)?\s*[:#.\-]*\s*([A-Z0-9][A-Z0-9*/-]{3,24})',
     caseSensitive: false,
@@ -267,6 +274,25 @@ class TransactionExtractor {
   /// SBI's person-to-person phrasing: `-Transferred to Mr. NAME. Avl Balance …`.
   static final RegExp _p2pPayee = RegExp(
     r'\btransferred\s+to\s+((?:Mr|Mrs|Ms|Dr)\.?\s+)?([A-Za-z][A-Za-z .]{2,40}?)[.,]?\s+(?:Avl|Available|$)',
+    caseSensitive: false,
+  );
+
+  /// SBI UPI: `debited by 60.00 on date 11Aug26 trf to M S SHRINGERI KI Refno …`.
+  static final RegExp _sbiUpiPayee = RegExp(
+    r'\bdebited by\b.{0,60}?\btrf\s+to\s+(.{2,40}?)\s+refno\b',
+    caseSensitive: false,
+  );
+
+  /// Payment apps and billers that forward money elsewhere.
+  static final RegExp _paymentAppPayee = RegExp(
+    r'^(?:phonepe|paytm|cred\b|mobikwik|amazon\s*pay|billdesk|google\s*pay|gpay|'
+    r'freecharge|razorpay|payu|cashfree)',
+    caseSensitive: false,
+  );
+
+  /// `trf to Bank Account XXX` — the user moving money to another own account.
+  static final RegExp _ownAccountPayee = RegExp(
+    r'^(?:bank\s+)?a(?:ccount|/c)\b|^self\b',
     caseSensitive: false,
   );
 
@@ -340,11 +366,20 @@ class TransactionExtractor {
 
     // A reminder, decline, collect request or mandate set-up never posts a row.
     if (SmsGuards.notMovedYet(lower)) return null;
+    // A biller's confirmation with no bank evidence of its own becomes a
+    // `receipt` row (counted only when no bank alert covers the payment).
+    if (SmsGuards.paidReceipt(lower) &&
+        sender.dltCategory != 'P' &&
+        !_bankEvidence.hasMatch(lower)) {
+      return _receiptTxn(message, sender, body);
+    }
     // A merchant's own receipt header (Swiggy, Zepto, …) is never our account.
     if (registry.isMerchantReceiptSender(sender)) return null;
     // No order without a completed movement of money: an offer, eligibility or
     // limit figure is not a payment.
     if (!SmsGuards.moneyMoved(lower)) return null;
+    // The fund house's unit confirmation duplicates the bank's SIP debit.
+    if (SmsGuards.fundHouseConfirmation(lower)) return null;
     // A merchant-side receipt is the payer's copy, not the user's account (K14).
     if (SmsGuards.merchantReceipt(lower) &&
         amountFinder.balanceAfter(body) == null &&
@@ -360,8 +395,20 @@ class TransactionExtractor {
     final cash = _cash.hasMatch(lower);
     // "Transferred to Mr. X" and SBI's "debit by transfer" move money out of the
     // account to another account — they are transfers, not consumption.
-    final bankTransfer =
-        _p2pPayee.hasMatch(body) || _debitByTransfer.hasMatch(lower);
+    // SBI's UPI debit names the payee after "trf to": a shop far more often
+    // than a person (gold set: 10 of 11), so it is spend unless it is the
+    // user's own bank account.
+    final sbiPayee = _sbiUpiPayee.firstMatch(body)?.group(1)?.trim();
+    final sbiSelf = sbiPayee != null && _ownAccountPayee.hasMatch(sbiPayee);
+    // "trf to PhonePe" / "trf to CRED": the app is a pipe, not the shop. A
+    // ₹72,570 "to PhonePe" was a card bill; it must never land in spend
+    // unasked, so it is a transfer the user is asked about.
+    final viaPaymentApp =
+        sbiPayee != null && _paymentAppPayee.hasMatch(sbiPayee);
+    final bankTransfer = _p2pPayee.hasMatch(body) ||
+        sbiSelf ||
+        viaPaymentApp ||
+        (sbiPayee == null && _debitByTransfer.hasMatch(lower));
     // Money-in taxonomy first: a card-bill credit, refund, TD redemption or
     // wallet load must never be treated as income (only salary/interest are).
     final moneyIn = isCredit
@@ -381,6 +428,10 @@ class TransactionExtractor {
     final isTransferInflow = transferInflows.contains(moneyIn);
     final transferReason = isTransferInflow
         ? moneyIn.asTransferReason
+        : sbiSelf
+        ? TransferReason.selfTransfer
+        : viaPaymentApp && RegExp(r'^cred\b', caseSensitive: false).hasMatch(sbiPayee)
+        ? TransferReason.creditCardBill
         : (moneyIn.isInflow
               ? TransferReason.none
               : _transferReason(lower, isCredit: isCredit));
@@ -406,7 +457,8 @@ class TransactionExtractor {
     final cardLast4 = _extractCardLast4(body, sender);
     final issuer = _issuer(lower, sender);
     final vpa = _counterpartyVpa(body);
-    final merchant = _merchant(body, cash: cash, keepCompanySuffix: isCredit) ??
+    final merchant = (sbiPayee != null && !sbiSelf ? sbiPayee : null) ??
+        _merchant(body, cash: cash, keepCompanySuffix: isCredit) ??
         _cardPostTimestampMerchant(body) ??
         _p2pMerchant(body);
     final balance = amountFinder.balanceAfter(body);
@@ -425,13 +477,14 @@ class TransactionExtractor {
       balanceFound: balance != null,
     );
 
-    final needsReview = ReviewQueue.shouldReview(
-      kind: kind,
-      confidence: confidence,
-      merchant: merchant,
-      vpa: vpa,
-      amountScore: best.score,
-    );
+    final needsReview = viaPaymentApp ||
+        ReviewQueue.shouldReview(
+          kind: kind,
+          confidence: confidence,
+          merchant: merchant,
+          vpa: vpa,
+          amountScore: best.score,
+        );
 
     return Txn(
       key: 'sms:${smsContentId(sender: message.sender, receivedAtMs: message.receivedAtMs, body: message.body)}',
@@ -459,6 +512,32 @@ class TransactionExtractor {
     );
   }
 
+  /// Words only the user's own bank prints: an account/card mask or a balance.
+  static final RegExp _bankEvidence = RegExp(
+    r'\ba/c\b|\bacct?\b|\baccount\s*(?:no|number|x)|\bcard\s*(?:no\.?|ending|xx|x\d|\*)|'
+    r'\bavl\.?\s*(?:bal|lmt|limit)|\bavailable\s*(?:balance|limit)',
+    caseSensitive: false,
+  );
+
+  Txn? _receiptTxn(SmsMessage message, SenderId sender, String body) {
+    final amount =
+        amountFinder.best(body)?.paise ?? SmsGuards.planAmountPaise(body);
+    if (amount == null || amount <= 0) return null;
+    return Txn(
+      key: 'sms:${smsContentId(sender: message.sender, receivedAtMs: message.receivedAtMs, body: message.body)}',
+      occurredAtMs: message.receivedAtMs,
+      amountPaise: amount,
+      kind: TxnKind.spend,
+      instrument: Instrument.unknown,
+      sender: sender.normalized,
+      merchant: sender.entity ?? _titleCase(sender.normalized),
+      referenceId: _reference(body),
+      confidence: 0.6,
+      sourceType: TxnSourceType.receipt,
+      rawBody: body,
+    );
+  }
+
   bool _isCreditMessage(String lower) {
     // A reversal credits the account even when the original verb was "debited".
     if (SmsGuards.isReversal(lower)) return true;
@@ -467,7 +546,7 @@ class TransactionExtractor {
       return false;
     }
     return RegExp(
-      r'\b(?:credited|received|refund(?:ed)?|deposited|deposit|cashback)\b',
+      r'\b(?:credited|received|refund(?:ed)?|deposited|deposit|cashback|has credit for)\b',
     ).hasMatch(lower);
   }
 
@@ -883,6 +962,10 @@ class TransactionExtractor {
       if (RegExp(r'^\*\d+$').hasMatch(tail)) return tail.substring(1);
       return token;
     }
+    // HDFC credit: "from VPA 74…@axl (UPI 649507747508)" — the 12-digit RRN
+    // the paying bank also prints, which is what pairs the two legs.
+    final rrn = _bracketRrn.firstMatch(body);
+    if (rrn != null) return rrn.group(1);
     for (final match in _upiPayloadRef.allMatches(body)) {
       if (match.end < body.length && body[match.end] == '@') continue; // a VPA, not a ref
       return match.group(1)!.toUpperCase();

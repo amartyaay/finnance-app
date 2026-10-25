@@ -22,6 +22,11 @@ iteration. Working branch: `main` (single-developer repo).
 | 9 | **Screen listing all SMS with manual categorisation**, remembered and applied to previous transactions; **optional**, never compulsory. | Done and reachable: Settings › Data › "All messages", plus the dismissible review banner. "Every payment from X" rewrites history and stores a rule; Settings › Learned categories has undo. |
 | 10 | "Work on UI/UX, make it fancy, modern and good looking, along with backend/data." | Redesign landed and device-verified (`9c55679`), then wired to the real data (`abd2f3f`): true hero, inbox door, learned-rules list. Round-2 end-user score 5.3 → **6.8**. |
 | 11 | "Keep updating the goal file and keep doing git commits." | This file, updated every round; every iteration is committed. |
+| 12 | Session 3 focus: **spam identification**; "very very accurate" on SMS that show expenses. | In progress. Gold answer key: 2 000 real messages hand-labelled (`docs/eval/gold-labelling.md`, data in gitignored `.local/gold/`). |
+| 13 | **Screen to upload an SBI bank statement with a password field**; find salary; per salary-to-salary cycle, categorise expenses. | In progress. Research `docs/research/07-sbi-statement.md`. |
+| 14 | Classifier: "super accurate", budget **≤ $2–3 / year**, cheapest best, on-device (S24 FE) preferred; network allowed only for classification. | In progress. Research `docs/research/08-classifier-budget.md`. |
+| 15 | **A subagent whose whole job is checking accuracy**: classification accuracy, spam counted, double counts. | In progress: `tool/audit_accuracy.dart` against the gold set + an auditor agent each round. |
+| 16 | No Google sign-in, no account, no network (except optional classification). | Holds: no INTERNET use at runtime. |
 
 ## Decisions to keep (with evidence)
 

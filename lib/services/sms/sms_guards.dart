@@ -12,7 +12,10 @@ class SmsGuards {
     r'\b(?:was declined|is declined|has been declined|declined|'
     r'no amount has been debited|has not been debited|not been debited|'
     r'has failed|failed to|requested (?:money|rs|inr|₹)|has requested|'
-    r'payment request|collect request|approving the request)\b',
+    r'payment request|collect request|approving the request|'
+    // A card spend restated as EMI is the same purchase, not new money.
+    r'converted to \d+ months? emi|'
+    r'terminated due to)\b',
     caseSensitive: false,
   );
 
@@ -51,6 +54,48 @@ class SmsGuards {
 
   static bool merchantReceipt(String lower) => _receipt.hasMatch(lower);
 
+  /// A merchant/biller confirming the user's **completed** payment: "Recharge
+  /// of INR 361.00 is successful", "Amount paid: Rs.349.00", "Your Swiggy
+  /// Order … was successfully paid", "Booking confirmed … for Rs. 7950". Often
+  /// the only record of a card or UPI payment whose bank alert never came, so
+  /// it becomes a `receipt` row that the dedupe engine folds into the bank
+  /// alert whenever there is one.
+  static final RegExp _paidReceipt = RegExp(
+    r'\brecharge (?:of (?:inr|rs\.?|₹)\s*[\d,.]+ )?(?:is |was |has been )?successful|'
+    r'\brecharge successful\b|রিচার্জ সফল|'
+    r'\b(?:bill )?payment of (?:inr|rs\.?|₹)\s*[\d,.]+ (?:was|is|has been) successful|'
+    r'\bwas successfully paid\b|\bsuccessfully paid\b|\bamount paid\s*:|'
+    r'\bpayment confirmed\b|'
+    r'\bbooking confirmed\b.{0,120}\bfor (?:inr|rs\.?|₹)|'
+    r'\bwe have processed (?:inr|rs\.?|₹)|'
+    r'\byour payment of (?:inr|rs\.?|₹)\s*[\d,.]+ has been received\b|'
+    r'\bhas been deducted from your \w+ wallet\b',
+    caseSensitive: false,
+  );
+
+  static final RegExp _receiptVeto = RegExp(
+    r'\b(?:refund|failed|pending|cancel+ed|could have|could.ve|you can|'
+    r'get (?:upto|up to|flat)|offer)\b',
+    caseSensitive: false,
+  );
+
+  /// Jio prints the price as the plan name: "Recharge Successful ! Plan Name :
+  /// 666.00 Jio Number : …" — no currency marker for the amount finder.
+  static final RegExp _planAmount = RegExp(
+    r'(?:plan name|প্ল্যানের নাম)\s*:\s*(\d{1,6}(?:\.\d{1,2})?)\b',
+    caseSensitive: false,
+  );
+
+  static int? planAmountPaise(String body) {
+    final match = _planAmount.firstMatch(body);
+    if (match == null) return null;
+    final value = double.tryParse(match.group(1)!);
+    return value == null || value <= 0 ? null : (value * 100).round();
+  }
+
+  static bool paidReceipt(String lower) =>
+      _paidReceipt.hasMatch(lower) && !_receiptVeto.hasMatch(lower);
+
   /// A reversal/chargeback returns money *to* the account that raised the debit,
   /// even when the message also says "debited" (G05).
   static final RegExp _reversal = RegExp(
@@ -82,11 +127,28 @@ class SmsGuards {
   static final RegExp _moneyMoved = RegExp(
     r'\b(?:debited|debit(?:ed)?|spent|paid|payment of|sent|withdrawn|withdrew|'
     r'charged|credited|refund(?:ed)?|deposited|deposit|reversed|deducted|billed|'
-    r'transferred|received|purchase[sd]?|invested|allotted)\b',
+    r'transferred|received|purchase[sd]?|invested|allotted|has credit for)\b|'
+    r'\btop[\s-]*up\b.{0,40}\bsuccessful\b|'
+    // SBI debit-card POS alerts carry no verb: "transaction number … for
+    // Rs.331.45 by SBI Debit Card X7361 done at 99999999 on 22Jun26".
+    r'\bdebit card [x*]*\d{3,4} done at\b',
     caseSensitive: false,
   );
 
   static bool moneyMoved(String lower) => _moneyMoved.hasMatch(lower);
+
+  /// A fund house / RTA confirming units for an SIP or purchase ("SIP Purchase
+  /// in Folio … processed at the NAV of 18.78 for 159.736 units"). It is the
+  /// receipt for a debit the bank already reported, so it never posts a row.
+  static final RegExp _folio = RegExp(r'\bfolio\b', caseSensitive: false);
+  static final RegExp _unitsWording = RegExp(
+    r'\b(?:nav|units?|allotment|allotted|sip (?:purchase|instalment|request)|'
+    r'systematic purchase|purchase of rs)\b',
+    caseSensitive: false,
+  );
+
+  static bool fundHouseConfirmation(String lower) =>
+      _folio.hasMatch(lower) && _unitsWording.hasMatch(lower);
 
   /// Bank footers like `SMS BLOCK 696 to 7459648006` are opt-out furniture, not
   /// a "your account is blocked" lure (H01-H04).

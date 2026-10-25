@@ -154,7 +154,16 @@ class Txn {
   }
 }
 
-enum TxnSourceType { sms, csv, manual }
+enum TxnSourceType {
+  sms,
+  csv,
+  manual,
+
+  /// A merchant's own confirmation ("Recharge of INR 361 successful"). It
+  /// only counts when no bank or card alert reports the same payment; the
+  /// dedupe engine folds it into that alert otherwise.
+  receipt,
+}
 
 /// A credit-card bill/statement reminder captured from an SMS.
 class CardBillNotice {

@@ -45,3 +45,7 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 /android/.kotlin/
+
+# Real personal data and review scratch — never commit
+/.local/
+/.review_tmp/

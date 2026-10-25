@@ -41,7 +41,7 @@ class MainActivity : FlutterActivity() {
                             return@setMethodCallHandler
                         }
 
-                        val limit = (call.argument<Int>("limit") ?: 1000).coerceIn(1, 5000)
+                        val limit = (call.argument<Int>("limit") ?: 1000).coerceIn(1, 20000)
                         val sinceMillis = call.argument<Number>("sinceMillis")?.toLong()
                         result.success(readInbox(limit, sinceMillis))
                     }

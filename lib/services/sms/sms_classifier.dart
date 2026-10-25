@@ -25,12 +25,15 @@ class SmsClassifier {
   static final RegExp _debitVerb = RegExp(
     r'\b(debited|debit(?:ed)? (?:by|with|for)|spent|spent on|paid|payment of|'
     r'purchase[d]?|charged|withdrawn|withdrew|sent|transferred|billed|'
-    r'txn of|transaction of|used for|deducted)\b',
+    r'txn of|transaction of|used for|deducted)\b|'
+    r'\btop[\s-]*up\b.{0,40}\bsuccessful\b|'
+    // SBI debit-card POS: "for Rs.331.45 by SBI Debit Card X7361 done at …".
+    r'\bdebit card [x*]*\d{3,4} done at\b',
     caseSensitive: false,
   );
   static final RegExp _creditVerb = RegExp(
     r'\b(credited|credit received|received from|deposited|refund(?:ed)?|'
-    r'reversal|reversed|chargeback|cashback credited|money received)\b',
+    r'reversal|reversed|chargeback|cashback credited|money received|has credit for)\b',
     caseSensitive: false,
   );
 
@@ -400,7 +403,7 @@ class SmsClassifier {
 
     final url = _firstUrl(lower, body);
     final risk = url == null
-        ? (suspicious: false, impersonation: false)
+        ? (suspicious: false, impersonation: false, owned: false)
         : _urlRisk(url);
     final suspiciousUrl = risk.suspicious;
     final impersonation = risk.impersonation;
@@ -442,7 +445,10 @@ class SmsClassifier {
         scamTemplate ||
         impersonation ||
         (preciousPretext && badChannel) ||
-        (kycLure && threat) ||
+        // The issuer's own KYC reminder on its own domain from its registered
+        // header ("A/c will be blocked as KYC is due, update at i.airtel.in")
+        // is pushy, not fraud. Gold set: 5 of 5 such messages are genuine.
+        (kycLure && threat && !(_ownsLink(sender, url, risk.owned) && sender.trust == SenderTrust.known)) ||
         (fraudTemplate && threat) ||
         (sender.trust == SenderTrust.suspicious &&
             callToAction &&
@@ -461,12 +467,26 @@ class SmsClassifier {
         sender.trust != SenderTrust.suspicious;
     // The merchant's own receipt (Swiggy, Zepto, …) is not the user's account.
     final merchantSender = registry.isMerchantReceiptSender(sender);
+    final paidReceipt = !notMoved &&
+        SmsGuards.paidReceipt(lower) &&
+        (amount != null || SmsGuards.planAmountPaise(body) != null) &&
+        sender.dltCategory != 'P' &&
+        sender.trust != SenderTrust.suspicious;
 
     SmsClass cls;
     if (strongPhish) {
       cls = SmsClass.phishing;
-    } else if (notMoved || receipt || merchantSender) {
-      // Nothing has moved yet: bill due, decline, collect request, mandate set-up.
+    } else if (paidReceipt) {
+      // A biller/merchant confirming a completed payment. It posts as a
+      // `receipt` row and only counts when no bank alert covers it.
+      cls = SmsClass.transaction;
+      signals.add(const SmsSignal('merchant_receipt', 3,
+          detail: 'Merchant confirms a completed payment'));
+    } else if (notMoved || receipt || merchantSender ||
+        SmsGuards.fundHouseConfirmation(lower)) {
+      // Nothing has moved yet (bill due, decline, collect request, mandate
+      // set-up), or a fund house is confirming units for a debit the bank
+      // already reported — counting both was 12 of 18 double counts.
       cls = SmsClass.informational;
     } else if (genuineTransaction) {
       cls = SmsClass.transaction;
@@ -478,6 +498,14 @@ class SmsClassifier {
       cls = SmsClass.transaction;
     } else {
       cls = SmsClass.unknown;
+    }
+    // A `-P` header is promotional by TRAI's DLT rules, whatever the copy says
+    // ("Your bill payment of Rs.2249 was successful. You could've paid less
+    // with…"). The real alert for the same payment arrives on an `-S` header.
+    if (cls == SmsClass.transaction && sender.dltCategory == 'P') {
+      cls = SmsClass.promo;
+      signals.add(const SmsSignal('dlt_promotional_veto', -6,
+          detail: 'Promotional (-P) headers never post a transaction'));
     }
 
     final score = _confidenceFor(
@@ -548,6 +576,25 @@ class SmsClassifier {
     'indiapost': ['indiapost.gov.in'],
   };
 
+  /// Domains a registered header is known to own, for brands whose own
+  /// domain is too generic to list as a brand (`airtel` would also match
+  /// `airtelxstream.in` adverts).
+  static const Map<String, List<String>> _headerDomains = {
+    'AIRBNK': ['airtel.in'],
+    'AIRTEL': ['airtel.in'],
+    'AIRINF': ['airtel.in'],
+    'JIOPAY': ['jio.com'],
+  };
+
+  bool _ownsLink(SenderId sender, String? url, bool brandOwned) {
+    if (brandOwned) return true;
+    if (url == null) return false;
+    final domains = _headerDomains[sender.normalized];
+    if (domains == null) return false;
+    final host = _hostOf(url);
+    return domains.any((d) => host == d || host.endsWith('.$d'));
+  }
+
   /// Suffixes governed by a real institution (RBI's `.bank.in`, the government
   /// domains). A host under one of these is never a lookalike.
   static const Set<String> _trustedSuffixes = {
@@ -587,10 +634,10 @@ class SmsClassifier {
     return labels.sublist(labels.length - 2).join('.');
   }
 
-  ({bool suspicious, bool impersonation}) _urlRisk(String url) {
+  ({bool suspicious, bool impersonation, bool owned}) _urlRisk(String url) {
     final host = _hostOf(url);
     if (_trustedSuffixes.any(host.endsWith)) {
-      return (suspicious: false, impersonation: false);
+      return (suspicious: false, impersonation: false, owned: true);
     }
     final registrable = _registrableDomain(host);
     // A host that names a brand must be that brand's own domain.
@@ -608,19 +655,21 @@ class SmsClassifier {
       final trusted = entry.value.any(
         (domain) => registrable == domain || host.endsWith('.$domain'),
       );
-      if (!trusted) return (suspicious: true, impersonation: true);
-      return (suspicious: false, impersonation: false);
+      if (!trusted) {
+        return (suspicious: true, impersonation: true, owned: false);
+      }
+      return (suspicious: false, impersonation: false, owned: true);
     }
     if (_shorteners.contains(host)) {
-      return (suspicious: true, impersonation: false);
+      return (suspicious: true, impersonation: false, owned: false);
     }
     if (RegExp(r'^\d{1,3}(?:\.\d{1,3}){3}$').hasMatch(host)) {
-      return (suspicious: true, impersonation: false);
+      return (suspicious: true, impersonation: false, owned: false);
     }
     if (_oddTlds.any(registrable.endsWith)) {
-      return (suspicious: true, impersonation: false);
+      return (suspicious: true, impersonation: false, owned: false);
     }
-    return (suspicious: false, impersonation: false);
+    return (suspicious: false, impersonation: false, owned: false);
   }
 
   double _confidenceFor({

@@ -29,6 +29,9 @@ import 'finance_repository.dart';
 /// Ownership: this class is the only writer of `transactions`. The Kotlin
 /// receiver only appends to `sms_messages`, so parsing lives in one place.
 class SqliteFinanceRepository implements FinanceRepository, InboxStore {
+  /// Upper bound on one inbox read; the native side clamps to the same value.
+  static const int maxInboxRead = 15000;
+
   SqliteFinanceRepository({
     AppDatabase? database,
     SmsInboxReader? reader,
@@ -154,9 +157,12 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
 
     List<SmsMessage> incoming;
     try {
+      // A year of history, uncapped in practice: salary cycles, recurring
+      // payments and card statements need more than the newest 2 000 alerts
+      // (the owner's phone holds 8 000+ messages over ~20 months).
       incoming = await _reader.readInbox(
-        limit: 2000,
-        sinceMillis: now.subtract(const Duration(days: 365)).millisecondsSinceEpoch,
+        limit: maxInboxRead,
+        sinceMillis: now.subtract(const Duration(days: 400)).millisecondsSinceEpoch,
       );
     } on UnsupportedError {
       rethrow;
@@ -165,14 +171,18 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
       rethrow;
     }
 
+    // One batch, not one transaction per row: 8 000 single inserts take tens
+    // of seconds on a phone.
+    final batch = db.batch();
     for (final message in incoming) {
-      await db.insert('sms_messages', {
+      batch.insert('sms_messages', {
         'id': message.id,
         'sender': message.sender,
         'body': message.body,
         'received_at': message.receivedAtMs,
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
+    await batch.commit(noResult: true);
 
     final result = await _processPending(db, now);
     await _writeParserVersion(db);
@@ -195,7 +205,6 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
       'sms_messages',
       where: 'processed = 0',
       orderBy: 'received_at ASC',
-      limit: 3000,
     );
 
     // Learned state is read once per scan and matched in memory: 2 000 alerts

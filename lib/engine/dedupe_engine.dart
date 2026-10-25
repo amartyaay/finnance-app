@@ -122,6 +122,98 @@ class DedupeEngine {
         }
       }
     }
+    // The very same alert text (tracking link aside) from the same bank for the
+    // same amount is one event re-sent, even when the copies are 12 minutes
+    // apart (HDFC's refund alert from VD-HDFCBK and again from VM-HDFCBK).
+    final bySignature = <String, Txn>{};
+    for (final txn in sorted) {
+      final body = txn.rawBody;
+      if (body == null || txn.sender == null) continue;
+      final signature = '${txn.sender}|${txn.amountPaise}|${_bodySignature(body)}';
+      final earlier = bySignature[signature];
+      if (earlier != null &&
+          txn.occurredAtMs - earlier.occurredAtMs <= 60 * 60 * 1000) {
+        pairs.add((a: earlier.key, b: txn.key, closure: false, opposite: false));
+        union(earlier.key, txn.key);
+      }
+      bySignature[signature] = txn;
+    }
+
+    // Receipts: a biller's "Recharge of INR 361 successful" is folded into the
+    // bank/card alert for the same payment — the same amount (to the rupee)
+    // within a day, or from the same merchant within 3 days (3 % fee slack
+    // only inside two hours). Only a receipt
+    // that no alert covers survives, which is exactly when it is the only
+    // record of the payment. Two receipts for one payment ("we have processed
+    // Rs 2249" + "Recharge of INR 2,249 successful") are one as well.
+    const receiptWindowMs = 3 * 24 * 60 * 60 * 1000;
+    final receipts =
+        sorted.where((t) => t.sourceType == TxnSourceType.receipt).toList();
+    for (final receipt in receipts) {
+      Txn? match;
+      for (final other in sorted) {
+        if (identical(other, receipt) || _isInflow(other)) continue;
+        final gapMs = (other.occurredAtMs - receipt.occurredAtMs).abs();
+        if (gapMs > receiptWindowMs) continue;
+        final diff = (other.amountPaise - receipt.amountPaise).abs();
+        // The same merchant may differ by fees (3 %); anyone else must match
+        // to the rupee and within a day, or a ₹417 Swiggy receipt is swallowed
+        // by an unrelated ₹410 payment two days later.
+        final sameMerchant =
+            _merchantSimilarity(other.merchant, receipt.merchant) >= 0.6 ||
+            _tokenOverlap(other.merchant, receipt.merchant);
+        // Two Swiggy orders of ₹417 and ₹404 a day apart are two orders, so
+        // fee slack applies only within two hours.
+        final close = sameMerchant
+            ? diff <= 100 ||
+                  (diff <= (receipt.amountPaise * 0.03).round() &&
+                      gapMs <= 2 * 60 * 60 * 1000)
+            : diff <= 100 && gapMs <= 24 * 60 * 60 * 1000;
+        if (!close) continue;
+        if (other.sourceType == TxnSourceType.receipt &&
+            other.occurredAtMs > receipt.occurredAtMs) {
+          continue; // pair receipt-with-receipt once, earlier one first
+        }
+        // Prefer a bank alert over another receipt, then the closest in time.
+        if (match == null ||
+            (match.sourceType == TxnSourceType.receipt &&
+                other.sourceType != TxnSourceType.receipt) ||
+            (match.sourceType == other.sourceType &&
+                (other.occurredAtMs - receipt.occurredAtMs).abs() <
+                    (match.occurredAtMs - receipt.occurredAtMs).abs())) {
+          match = other;
+        }
+      }
+      if (match != null) {
+        pairs.add((a: match.key, b: receipt.key, closure: false, opposite: false));
+        union(match.key, receipt.key);
+      }
+    }
+
+    // Third pass: one UPI/IMPS reference printed by two banks — the debit leg
+    // at one and the credit leg at the other (SBI "trf to Bank Account …
+    // Refno 649507747508" + HDFC "credited … (UPI 649507747508)"). The same
+    // long reference, the same amount and opposite directions within a day is
+    // one movement between the user's own accounts.
+    final byRef = <String, List<Txn>>{};
+    for (final txn in sorted) {
+      final ref = txn.referenceId;
+      if (ref == null || ref.length < 10) continue;
+      byRef.putIfAbsent(ref, () => <Txn>[]).add(txn);
+    }
+    for (final group in byRef.values) {
+      for (var i = 0; i < group.length; i++) {
+        for (var j = i + 1; j < group.length; j++) {
+          final a = group[i];
+          final b = group[j];
+          if (a.amountPaise != b.amountPaise) continue;
+          if (b.occurredAtMs - a.occurredAtMs > 24 * 60 * 60 * 1000) continue;
+          if (_isInflow(a) == _isInflow(b)) continue;
+          pairs.add((a: a.key, b: b.key, closure: false, opposite: true));
+          union(a.key, b.key);
+        }
+      }
+    }
     if (pairs.isEmpty) return sorted;
 
     final transferGroups = <String>{};
@@ -186,6 +278,9 @@ class DedupeEngine {
             : (rewritten[txn.key] ?? txn),
     ];
   }
+
+  static bool _isInflow(Txn txn) =>
+      txn.kind == TxnKind.income || txn.moneyInKind != MoneyInKind.none;
 
   /// Two alerts from the same sender that carry two *different* reference ids
   /// are evidence of two separate charges — the only case that keeps the old
@@ -393,6 +488,8 @@ class DedupeEngine {
   }
 
   int _score(Txn txn) {
+    // A bank/card alert always beats a biller's receipt for the same payment.
+    if (txn.sourceType == TxnSourceType.receipt) return -10;
     return (txn.merchant?.isNotEmpty == true ? 2 : 0) +
         (txn.cardKey != null ? 2 : 0) +
         (txn.referenceId != null ? 1 : 0) +
@@ -415,6 +512,11 @@ class DedupeEngine {
   static String _normalise(String value) =>
       value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
 
-  static String _bodySignature(String body) =>
-      body.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+  /// The alert text without its tracking link: HDFC re-sends one refund from
+  /// two headers with two different short links, and that is one refund.
+  static String _bodySignature(String body) => body
+      .toLowerCase()
+      .replaceAll(RegExp(r'https?://\S+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
 }
