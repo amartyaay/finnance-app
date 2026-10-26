@@ -15,7 +15,20 @@ class SmsGuards {
     r'payment request|collect request|approving the request|'
     // A card spend restated as EMI is the same purchase, not new money.
     r'converted to \d+ months? emi|'
-    r'terminated due to)\b',
+    r'terminated due to|'
+    // A cheque in clearing has not reached the account yet.
+    r'under clearing|sent for clearing|in clearing|'
+    // Wallet promos: "Rs 5000 cashback credited* … claim before midnight".
+    r'claim (?:before|now|it|your)|credited\*)',
+    caseSensitive: false,
+  );
+
+  /// A failure stated without "has": "… at MYNTRA failed.", "could not be
+  /// processed", "was unsuccessful". A reversal of a failed payment ("Rs 650
+  /// reversed for your failed UPI txn") did move money back and is exempt.
+  static final RegExp _bareFailure = RegExp(
+    r'\b(?:failed|could not be (?:processed|completed)|'
+    r"couldn't be (?:processed|completed)|(?:was|is) unsuccessful|unsuccessful)\b",
     caseSensitive: false,
   );
 
@@ -25,7 +38,8 @@ class SmsGuards {
     r'\b(?:is due|are due|due on|due by|minimum due|amount due|total due|'
     r'pay now|pay before|avoid (?:late|penalty)|will be debited|will be charged|'
     r'scheduled (?:for|on)|upcoming|convert your transaction|reply yes to confirm|'
-    r'first debit on|to be paid|has been initiated|is initiated)\b',
+    r'first debit on|to be paid|has been initiated|is initiated|'
+    r'will be auto[- ]?debited|will be deducted)\b',
     caseSensitive: false,
   );
 
@@ -40,6 +54,7 @@ class SmsGuards {
   /// that was only set up (I07).
   static bool notMovedYet(String lower) {
     if (_stopped.hasMatch(lower)) return true;
+    if (_bareFailure.hasMatch(lower) && !isReversal(lower)) return true;
     return _future.hasMatch(lower) && !_completed.hasMatch(lower);
   }
 
@@ -74,7 +89,9 @@ class SmsGuards {
     r'\b(?:inr|rs\.?|₹)\s*[\d,.]+ done for .{2,60}\bhas succeeded\b|'
     r'\bwallet has been recharged with an amount of\b|'
     r'\bwe have processed (?:inr|rs\.?|₹)|'
-    r'\byour payment of (?:inr|rs\.?|₹)\s*[\d,.]+ has been received\b|'
+    r'\byour payment of (?:inr|rs\.?|₹)\s*[\d,.]+ (?:has been |is |was )?received\b|'
+    // "Your payment of Rs. 500 for the Application … is confirmed" (RRB).
+    r'\byour payment of (?:inr|rs\.?|₹)\s*[\d,.]+\b.{0,120}\b(?:is|has been) (?:confirmed|successful)\b|'
     r'\bhas been deducted from your \w+ wallet\b',
     caseSensitive: false,
   );
@@ -126,6 +143,16 @@ class SmsGuards {
   );
 
   static bool shareIsNegated(String lower) => _shareNegation.hasMatch(lower);
+
+  /// The "credited to your account by mistake, please return it" scam. A
+  /// bank never asks for money back by SMS; the credit is usually fake.
+  static final RegExp _mistakeScam = RegExp(
+    r'\bby mistake\b.{0,100}\b(?:return|refund|send (?:it )?back|transfer back)\b|'
+    r'\b(?:return|send back)\b.{0,60}\bby mistake\b',
+    caseSensitive: false,
+  );
+
+  static bool mistakenCreditScam(String lower) => _mistakeScam.hasMatch(lower);
 
   /// A row may only become a transaction when money actually moved. Offer,
   /// eligibility, limit and cashback-*estimate* wording ("Loan of INR 36,000

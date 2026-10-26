@@ -441,6 +441,7 @@ class SmsClassifier {
     final badChannel = suspiciousUrl || impersonation;
     final preciousPretext = kycLure || fraudTemplate;
     final strongPhish =
+        SmsGuards.mistakenCreditScam(lower) ||
         credentialAsk ||
         scamTemplate ||
         impersonation ||
@@ -494,7 +495,12 @@ class SmsClassifier {
       cls = SmsClass.informational;
     } else if (promo >= 4) {
       cls = SmsClass.promo;
-    } else if (tx >= 4 && hasAmount && moved) {
+    } else if (tx >= 4 &&
+        hasAmount &&
+        moved &&
+        sender.trust != SenderTrust.suspicious) {
+      // Same rule as the main path: a phone-number sender never posts money,
+      // in either direction ("Rs 10,000 credited to your account by mistake").
       cls = SmsClass.transaction;
     } else {
       cls = SmsClass.unknown;
