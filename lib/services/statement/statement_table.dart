@@ -41,10 +41,29 @@ class RawStatementRow {
 enum _Column { debit, credit, balance }
 
 class _Line {
-  _Line(this.page, this.top, this.words);
+  _Line(this.page, this.top, this.words)
+    : _spanTop = words.first.top,
+      _spanBottom = words.first.bottom;
   final int page;
   final double top;
   final List<PdfWord> words;
+  double _spanTop;
+  double _spanBottom;
+
+  /// Same printed line: the word's vertical span overlaps the line's by more
+  /// than half the word's height.
+  bool overlaps(PdfWord word) {
+    final overlap = (word.bottom < _spanBottom ? word.bottom : _spanBottom) -
+        (word.top > _spanTop ? word.top : _spanTop);
+    final height = word.height <= 0 ? 1.0 : word.height;
+    return overlap > height * 0.5;
+  }
+
+  void add(PdfWord word) {
+    words.add(word);
+    if (word.top < _spanTop) _spanTop = word.top;
+    if (word.bottom > _spanBottom) _spanBottom = word.bottom;
+  }
 
   /// Words joined by one space, or by three where the gap is wide enough to
   /// be a column break ("Name : RAHUL VERMA" … "MG ROAD BENGALURU").
@@ -132,6 +151,11 @@ class StatementTableBuilder {
     if (value == 0) negative = false;
     return negative ? -value : value;
   }
+
+  /// The reconstructed lines, for diagnosing a layout ("p2 @84: 28 Sep …").
+  List<String> debugLines(List<PdfWord> words) => [
+    for (final l in _lines(words)) 'p${l.page} @${l.top.toStringAsFixed(1)}: ${l.text}',
+  ];
 
   BankStatement build(List<PdfWord> words) {
     final lines = _lines(words);
@@ -236,19 +260,18 @@ class StatementTableBuilder {
       ..sort((a, b) {
         final byPage = a.page.compareTo(b.page);
         if (byPage != 0) return byPage;
-        final byTop = a.top.compareTo(b.top);
-        return byTop != 0 ? byTop : a.x0.compareTo(b.x0);
+        // By vertical centre: capitals, digits, a mid-height "~" and words
+        // with descenders on one printed line all share it closely.
+        final byCentre = (a.top + a.bottom).compareTo(b.top + b.bottom);
+        return byCentre != 0 ? byCentre : a.x0.compareTo(b.x0);
       });
     final lines = <_Line>[];
     for (final word in sorted) {
-      final tolerance = (word.height * 0.5).clamp(2.0, 6.0);
       final last = lines.isEmpty ? null : lines.last;
-      if (last != null &&
-          last.page == word.page &&
-          (word.top - last.top).abs() <= tolerance) {
-        last.words.add(word);
+      if (last != null && last.page == word.page && last.overlaps(word)) {
+        last.add(word);
       } else {
-        lines.add(_Line(word.page, word.top, [word]));
+        lines.add(_Line(word.page, word.bottom, [word]));
       }
     }
     for (final line in lines) {

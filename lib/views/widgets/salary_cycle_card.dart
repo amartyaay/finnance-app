@@ -193,9 +193,12 @@ class _Legend extends StatelessWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: T.s1),
-        Text(
-          '$label ${moneyCompact(Paise(paise))}',
-          style: T.bodySmall.copyWith(color: p.inkSecondary),
+        Flexible(
+          child: Text(
+            '$label ${moneyCompact(Paise(paise))}',
+            style: T.bodySmall.copyWith(color: p.inkSecondary),
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ],
     );

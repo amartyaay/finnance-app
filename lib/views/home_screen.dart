@@ -17,6 +17,7 @@ import '../state/app_state.dart';
 import 'insight_actions.dart';
 import 'sms_inbox_screen.dart';
 import 'transactions_screen.dart';
+import 'statements_screen.dart';
 import 'widgets/card_face.dart';
 import 'widgets/charts.dart';
 import 'widgets/insight_tile.dart';
@@ -515,20 +516,17 @@ class _HeroCard extends StatelessWidget {
                         height: 1.35,
                       ),
                     ),
-                    if (!hasIncome) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Only salary and interest count as income, so there is '
-                        'no "left over" figure.',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: T.bodySmall.copyWith(
-                          color: p.heroMuted,
-                          fontSize: 12,
-                          height: 1.35,
-                        ),
+                    if (!hasIncome)
+                      // SBI rarely sends a salary SMS; its statement shows it.
+                      _HeroLink(
+                        icon: Icons.account_balance_rounded,
+                        text: 'No salary in your SMS. Import an SBI statement to see '
+                            'each month salary to salary',
+                        semanticsLabel:
+                            'No salary was found in your messages. Import an SBI '
+                            'statement to see spending salary to salary.',
+                        onTap: () => StatementsScreen.open(context),
                       ),
-                    ],
                   ],
                 ),
               ),
@@ -549,8 +547,10 @@ class _HeroLink extends StatelessWidget {
     required this.text,
     required this.semanticsLabel,
     this.onTap,
+    this.icon = Icons.swap_horiz_rounded,
   });
 
+  final IconData icon;
   final String text;
   final String semanticsLabel;
   final VoidCallback? onTap;
@@ -570,7 +570,7 @@ class _HeroLink extends StatelessWidget {
           child: Row(
             children: [
               Icon(
-                Icons.swap_horiz_rounded,
+                icon,
                 size: 15,
                 color: p.heroMuted,
               ),

@@ -19,7 +19,6 @@ import 'package:finnance_app/app.dart';
 import 'package:finnance_app/app/money_format.dart';
 import 'package:finnance_app/data/demo_repository.dart';
 import 'package:finnance_app/data/finance_repository.dart';
-import 'package:finnance_app/domain/money.dart';
 import 'package:finnance_app/services/sms_reader.dart';
 import 'package:finnance_app/state/app_state.dart';
 import 'package:finnance_app/views/cards_screen.dart';

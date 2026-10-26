@@ -30,8 +30,14 @@ class PdfUnreadable extends PdfOpenError {
   const PdfUnreadable();
 }
 
-Future<List<PdfWord>> readPdfWords(String path, {String? password}) async {
-  await pdfrxFlutterInitialize();
+/// [initialize] defaults to the Flutter initializer (app cache dir via
+/// path_provider); host tests pass `pdfrxInitialize` from pdfrx_engine.
+Future<List<PdfWord>> readPdfWords(
+  String path, {
+  String? password,
+  Future<void> Function()? initialize,
+}) async {
+  await (initialize ?? pdfrxFlutterInitialize)();
   final PdfDocument doc;
   try {
     // pdfrx tries an empty password first, then [password] once.
@@ -77,6 +83,15 @@ Future<List<PdfWord>> readPdfWords(String path, {String? password}) async {
       final count = raw.fullText.length < raw.charRects.length
           ? raw.fullText.length
           : raw.charRects.length;
+      // PDFium's boxes are tight glyph boxes (a "." is ~1 pt tall), so gaps
+      // are measured against the page's median glyph height, not the
+      // current glyph's — otherwise "0.00" falls apart into "0", ".", "00".
+      final heights = <double>[
+        for (var i = 0; i < count; i++)
+          if (raw.fullText[i].trim().isNotEmpty && raw.charRects[i].isNotEmpty)
+            raw.charRects[i].top - raw.charRects[i].bottom,
+      ]..sort();
+      final unit = heights.isEmpty ? 5.0 : heights[heights.length ~/ 2];
       for (var i = 0; i < count; i++) {
         final char = raw.fullText[i];
         final rect = raw.charRects[i];
@@ -86,10 +101,11 @@ Future<List<PdfWord>> readPdfWords(String path, {String? password}) async {
         }
         final current = box;
         if (current != null) {
-          final glyph = rect.top - rect.bottom;
+          // A real space ends a word above; this catches cells laid out by
+          // position with no space character between them.
           final gap = rect.left - current.right;
-          final otherLine = (rect.bottom - current.bottom).abs() > glyph * 0.5;
-          if (gap > glyph * 0.5 || gap < -glyph || otherLine) flush();
+          final otherLine = (rect.bottom - current.bottom).abs() > unit * 0.6;
+          if (gap > unit || gap < -unit || otherLine) flush();
         }
         box = box == null ? rect : box!.merge(rect);
         buffer.write(char);
