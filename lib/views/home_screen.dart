@@ -69,10 +69,10 @@ class HomeScreen extends StatelessWidget {
       onRefresh: state.scanInbox,
       child: CustomScrollView(
         slivers: [
+          // Scrolls away with the page (no floating bar over content), and is
+          // transparent so the shell's ambient glow shows behind it.
           SliverAppBar(
-            floating: true,
-            snap: true,
-            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+            backgroundColor: Colors.transparent,
             surfaceTintColor: Colors.transparent,
             titleSpacing: T.s5,
             title: Column(
@@ -422,27 +422,29 @@ class _HeroCard extends StatelessWidget {
                 style: T.heroNumber.copyWith(fontSize: 46),
               ),
             ),
-            const SizedBox(height: T.s1),
-            Text(
-              '${summary.daysElapsed} of ${summary.daysInMonth} days',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: T.body.copyWith(color: p.heroInk, fontSize: 13.5),
+            const SizedBox(height: T.s3),
+            Row(
+              children: [
+                Expanded(
+                  child: _MonthProgress(
+                    fraction: summary.daysInMonth == 0
+                        ? 0
+                        : summary.daysElapsed / summary.daysInMonth,
+                  ),
+                ),
+                const SizedBox(width: T.s3),
+                Text(
+                  'Day ${summary.daysElapsed} of ${summary.daysInMonth}',
+                  maxLines: 1,
+                  style: T.bodySmall.copyWith(
+                    color: p.heroMuted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: T.s2),
-            _MonthProgress(
-              fraction: summary.daysInMonth == 0
-                  ? 0
-                  : summary.daysElapsed / summary.daysInMonth,
-            ),
-            const SizedBox(height: T.s2),
-            Text(
-              provenance,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: T.bodySmall.copyWith(color: p.heroMuted, fontSize: 12),
-            ),
-            const SizedBox(height: T.s4),
+            const SizedBox(height: T.s5),
             LayoutBuilder(
               builder: (context, constraints) {
                 final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
@@ -479,21 +481,8 @@ class _HeroCard extends StatelessWidget {
                 );
               },
             ),
-            if (includedLine != null) ...[
-              const SizedBox(height: T.s3),
-              Text(
-                includedLine,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: T.bodySmall.copyWith(
-                  color: p.heroMuted,
-                  fontSize: 12,
-                  height: 1.35,
-                ),
-              ),
-            ],
-            if (otherTransfers > 0) ...[
-              SizedBox(height: includedLine == null ? T.s3 : 0),
+            if (otherTransfers > 0 || !hasIncome) const SizedBox(height: T.s2),
+            if (otherTransfers > 0)
               _HeroLink(
                 text: '${money(Paise(otherTransfers))} transfers not counted',
                 semanticsLabel:
@@ -504,18 +493,6 @@ class _HeroCard extends StatelessWidget {
                         const ActivityRequest(transfersOnly: true),
                       ),
               ),
-            ],
-            const SizedBox(height: T.s1),
-            Text(
-              moneyInText,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: T.bodySmall.copyWith(
-                color: p.heroMuted,
-                fontSize: 12,
-                height: 1.35,
-              ),
-            ),
             if (!hasIncome)
               // SBI rarely sends a salary SMS; its statement shows it.
               _HeroLink(
@@ -530,6 +507,24 @@ class _HeroCard extends StatelessWidget {
                         'statement to see spending salary to salary.',
                 onTap: () => StatementsScreen.open(context),
               ),
+            const SizedBox(height: T.s2),
+            Divider(color: Colors.white.withValues(alpha: 0.12), height: 1),
+            const SizedBox(height: T.s3),
+            // One footnote instead of three loose lines.
+            Text(
+              [
+                ?includedLine,
+                moneyInText,
+                provenance,
+              ].where((t) => t.trim().isNotEmpty).join(' · '),
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: T.bodySmall.copyWith(
+                color: p.heroMuted,
+                fontSize: 11.5,
+                height: 1.45,
+              ),
+            ),
           ],
         ),
       ),
@@ -680,7 +675,7 @@ class _MonthProgress extends StatelessWidget {
                 child: const DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Color(0xFF9BF2D8), T.mintGlow],
+                      colors: [Color(0xFFE0E7FF), T.mintGlow],
                     ),
                   ),
                   child: SizedBox.expand(),

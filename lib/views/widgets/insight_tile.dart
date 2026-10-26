@@ -117,8 +117,6 @@ class InsightTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = T.of(context);
     final toneColor = insightToneColor(context, insight.tone);
-    final emphasised = insight.tone == InsightTone.warning ||
-        insight.tone == InsightTone.caution;
     final amount = insight.amountPaise;
     final chip = insight.chip?.trim();
     final title = _tidyTitle(insight.title);
@@ -144,21 +142,9 @@ class InsightTile extends StatelessWidget {
       label: semantics,
       excludeSemantics: true,
       child: Container(
-        // Depth from a soft shadow; a warning earns a faint tinted wash at the
-        // top instead of a coloured frame.
+        // Flat surface, soft shadow: the tone lives in the icon disc.
         decoration: BoxDecoration(
           color: p.surface,
-          gradient: emphasised
-              ? LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    toneColor.withValues(alpha: p.isDark ? 0.06 : 0.05),
-                    p.surface,
-                  ],
-                  stops: const [0, 0.55],
-                )
-              : null,
           border: p.isDark ? Border.all(color: p.outlineVariant) : null,
           boxShadow: p.isDark ? null : p.shadowSoft,
           borderRadius: BorderRadius.circular(T.r4),
@@ -195,11 +181,14 @@ class InsightTile extends StatelessWidget {
                 if (hasAmount) ...[
                   const SizedBox(width: T.s2),
                   Flexible(
-                    child: MoneyText(
-                      Paise(amount),
-                      compact: true,
-                      style: T.money.copyWith(fontSize: 16),
-                      color: toneColor,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: MoneyText(
+                        Paise(amount),
+                        compact: true,
+                        style: T.money.copyWith(fontSize: 16),
+                        color: toneColor,
+                      ),
                     ),
                   ),
                 ],

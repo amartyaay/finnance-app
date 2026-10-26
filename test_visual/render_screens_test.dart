@@ -19,7 +19,9 @@ import 'package:finnance_app/services/sms_reader.dart';
 import 'package:finnance_app/state/app_state.dart';
 import 'package:finnance_app/state/statements_controller.dart';
 import 'package:finnance_app/viewmodels/theme_view_model.dart';
+import 'package:finnance_app/views/onboarding_screen.dart';
 import 'package:finnance_app/views/salary_cycle_screen.dart';
+import 'package:finnance_app/views/settings_screen.dart';
 import 'package:finnance_app/views/statements_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -180,6 +182,14 @@ Future<void> _render(
     await _shot(tester, '${tab.toLowerCase()}-$t');
   }
   await _tab(tester, 'Home');
+  await _push(tester, const SettingsScreen());
+  await _shot(tester, 'settings-$t');
+  Navigator.of(tester.element(find.byType(Scaffold).last)).pop();
+  await tester.pumpAndSettle();
+  await _push(tester, const OnboardingScreen());
+  await _shot(tester, 'onboarding-$t');
+  Navigator.of(tester.element(find.byType(Scaffold).last)).pop();
+  await tester.pumpAndSettle();
   await _push(tester, const StatementsScreen());
   await _shot(tester, 'statements-$t');
   await _push(tester, SalaryCycleScreen(start: DateTime(2026, 9, 1)));

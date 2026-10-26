@@ -65,7 +65,7 @@ class SettingsTile extends StatelessWidget {
         children: [
           IconBadge(
             icon: icon,
-            color: danger ? p.danger : p.inkSecondary,
+            color: danger ? p.danger : p.primary,
             size: 36,
             iconSize: 19,
           ),

@@ -104,139 +104,134 @@ class FinanceColors {
 
   static const light = FinanceColors(
     brightness: Brightness.light,
-    bg: Color(0xFFF3F5F3),
+    bg: Color(0xFFF5F5FA),
     surface: Color(0xFFFFFFFF),
-    surfaceMuted: Color(0xFFEDF1E9),
-    surfaceSunken: Color(0xFFE4EADF),
-    ink: Color(0xFF101A14),
-    inkSecondary: Color(0xFF4B5B51),
-    inkMuted: Color(0xFF5A6A60),
-    inkOnPrimary: Color(0xFFF7FBF8),
-    heroInk: Color(0xFFF4FBF7),
-    heroMuted: Color(0xFFCBE5DB),
-    primary: Color(0xFF0C7257),
-    primaryPressed: Color(0xFF085642),
-    primarySoft: Color(0xFFDFF1E8),
-    accent: Color(0xFFB4690E),
-    accentSoft: Color(0xFFFBEDD9),
-    positive: Color(0xFF16754A),
-    positiveSoft: Color(0xFFE1F2E7),
-    caution: Color(0xFF8A5A00),
-    cautionSoft: Color(0xFFFFF1D6),
-    danger: Color(0xFFAE2A21),
-    dangerSoft: Color(0xFFFBE6E3),
-    info: Color(0xFF1F5F8B),
-    infoSoft: Color(0xFFE4EEF6),
-    outline: Color(0xFFD9E0DA),
-    outlineVariant: Color(0xFFE9EEEA),
+    surfaceMuted: Color(0xFFEFEFF6),
+    surfaceSunken: Color(0xFFE7E7F0),
+    ink: Color(0xFF0E0E18),
+    inkSecondary: Color(0xFF4B4B63),
+    inkMuted: Color(0xFF666680),
+    inkOnPrimary: Color(0xFFFFFFFF),
+    heroInk: Color(0xFFFFFFFF),
+    heroMuted: Color(0xFFDCD6FF),
+    primary: Color(0xFF5B45F0),
+    primaryPressed: Color(0xFF4A35D6),
+    primarySoft: Color(0xFFECE9FF),
+    accent: Color(0xFF0891B2),
+    accentSoft: Color(0xFFDDF4F9),
+    positive: Color(0xFF047857),
+    positiveSoft: Color(0xFFDDF5EC),
+    caution: Color(0xFFB45309),
+    cautionSoft: Color(0xFFFEF0D9),
+    danger: Color(0xFFE11D48),
+    dangerSoft: Color(0xFFFDE4EA),
+    info: Color(0xFF2563EB),
+    infoSoft: Color(0xFFE3ECFE),
+    outline: Color(0xFFDCDCE8),
+    outlineVariant: Color(0xFFEAEAF2),
     chart: [
-      Color(0xFF0E7A5F),
-      Color(0xFF2E7FB8),
-      Color(0xFFB4690E),
-      Color(0xFF6C5CE0),
-      Color(0xFF3C8C8C),
-      Color(0xFFA8447A),
-      Color(0xFF7A8B3A),
-      Color(0xFF8A6A4F),
+      Color(0xFF5B45F0),
+      Color(0xFF0891B2),
+      Color(0xFFE11D48),
+      Color(0xFFD97706),
+      Color(0xFF059669),
+      Color(0xFFDB2777),
+      Color(0xFF65A30D),
+      Color(0xFF64748B),
     ],
     ramp: [
-      Color(0xFF0A5B47),
-      Color(0xFF127A61),
-      Color(0xFF1F967D),
-      Color(0xFF3FAE99),
-      Color(0xFF6AC7B4),
-      Color(0xFF9BDCCB),
-      Color(0xFFC7E5DA),
+      Color(0xFF3B2BB0),
+      Color(0xFF4A35D6),
+      Color(0xFF5B45F0),
+      Color(0xFF7A68F5),
+      Color(0xFF9A8CF8),
+      Color(0xFFBDB3FB),
+      Color(0xFFDCD6FD),
     ],
     heroGradient: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFF0E7C60), Color(0xFF0B5C66), Color(0xFF173F6E)],
+      colors: [Color(0xFF6A4CFF), Color(0xFF4338CA), Color(0xFF1E3A8A)],
       stops: [0.0, 0.55, 1.0],
     ),
     tintGradient: LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [Color(0xFFFFFFFF), Color(0xFFF1F7F3)],
+      colors: [Color(0xFFFFFFFF), Color(0xFFF4F3FF)],
     ),
-    // Two layers: a tight contact shadow and a wide, very faint ambient one —
-    // depth without a visible border.
     shadowSoft: [
-      BoxShadow(color: Color(0x0A0F2018), blurRadius: 2, offset: Offset(0, 1)),
-      BoxShadow(color: Color(0x0F0F2018), blurRadius: 24, offset: Offset(0, 8)),
+      BoxShadow(color: Color(0x0A12102E), blurRadius: 2, offset: Offset(0, 1)),
+      BoxShadow(color: Color(0x1412102E), blurRadius: 28, offset: Offset(0, 10)),
     ],
     shadowCard: [
-      BoxShadow(color: Color(0x140B2A1E), blurRadius: 4, offset: Offset(0, 2)),
-      BoxShadow(color: Color(0x290B2A3E), blurRadius: 40, offset: Offset(0, 18)),
+      BoxShadow(color: Color(0x1A3B2BB0), blurRadius: 6, offset: Offset(0, 3)),
+      BoxShadow(color: Color(0x404338CA), blurRadius: 44, offset: Offset(0, 20)),
     ],
   );
 
   static const dark = FinanceColors(
     brightness: Brightness.dark,
-    bg: Color(0xFF060C0A),
-    surface: Color(0xFF0E1814),
-    surfaceMuted: Color(0xFF12241B),
-    surfaceSunken: Color(0xFF183024),
-    ink: Color(0xFFEDF5EF),
-    inkSecondary: Color(0xFFB3C6B9),
-    inkMuted: Color(0xFF9AB0A2),
-    inkOnPrimary: Color(0xFF04211A),
-    heroInk: Color(0xFFF2FBF6),
-    heroMuted: Color(0xFFBFE3D7),
-    primary: Color(0xFF5FD3AC),
-    primaryPressed: Color(0xFF7EE3C0),
-    primarySoft: Color(0xFF113A2C),
-    accent: Color(0xFFE8AE66),
-    accentSoft: Color(0xFF3A2A14),
-    positive: Color(0xFF62D6A3),
-    positiveSoft: Color(0xFF10392A),
-    caution: Color(0xFFF0C06A),
-    cautionSoft: Color(0xFF392B12),
-    danger: Color(0xFFF29388),
-    dangerSoft: Color(0xFF3D1B17),
-    info: Color(0xFF8CC6EC),
-    infoSoft: Color(0xFF132F40),
-    outline: Color(0xFF2A4034),
-    outlineVariant: Color(0xFF203329),
+    bg: Color(0xFF09090F),
+    surface: Color(0xFF13131C),
+    surfaceMuted: Color(0xFF191925),
+    surfaceSunken: Color(0xFF20202E),
+    ink: Color(0xFFF4F4FA),
+    inkSecondary: Color(0xFFB4B4C8),
+    inkMuted: Color(0xFF8E8EA6),
+    inkOnPrimary: Color(0xFF0B0820),
+    heroInk: Color(0xFFFFFFFF),
+    heroMuted: Color(0xFFD3CCFF),
+    primary: Color(0xFF8B7CFF),
+    primaryPressed: Color(0xFFA79BFF),
+    primarySoft: Color(0xFF231F4A),
+    accent: Color(0xFF4CC9F0),
+    accentSoft: Color(0xFF0F2E3A),
+    positive: Color(0xFF34D399),
+    positiveSoft: Color(0xFF0E2E24),
+    caution: Color(0xFFFBBF24),
+    cautionSoft: Color(0xFF33280C),
+    danger: Color(0xFFFB7185),
+    dangerSoft: Color(0xFF3A1520),
+    info: Color(0xFF60A5FA),
+    infoSoft: Color(0xFF132544),
+    outline: Color(0xFF2A2A3D),
+    outlineVariant: Color(0xFF20202F),
     chart: [
-      Color(0xFF5FD3AC),
-      Color(0xFF7FB8E8),
-      Color(0xFFE0A15A),
-      Color(0xFFA99BF0),
-      Color(0xFF58C8C8),
-      Color(0xFFE48AB8),
-      Color(0xFFB8C86A),
-      Color(0xFFC9A78D),
+      Color(0xFF8B7CFF),
+      Color(0xFF4CC9F0),
+      Color(0xFFFB7185),
+      Color(0xFFFBBF24),
+      Color(0xFF34D399),
+      Color(0xFFF472B6),
+      Color(0xFFA3E635),
+      Color(0xFF94A3B8),
     ],
     ramp: [
-      Color(0xFF8FEBD0),
-      Color(0xFF6FDCBC),
-      Color(0xFF55C9AA),
-      Color(0xFF45B395),
-      Color(0xFF389A80),
-      Color(0xFF2E7F6B),
-      Color(0xFF286557),
+      Color(0xFFC4B5FD),
+      Color(0xFFA78BFA),
+      Color(0xFF8B7CFF),
+      Color(0xFF7C6CF0),
+      Color(0xFF6D5DE0),
+      Color(0xFF5B4BC8),
+      Color(0xFF4A3DA8),
     ],
     heroGradient: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFF0C6450), Color(0xFF0A4A55), Color(0xFF14305A)],
+      colors: [Color(0xFF6A4CFF), Color(0xFF4338CA), Color(0xFF1E3A8A)],
       stops: [0.0, 0.55, 1.0],
     ),
     tintGradient: LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [Color(0xFF101D18), Color(0xFF0D1915)],
+      colors: [Color(0xFF16161F), Color(0xFF12121A)],
     ),
     shadowSoft: [
-      BoxShadow(color: Color(0x4D000000), blurRadius: 20, offset: Offset(0, 8)),
+      BoxShadow(color: Color(0x66000000), blurRadius: 24, offset: Offset(0, 10)),
     ],
     shadowCard: [
-      BoxShadow(
-        color: Color(0x66000000),
-        blurRadius: 32,
-        offset: Offset(0, 16),
-      ),
+      BoxShadow(color: Color(0x554338CA), blurRadius: 48, offset: Offset(0, 18)),
+      BoxShadow(color: Color(0x80000000), blurRadius: 20, offset: Offset(0, 10)),
     ],
   );
 }
@@ -270,55 +265,58 @@ class T {
       : FinanceColors.light;
 
   // ---- Light aliases (used by the theme and by code that has no context) ---
-  static const bg = Color(0xFFF3F5F3);
+  static const bg = Color(0xFFF5F5FA);
   static const surface = Color(0xFFFFFFFF);
-  static const ink = Color(0xFF101A14);
-  static const inkSecondary = Color(0xFF4B5B51);
-  static const inkMuted = Color(0xFF5A6A60);
-  static const inkOnPrimary = Color(0xFFF7FBF8);
-  static const primary = Color(0xFF0C7257);
-  static const primaryPressed = Color(0xFF085642);
-  static const primarySoft = Color(0xFFDFF1E8);
-  static const accent = Color(0xFFB4690E);
-  static const accentSoft = Color(0xFFFBEDD9);
-  static const positive = Color(0xFF16754A);
-  static const positiveSoft = Color(0xFFE1F2E7);
-  static const caution = Color(0xFF8A5A00);
-  static const cautionSoft = Color(0xFFFFF1D6);
-  static const danger = Color(0xFFAE2A21);
-  static const dangerSoft = Color(0xFFFBE6E3);
-  static const info = Color(0xFF1F5F8B);
-  static const infoSoft = Color(0xFFE4EEF6);
+  static const ink = Color(0xFF0E0E18);
+  static const inkSecondary = Color(0xFF4B4B63);
+  static const inkMuted = Color(0xFF666680);
+  static const inkOnPrimary = Color(0xFFFFFFFF);
+  static const primary = Color(0xFF5B45F0);
+  static const primaryPressed = Color(0xFF4A35D6);
+  static const primarySoft = Color(0xFFECE9FF);
+  static const accent = Color(0xFF0891B2);
+  static const accentSoft = Color(0xFFDDF4F9);
+  static const positive = Color(0xFF047857);
+  static const positiveSoft = Color(0xFFDDF5EC);
+  static const caution = Color(0xFFB45309);
+  static const cautionSoft = Color(0xFFFEF0D9);
+  static const danger = Color(0xFFE11D48);
+  static const dangerSoft = Color(0xFFFDE4EA);
+  static const info = Color(0xFF2563EB);
+  static const infoSoft = Color(0xFFE3ECFE);
   static const heroGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF0E7C60), Color(0xFF0B5C66), Color(0xFF173F6E)],
+    colors: [Color(0xFF6A4CFF), Color(0xFF4338CA), Color(0xFF1E3A8A)],
     stops: [0.0, 0.55, 1.0],
   );
 
-  /// The first-run surface is always deep brand green, in either theme.
+  /// The first-run surface is always midnight, in either theme.
   static const onboardingGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF0A4A3C), Color(0xFF07363F), Color(0xFF04262E)],
+    colors: [Color(0xFF1B1452), Color(0xFF0E0C2A), Color(0xFF07070D)],
     stops: [0.0, 0.55, 1.0],
   );
 
-  /// Deep green used for ink on a cream button.
-  static const brandDeep = Color(0xFF06352B);
+  /// Deep midnight used for ink on a light button.
+  static const brandDeep = Color(0xFF0B0820);
 
-  /// Mint highlight used sparingly on brand surfaces.
-  static const mintGlow = Color(0xFF6FE3C2);
+  /// Cyan highlight used sparingly on brand surfaces (progress, glows).
+  static const mintGlow = Color(0xFF67E8F9);
+
+  /// Magenta bloom used on brand surfaces.
+  static const magentaGlow = Color(0xFFFF5CC8);
 
   static const List<Color> chart = [
-    Color(0xFF0E7A5F),
-    Color(0xFF2E7FB8),
-    Color(0xFFB4690E),
-    Color(0xFF6C5CE0),
-    Color(0xFF3C8C8C),
-    Color(0xFFA8447A),
-    Color(0xFF7A8B3A),
-    Color(0xFF8A6A4F),
+    Color(0xFF5B45F0),
+    Color(0xFF0891B2),
+    Color(0xFFE11D48),
+    Color(0xFFD97706),
+    Color(0xFF059669),
+    Color(0xFFDB2777),
+    Color(0xFF65A30D),
+    Color(0xFF64748B),
   ];
 
   // ---- Spacing scale (4pt) -----------------------------------------------
@@ -458,81 +456,52 @@ class T {
   );
 
   // ---- Card faces ---------------------------------------------------------
-  static const _faceInk = Color(0xFFF7FCF9);
-  static const _faceMuted = Color(0xB3F7FCF9);
+  // Dark metal finishes, each tinted with the issuer's hue: cards read as
+  // premium objects on the midnight canvas.
+  static const _faceInk = Color(0xFFF8F8FF);
+  static const _faceMuted = Color(0xB3F8F8FF);
 
-  static const CardFaceStyle _hdfcFace = CardFaceStyle(
+  static CardFaceStyle _face(List<Color> colors, Color glow) => CardFaceStyle(
     gradient: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFF0F7459), Color(0xFF0A4C44), Color(0xFF07323A)],
+      colors: colors,
     ),
-    glow: Color(0xFF7FE7C8),
-    ink: _faceInk,
-    mutedInk: _faceMuted,
-  );
-  static const CardFaceStyle _iciciFace = CardFaceStyle(
-    gradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [Color(0xFF31478A), Color(0xFF202C5C), Color(0xFF141B3A)],
-    ),
-    glow: Color(0xFFA9BEFF),
-    ink: _faceInk,
-    mutedInk: _faceMuted,
-  );
-  static const CardFaceStyle _amexFace = CardFaceStyle(
-    gradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [Color(0xFF454B45), Color(0xFF252E29), Color(0xFF101815)],
-    ),
-    glow: Color(0xFFE7CB92),
-    ink: _faceInk,
-    mutedInk: _faceMuted,
-  );
-  static const CardFaceStyle _sbiFace = CardFaceStyle(
-    gradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [Color(0xFF1F5394), Color(0xFF143765), Color(0xFF0B1F3C)],
-    ),
-    glow: Color(0xFFA6CBFF),
-    ink: _faceInk,
-    mutedInk: _faceMuted,
-  );
-  static const CardFaceStyle _axisFace = CardFaceStyle(
-    gradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [Color(0xFF7A2442), Color(0xFF4A1528), Color(0xFF2A0D18)],
-    ),
-    glow: Color(0xFFF5AEC6),
-    ink: _faceInk,
-    mutedInk: _faceMuted,
-  );
-  static const CardFaceStyle _kotakFace = CardFaceStyle(
-    gradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [Color(0xFF8C3026), Color(0xFF571C18), Color(0xFF2D0E0C)],
-    ),
-    glow: Color(0xFFFFBAA8),
-    ink: _faceInk,
-    mutedInk: _faceMuted,
-  );
-  static const CardFaceStyle _defaultFace = CardFaceStyle(
-    gradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [Color(0xFF0C5F52), Color(0xFF084A4F), Color(0xFF06333D)],
-    ),
-    glow: Color(0xFF7FE7C8),
+    glow: glow,
     ink: _faceInk,
     mutedInk: _faceMuted,
   );
 
-  /// Tonal identity per issuer. Unknown issuers get the house emerald.
+  static final CardFaceStyle _hdfcFace = _face(
+    const [Color(0xFF243B8F), Color(0xFF15215A), Color(0xFF0A0F2C)],
+    const Color(0xFF93B4FF),
+  );
+  static final CardFaceStyle _iciciFace = _face(
+    const [Color(0xFF7A2638), Color(0xFF4A1522), Color(0xFF220A10)],
+    const Color(0xFFFFA3B8),
+  );
+  static final CardFaceStyle _amexFace = _face(
+    const [Color(0xFF5A606C), Color(0xFF30343D), Color(0xFF15171C)],
+    const Color(0xFFE5E7EB),
+  );
+  static final CardFaceStyle _sbiFace = _face(
+    const [Color(0xFF1366B3), Color(0xFF0B3F75), Color(0xFF071E3A)],
+    const Color(0xFF7DD3FC),
+  );
+  static final CardFaceStyle _axisFace = _face(
+    const [Color(0xFF8A2350), Color(0xFF52142F), Color(0xFF250915)],
+    const Color(0xFFF9A8D4),
+  );
+  static final CardFaceStyle _kotakFace = _face(
+    const [Color(0xFF9B2C2C), Color(0xFF5C1717), Color(0xFF2A0A0A)],
+    const Color(0xFFFCA5A5),
+  );
+  static final CardFaceStyle _defaultFace = _face(
+    const [Color(0xFF4C3BC4), Color(0xFF2A2170), Color(0xFF120E30)],
+    const Color(0xFFC4B5FD),
+  );
+
+  /// Tonal identity per issuer. Unknown issuers get the house violet.
   static CardFaceStyle faceFor(String issuer) {
     final name = issuer.toLowerCase();
     if (name.contains('hdfc')) return _hdfcFace;

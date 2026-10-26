@@ -137,7 +137,7 @@ class SettingsScreen extends StatelessWidget {
                 SettingsTile(
                   icon: Icons.delete_rounded,
                   title: 'Clear all data',
-                  subtitle: 'Removes parsed alerts and card settings',
+                  subtitle: 'Removes parsed alerts, statements and card settings',
                   danger: true,
                   trailing: chevron,
                   onTap: () => _confirmClear(context),

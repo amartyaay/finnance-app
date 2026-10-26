@@ -52,10 +52,7 @@ class _AppCardState extends State<AppCard> {
     final padded = Padding(padding: widget.padding, child: widget.child);
 
     if (widget.onTap == null) {
-      return DecoratedBox(
-        decoration: decoration,
-        child: padded,
-      );
+      return DecoratedBox(decoration: decoration, child: padded);
     }
 
     return Semantics(
@@ -326,8 +323,7 @@ class _MoneyTextState extends State<MoneyText>
               ),
             TextSpan(text: parts.symbol, style: symbol),
             TextSpan(text: parts.major),
-            if (parts.minor != null)
-              TextSpan(text: parts.minor, style: minor),
+            if (parts.minor != null) TextSpan(text: parts.minor, style: minor),
           ],
         ),
         maxLines: 1,
@@ -375,6 +371,7 @@ class Pill extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       softWrap: false,
       style: TextStyle(
+        fontFamily: T.fontFamily,
         fontSize: dense ? 12 : 12,
         fontWeight: FontWeight.w600,
         color: fg,
@@ -508,7 +505,12 @@ class _ChipStripState extends State<ChipStrip> {
             : (widget.fade / bounds.width).clamp(0.0, 0.2);
         final (colors, stops) = switch ((_moreLeft, _moreRight)) {
           (true, true) => (
-            const [Colors.transparent, Colors.black, Colors.black, Colors.transparent],
+            const [
+              Colors.transparent,
+              Colors.black,
+              Colors.black,
+              Colors.transparent,
+            ],
             [0.0, stop, 1 - stop, 1.0],
           ),
           (true, false) => (
@@ -519,10 +521,7 @@ class _ChipStripState extends State<ChipStrip> {
             const [Colors.black, Colors.black, Colors.transparent],
             [0.0, 1 - stop, 1.0],
           ),
-          (false, false) => (
-            const [Colors.black, Colors.black],
-            [0.0, 1.0],
-          ),
+          (false, false) => (const [Colors.black, Colors.black], [0.0, 1.0]),
         };
         return LinearGradient(
           begin: Alignment.centerLeft,
@@ -717,7 +716,11 @@ class _EmptyIllustration extends StatelessWidget {
 }
 
 class _OrbitPainter extends CustomPainter {
-  const _OrbitPainter({required this.ring, required this.dot, required this.core});
+  const _OrbitPainter({
+    required this.ring,
+    required this.dot,
+    required this.core,
+  });
 
   final Color ring;
   final Color dot;
@@ -731,12 +734,12 @@ class _OrbitPainter extends CustomPainter {
       ..strokeWidth = 1.2
       ..color = ring;
     canvas.drawCircle(center, size.width * 0.30, paint);
-    canvas.drawCircle(center, size.width * 0.43, paint..color = ring.withValues(alpha: 0.45));
     canvas.drawCircle(
       center,
-      size.width * 0.19,
-      Paint()..color = core,
+      size.width * 0.43,
+      paint..color = ring.withValues(alpha: 0.45),
     );
+    canvas.drawCircle(center, size.width * 0.19, Paint()..color = core);
     final dotPaint = Paint()..color = dot;
     for (var i = 0; i < 8; i++) {
       final angle = i * math.pi / 4 + 0.35;
@@ -751,7 +754,9 @@ class _OrbitPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_OrbitPainter oldDelegate) =>
-      oldDelegate.ring != ring || oldDelegate.dot != dot || oldDelegate.core != core;
+      oldDelegate.ring != ring ||
+      oldDelegate.dot != dot ||
+      oldDelegate.core != core;
 }
 
 class NoticeBanner extends StatelessWidget {
@@ -837,11 +842,7 @@ class NoticeBanner extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(actionLabel!),
-                        Icon(
-                          Icons.arrow_forward_rounded,
-                          size: 14,
-                          color: fg,
-                        ),
+                        Icon(Icons.arrow_forward_rounded, size: 14, color: fg),
                       ],
                     ),
                   ),
@@ -923,6 +924,60 @@ class HeroSurface extends StatelessWidget {
   }
 }
 
+/// The page's ambient light: a soft violet glow from the top left and a
+/// cyan one from the top right, fading into the canvas. Painted once behind
+/// all four tabs by the shell.
+class AmbientBackdrop extends StatelessWidget {
+  const AmbientBackdrop({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = T.of(context);
+    return IgnorePointer(
+      child: RepaintBoundary(
+        child: CustomPaint(painter: _AmbientPainter(p.primary, dark: p.isDark)),
+      ),
+    );
+  }
+}
+
+class _AmbientPainter extends CustomPainter {
+  const _AmbientPainter(this.primary, {required this.dark});
+
+  final Color primary;
+  final bool dark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    void glow(Offset centre, double radius, Color color) {
+      final rect = Rect.fromCircle(center: centre, radius: radius);
+      canvas.drawRect(
+        Offset.zero & size,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [color, color.withValues(alpha: 0)],
+          ).createShader(rect),
+      );
+    }
+
+    final w = size.width;
+    glow(
+      Offset(w * 0.1, -w * 0.15),
+      w * 1.0,
+      primary.withValues(alpha: dark ? 0.22 : 0.10),
+    );
+    glow(
+      Offset(w * 1.05, w * 0.05),
+      w * 0.75,
+      T.mintGlow.withValues(alpha: dark ? 0.10 : 0.07),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_AmbientPainter oldDelegate) =>
+      oldDelegate.primary != primary || oldDelegate.dark != dark;
+}
+
 class _BloomPainter extends CustomPainter {
   const _BloomPainter({required this.dark});
 
@@ -944,16 +999,16 @@ class _BloomPainter extends CustomPainter {
 
     final w = size.width;
     final h = size.height;
-    // Mint light from the top right, a cool indigo pool bottom left.
+    // Magenta light from the top right, a cyan pool bottom left.
     bloom(
       Offset(w * 0.92, h * 0.02),
       w * 0.62,
-      const Color(0xFF6FE3C2).withValues(alpha: dark ? 0.20 : 0.30),
+      T.magentaGlow.withValues(alpha: dark ? 0.30 : 0.34),
     );
     bloom(
       Offset(w * 0.05, h * 1.05),
       w * 0.70,
-      const Color(0xFF6C8CFF).withValues(alpha: dark ? 0.16 : 0.22),
+      T.mintGlow.withValues(alpha: dark ? 0.22 : 0.26),
     );
     // A faint diagonal sheen across the face.
     canvas.drawRect(
@@ -1029,7 +1084,8 @@ class _ShareBarState extends State<ShareBar>
     _controller.forward(from: 0);
   }
 
-  double get _current => _from + (_to - _from) * T.curveOut.transform(_controller.value);
+  double get _current =>
+      _from + (_to - _from) * T.curveOut.transform(_controller.value);
 
   @override
   void dispose() {

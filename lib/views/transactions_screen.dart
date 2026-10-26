@@ -422,7 +422,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       );
     }
 
+    // Transparent: the shell paints the ambient glow behind every tab.
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(title: const Text('Activity'), titleSpacing: T.s5),
       body: SafeArea(top: false, bottom: false, child: body),
     );

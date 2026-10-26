@@ -239,7 +239,9 @@ class _InsightsScreenState extends State<InsightsScreen> {
       );
     }
 
+    // Transparent: the shell paints the ambient glow behind every tab.
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(title: const Text('Insights'), titleSpacing: T.s5),
       body: SafeArea(top: false, bottom: false, child: body),
     );
@@ -343,12 +345,6 @@ class _FraudCard extends StatelessWidget {  const _FraudCard({required this.aler
       padding: const EdgeInsets.all(T.s4),
       decoration: BoxDecoration(
         color: p.surface,
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [p.danger.withValues(alpha: p.isDark ? 0.07 : 0.06), p.surface],
-          stops: const [0, 0.6],
-        ),
         border: p.isDark ? Border.all(color: p.outlineVariant) : null,
         boxShadow: p.isDark ? null : p.shadowSoft,
         borderRadius: BorderRadius.circular(T.r4),

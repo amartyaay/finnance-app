@@ -86,6 +86,8 @@ class _CardsScreenState extends State<CardsScreen> {
             SizedBox(
               height: faceHeight + 10,
               child: PageView.builder(
+                // The face's glow shadow must not be cut to the pager's box.
+                clipBehavior: Clip.none,
                 controller: _pager,
                 itemCount: cards.length,
                 onPageChanged: (page) => setState(() => _page = page),
@@ -182,7 +184,9 @@ class _CardsScreenState extends State<CardsScreen> {
       );
     }
 
+    // Transparent: the shell paints the ambient glow behind every tab.
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(title: const Text('Cards'), titleSpacing: T.s5),
       body: SafeArea(top: false, bottom: false, child: body),
     );
@@ -271,7 +275,11 @@ class _BillRow extends StatelessWidget {
     final hasBill = metrics.totalDuePaise > 0;
     // Calendar days, not elapsed hours: a bill due tomorrow is never "today".
     final days = hasBill && due != null ? daysUntilDate(due) : metrics.daysToDue;
-    final tone = metrics.dueSoon ? p.caution : p.positive;
+    final tone = days != null && days < 0 && hasBill
+        ? p.danger
+        : metrics.dueSoon
+        ? p.caution
+        : p.primary;
     final dueLabel = due == null
         ? 'No date set'
         : hasBill
@@ -282,12 +290,7 @@ class _BillRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: T.s3),
       child: Row(
         children: [
-          IconBadge(
-            icon: Icons.event_rounded,
-            color: tone,
-            size: 38,
-            iconSize: 19,
-          ),
+          IconDisc(icon: Icons.event_rounded, color: tone, size: 40),
           const SizedBox(width: T.s3),
           Expanded(
             child: Column(

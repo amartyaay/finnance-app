@@ -105,9 +105,18 @@ class OnboardingScreen extends StatelessWidget {
                   spacing: T.s2,
                   runSpacing: T.s2,
                   children: [
-                    _ProofChip(label: 'On-device', icon: Icons.phone_android_rounded),
-                    _ProofChip(label: 'No sign-up', icon: Icons.person_off_rounded),
-                    _ProofChip(label: 'No upload', icon: Icons.cloud_off_rounded),
+                    _ProofChip(
+                      label: 'On-device',
+                      icon: Icons.phone_android_rounded,
+                    ),
+                    _ProofChip(
+                      label: 'No sign-up',
+                      icon: Icons.person_off_rounded,
+                    ),
+                    _ProofChip(
+                      label: 'No upload',
+                      icon: Icons.cloud_off_rounded,
+                    ),
                   ],
                 ),
                 const SizedBox(height: T.s8),
@@ -123,6 +132,7 @@ class OnboardingScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(T.r3),
                       ),
                       textStyle: const TextStyle(
+                        fontFamily: T.fontFamily,
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                       ),
@@ -243,14 +253,13 @@ class _OnboardingPatternPainter extends CustomPainter {
     }
 
     final glowPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [glow, glow.withValues(alpha: 0)],
-      ).createShader(
-        Rect.fromCircle(
-          center: Offset(size.width * 0.15, size.height * 0.9),
-          radius: size.width * 0.8,
-        ),
-      );
+      ..shader = RadialGradient(colors: [glow, glow.withValues(alpha: 0)])
+          .createShader(
+            Rect.fromCircle(
+              center: Offset(size.width * 0.15, size.height * 0.9),
+              radius: size.width * 0.8,
+            ),
+          );
     canvas.drawRect(Offset.zero & size, glowPaint);
 
     // A fine arc that echoes the card faces.

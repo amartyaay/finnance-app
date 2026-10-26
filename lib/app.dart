@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import 'app/design_tokens.dart';
 import 'app/theme.dart';
+import 'app/widgets/kit.dart';
 import 'state/app_state.dart';
 import 'state/statements_controller.dart';
 import 'viewmodels/theme_view_model.dart';
@@ -168,9 +169,9 @@ class _AppShellState extends State<AppShell> {
   ];
 
   void _openSettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const SettingsScreen()));
   }
 
   /// Switches the visible tab. Shared with every screen that has an insight
@@ -192,19 +193,24 @@ class _AppShellState extends State<AppShell> {
     }
 
     return Scaffold(
-      body: IndexedStack(
-        index: _index,
+      body: Stack(
         children: [
-          HomeScreen(
-            onNavigate: _openTab,
-            onOpenSettings: _openSettings,
-            onOpenActivity: _openActivity,
-          ),
-          TransactionsScreen(request: _activityRequest),
-          const CardsScreen(),
-          InsightsScreen(
-            onNavigate: _openTab,
-            onOpenActivity: _openActivity,
+          const Positioned.fill(child: AmbientBackdrop()),
+          IndexedStack(
+            index: _index,
+            children: [
+              HomeScreen(
+                onNavigate: _openTab,
+                onOpenSettings: _openSettings,
+                onOpenActivity: _openActivity,
+              ),
+              TransactionsScreen(request: _activityRequest),
+              const CardsScreen(),
+              InsightsScreen(
+                onNavigate: _openTab,
+                onOpenActivity: _openActivity,
+              ),
+            ],
           ),
         ],
       ),

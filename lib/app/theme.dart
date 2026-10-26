@@ -12,34 +12,44 @@ ThemeData buildAppTheme({Brightness brightness = Brightness.light}) {
     primary: p.primary,
     onPrimary: p.inkOnPrimary,
     primaryContainer: p.primarySoft,
-    onPrimaryContainer: dark ? const Color(0xFFB8F0DC) : const Color(0xFF064434),
+    onPrimaryContainer: dark
+        ? const Color(0xFFE2DDFF)
+        : const Color(0xFF1F1470),
     secondary: p.accent,
-    onSecondary: dark ? const Color(0xFF2B1904) : Colors.white,
+    onSecondary: dark ? const Color(0xFF04222C) : Colors.white,
     secondaryContainer: p.accentSoft,
-    onSecondaryContainer: dark ? const Color(0xFFF3D8AF) : const Color(0xFF5C3607),
+    onSecondaryContainer: dark
+        ? const Color(0xFFC9F1FB)
+        : const Color(0xFF07414F),
     tertiary: p.info,
-    onTertiary: dark ? const Color(0xFF08202E) : Colors.white,
+    onTertiary: dark ? const Color(0xFF0A1A33) : Colors.white,
     tertiaryContainer: p.infoSoft,
-    onTertiaryContainer: dark ? const Color(0xFFC7E2F5) : const Color(0xFF103B57),
+    onTertiaryContainer: dark
+        ? const Color(0xFFD6E4FF)
+        : const Color(0xFF16337A),
     error: p.danger,
-    onError: dark ? const Color(0xFF2B0906) : Colors.white,
+    onError: dark ? const Color(0xFF2E0610) : Colors.white,
     errorContainer: p.dangerSoft,
-    onErrorContainer: dark ? const Color(0xFFF9D6D2) : const Color(0xFF6E1710),
+    onErrorContainer: dark ? const Color(0xFFFFD6DE) : const Color(0xFF7A0E28),
     surface: p.surface,
     onSurface: p.ink,
-    surfaceContainerLowest: dark ? const Color(0xFF050D0A) : const Color(0xFFFBFCFA),
+    surfaceContainerLowest: dark
+        ? const Color(0xFF060609)
+        : const Color(0xFFFBFBFE),
     surfaceContainerLow: p.surfaceMuted,
-    surfaceContainer: dark ? const Color(0xFF152A20) : const Color(0xFFF2F5EF),
+    surfaceContainer: dark ? const Color(0xFF171722) : const Color(0xFFF1F1F8),
     surfaceContainerHigh: p.surfaceSunken,
-    surfaceContainerHighest: dark ? const Color(0xFF22392C) : const Color(0xFFE3E8DF),
+    surfaceContainerHighest: dark
+        ? const Color(0xFF262636)
+        : const Color(0xFFE3E3EE),
     onSurfaceVariant: p.inkSecondary,
     outline: p.outline,
     outlineVariant: p.outlineVariant,
     shadow: Colors.black,
     scrim: Colors.black,
-    inverseSurface: dark ? const Color(0xFFECF1ED) : const Color(0xFF1C2420),
-    onInverseSurface: dark ? const Color(0xFF101412) : const Color(0xFFF3F7F3),
-    inversePrimary: dark ? T.primary : const Color(0xFF5FD3AC),
+    inverseSurface: dark ? const Color(0xFFF1F0FA) : const Color(0xFF1B1A2B),
+    onInverseSurface: dark ? const Color(0xFF111019) : const Color(0xFFF4F3FB),
+    inversePrimary: dark ? T.primary : const Color(0xFFA79BFF),
   );
 
   final base = ThemeData(
@@ -91,8 +101,11 @@ ThemeData buildAppTheme({Brightness brightness = Brightness.light}) {
         foregroundColor: scheme.onPrimary,
         minimumSize: const Size(0, 48),
         padding: const EdgeInsets.symmetric(horizontal: T.s5),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(T.r2)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(T.r2),
+        ),
         textStyle: const TextStyle(
+          fontFamily: T.fontFamily,
           fontSize: 14.5,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.1,
@@ -105,16 +118,28 @@ ThemeData buildAppTheme({Brightness brightness = Brightness.light}) {
         minimumSize: const Size(0, 48),
         side: BorderSide(color: scheme.outline),
         padding: const EdgeInsets.symmetric(horizontal: T.s5),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(T.r2)),
-        textStyle: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(T.r2),
+        ),
+        textStyle: const TextStyle(
+          fontFamily: T.fontFamily,
+          fontSize: 14.5,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: scheme.primary,
         minimumSize: const Size(0, 44),
-        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(T.r1)),
+        textStyle: const TextStyle(
+          fontFamily: T.fontFamily,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(T.r1),
+        ),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
@@ -213,9 +238,8 @@ ThemeData buildAppTheme({Brightness brightness = Brightness.light}) {
     ),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith(
-        (states) => states.contains(WidgetState.selected)
-            ? p.primary
-            : p.surface,
+        (states) =>
+            states.contains(WidgetState.selected) ? p.primary : p.surface,
       ),
       trackColor: WidgetStateProperty.resolveWith(
         (states) => states.contains(WidgetState.selected)
@@ -242,7 +266,11 @@ ThemeData buildAppTheme({Brightness brightness = Brightness.light}) {
         ),
         side: WidgetStatePropertyAll(BorderSide(color: p.outlineVariant)),
         textStyle: const WidgetStatePropertyAll(
-          TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          TextStyle(
+            fontFamily: T.fontFamily,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     ),

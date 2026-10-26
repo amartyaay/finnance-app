@@ -42,7 +42,9 @@ class CardFace extends StatelessWidget {
     final hasBill = metrics.totalDuePaise > 0;
     final due = metrics.dueDate;
     // Calendar days, not elapsed hours: a bill due tomorrow is never "today".
-    final days = hasBill && due != null ? daysUntilDate(due) : metrics.daysToDue;
+    final days = hasBill && due != null
+        ? daysUntilDate(due)
+        : metrics.daysToDue;
     final height = cardFaceHeight(context, compact: compact);
 
     final content = Container(
@@ -93,7 +95,12 @@ class CardFace extends StatelessWidget {
 
     final label = _semantics(percent);
     if (onTap == null) {
-      return Semantics(container: true, label: label, excludeSemantics: true, child: content);
+      return Semantics(
+        container: true,
+        label: label,
+        excludeSemantics: true,
+        child: content,
+      );
     }
     return Semantics(
       container: true,
@@ -107,7 +114,9 @@ class CardFace extends StatelessWidget {
   String _semantics(int? percent) {
     final card = metrics.card;
     final buffer = StringBuffer()
-      ..write('${card.displayName}, ${card.issuer} card ending ${card.last4}. ');
+      ..write(
+        '${card.displayName}, ${card.issuer} card ending ${card.last4}. ',
+      );
     if (percent == null) {
       buffer.write('Utilisation unknown until a limit is set. ');
     } else {
@@ -197,6 +206,7 @@ class _FullFace extends StatelessWidget {
           maxLines: 1,
           softWrap: false,
           style: TextStyle(
+            fontFamily: T.fontFamily,
             color: ink,
             fontSize: 15,
             fontWeight: FontWeight.w600,
@@ -244,6 +254,7 @@ class _FullFace extends StatelessWidget {
                       maxLines: 1,
                       softWrap: false,
                       style: TextStyle(
+                        fontFamily: T.fontFamily,
                         color: ink,
                         fontSize: 23,
                         fontWeight: FontWeight.w700,
@@ -327,6 +338,7 @@ class _CompactFace extends StatelessWidget {
           maxLines: 1,
           softWrap: false,
           style: TextStyle(
+            fontFamily: T.fontFamily,
             color: mutedInk,
             fontSize: 12.5,
             fontWeight: FontWeight.w600,
@@ -370,10 +382,7 @@ class _CompactFace extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
           child: Stack(
             children: [
-              Container(
-                height: 5,
-                color: ink.withValues(alpha: 0.18),
-              ),
+              Container(height: 5, color: ink.withValues(alpha: 0.18)),
               FractionallySizedBox(
                 widthFactor: (metrics.utilization ?? 0).clamp(0.0, 1.0),
                 child: Container(height: 5, color: glow),
@@ -563,14 +572,15 @@ class _CardPatternPainter extends CustomPainter {
       Paint()..color = Colors.white.withValues(alpha: 0.035),
     );
     final glowPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [glow.withValues(alpha: 0.18), glow.withValues(alpha: 0)],
-      ).createShader(
-        Rect.fromCircle(
-          center: Offset(size.width * 0.1, size.height * 0.95),
-          radius: size.width * 0.55,
-        ),
-      );
+      ..shader =
+          RadialGradient(
+            colors: [glow.withValues(alpha: 0.18), glow.withValues(alpha: 0)],
+          ).createShader(
+            Rect.fromCircle(
+              center: Offset(size.width * 0.1, size.height * 0.95),
+              radius: size.width * 0.55,
+            ),
+          );
     canvas.drawRect(Offset.zero & size, glowPaint);
   }
 

@@ -23,11 +23,11 @@ List<({String label, int paise, Color color})> cycleSegments(
 ) {
   final p = T.of(context);
   return [
-    (label: 'Spent', paise: cycle.spentPaise, color: p.accent),
+    (label: 'Spent', paise: cycle.spentPaise, color: p.primary),
     (label: 'Card bills', paise: cycle.cardBillsPaise, color: p.info),
     (label: 'Cash', paise: cycle.cashPaise, color: p.caution),
     (label: 'EMI / loans', paise: cycle.loanPaise, color: p.danger),
-    (label: 'Invested', paise: cycle.investedPaise, color: p.primary),
+    (label: 'Invested', paise: cycle.investedPaise, color: p.positive),
   ].where((s) => s.paise > 0).toList();
 }
 

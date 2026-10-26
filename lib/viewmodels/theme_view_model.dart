@@ -32,7 +32,7 @@ class SharedPreferencesThemePreferenceStore implements ThemePreferenceStore {
 
 class ThemeViewModel extends ChangeNotifier {
   ThemeViewModel({
-    AppThemePreference initialPreference = AppThemePreference.light,
+    AppThemePreference initialPreference = AppThemePreference.dark,
     ThemePreferenceStore? preferenceStore,
   }) : _preference = initialPreference,
        _preferenceStore =
