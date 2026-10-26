@@ -39,7 +39,9 @@ class CardFace extends StatelessWidget {
     final percent = metrics.utilization == null
         ? null
         : (metrics.utilization! * 100).round();
-    final hasBill = metrics.totalDuePaise > 0;
+    // A bill counts only while something is still owed on it: a statement
+    // paid on the day it arrived is not "due in 6 days".
+    final hasBill = metrics.billDuePaise > 0;
     final due = metrics.dueDate;
     // Calendar days, not elapsed hours: a bill due tomorrow is never "today".
     final days = hasBill && due != null
@@ -124,9 +126,9 @@ class CardFace extends StatelessWidget {
         '$percent percent of the limit used, ${metrics.band.label.toLowerCase()}. ',
       );
     }
-    if (metrics.totalDuePaise > 0) {
+    if (metrics.billDuePaise > 0) {
       buffer.write(
-        '${money(metrics.totalDue)} due${metrics.dueDate == null ? '' : ' by ${shortDate(metrics.dueDate!)}'}. ',
+        '${money(metrics.billDue)} due${metrics.dueDate == null ? '' : ' by ${shortDate(metrics.dueDate!)}'}. ',
       );
     } else {
       buffer.write('No bill due. ');
@@ -249,7 +251,7 @@ class _FullFace extends StatelessWidget {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       hasBill
-                          ? money(metrics.totalDue)
+                          ? money(metrics.billDue)
                           : money(metrics.spentThisCycle),
                       maxLines: 1,
                       softWrap: false,

@@ -51,7 +51,10 @@ class SmsClassifier {
     ),
     (
       'statement_wording',
-      RegExp(r'\b(?:statement|account summary|passbook)\b', caseSensitive: false),
+      RegExp(
+        r'\b(?:statement|account summary|passbook)\b',
+        caseSensitive: false,
+      ),
       5,
     ),
     (
@@ -147,6 +150,7 @@ class SmsClassifier {
     r'join now|multibagger|bonus)\b',
     caseSensitive: false,
   );
+
   /// KYC / account-pressure wording. Deliberately narrow: a bare "expires" or
   /// "complete your" is ordinary English (a Jio plan expires, a cart needs
   /// completing) and used to flag 151 messages of which none was fraud.
@@ -230,12 +234,14 @@ class SmsClassifier {
     if (negated) return false;
     // A delivery handover code ("share OTP 3823 with the delivery agent") is a
     // receipt token, not a bank credential: parcel/pickup contexts are exempt.
-    final handover = RegExp(
-      r'\b(?:deliver(?:y|ed)?|rider|delivery\s+agent|technician|collect|pickup|'
-      r'pick\s*up|parcel|package|courier|order)\b',
-    ).hasMatch(lower) &&
-        !RegExp(r'\b(?:bank|credit\s*card|debit\s*card|account|kyc|cvv)\b')
-            .hasMatch(lower);
+    final handover =
+        RegExp(
+          r'\b(?:deliver(?:y|ed)?|rider|delivery\s+agent|technician|collect|pickup|'
+          r'pick\s*up|parcel|package|courier|order)\b',
+        ).hasMatch(lower) &&
+        !RegExp(
+          r'\b(?:bank|credit\s*card|debit\s*card|account|kyc|cvv)\b',
+        ).hasMatch(lower);
     if (_credentialShareAsk.hasMatch(lower) && !handover) return true;
     // A message that already delivered a 4–8 digit code is a genuine OTP; the
     // "enter the OTP" sentence in it points at the bank's own screen.
@@ -308,18 +314,36 @@ class SmsClassifier {
     switch (sender.trust) {
       case SenderTrust.known:
         tx += 3;
-        signals.add(const SmsSignal('known_sender', 3, detail: 'Sender id matches a known bank/wallet header'));
+        signals.add(
+          const SmsSignal(
+            'known_sender',
+            3,
+            detail: 'Sender id matches a known bank/wallet header',
+          ),
+        );
       case SenderTrust.plausible:
         tx += 1;
         signals.add(const SmsSignal('plausible_sender', 1));
       case SenderTrust.suspicious:
         phish += 3;
-        signals.add(const SmsSignal('suspicious_sender', -3, detail: 'Numeric or unknown sender id'));
+        signals.add(
+          const SmsSignal(
+            'suspicious_sender',
+            -3,
+            detail: 'Numeric or unknown sender id',
+          ),
+        );
     }
 
     if (sender.dltCategory == 'P') {
       promo += 3;
-      signals.add(const SmsSignal('dlt_promotional', -3, detail: 'DLT header is marked promotional (-P)'));
+      signals.add(
+        const SmsSignal(
+          'dlt_promotional',
+          -3,
+          detail: 'DLT header is marked promotional (-P)',
+        ),
+      );
     }
     if (sender.dltCategory == 'T') {
       tx += 1;
@@ -336,21 +360,40 @@ class SmsClassifier {
     }
     if (hasAmount) {
       tx += 2;
-      signals.add(SmsSignal('amount', 2, detail: '₹${(amount.paise / 100).toStringAsFixed(2)} found'));
+      signals.add(
+        SmsSignal(
+          'amount',
+          2,
+          detail: '₹${(amount.paise / 100).toStringAsFixed(2)} found',
+        ),
+      );
     }
     if (_cashbackCredit.hasMatch(lower) &&
         hasAmount &&
         sender.trust == SenderTrust.known) {
       tx += 5;
-      signals.add(const SmsSignal('cashback_credit', 5, detail: 'Cashback credit from a known sender'));
+      signals.add(
+        const SmsSignal(
+          'cashback_credit',
+          5,
+          detail: 'Cashback credit from a known sender',
+        ),
+      );
     }
 
     if (_otpWord.hasMatch(lower)) {
-      final fakeOtp = _otpLikeNumber.hasMatch(lower) &&
+      final fakeOtp =
+          _otpLikeNumber.hasMatch(lower) &&
           !_debitVerb.hasMatch(lower) &&
           !_creditVerb.hasMatch(lower);
       info += fakeOtp ? 8 : 5;
-      signals.add(const SmsSignal('otp_wording', -5, detail: 'Contains OTP / never-share wording'));
+      signals.add(
+        const SmsSignal(
+          'otp_wording',
+          -5,
+          detail: 'Contains OTP / never-share wording',
+        ),
+      );
     }
     for (final (code, pattern, weight) in _infoIntents) {
       if (!pattern.hasMatch(lower)) continue;
@@ -360,45 +403,86 @@ class SmsClassifier {
     if (_requestMoney.hasMatch(lower)) {
       info += 6;
       tx -= 4;
-      signals.add(const SmsSignal('upi_request', -6, detail: 'A money request, not a payment'));
+      signals.add(
+        const SmsSignal(
+          'upi_request',
+          -6,
+          detail: 'A money request, not a payment',
+        ),
+      );
     }
     if (_addMoneyVerb.hasMatch(lower)) {
       tx += 3;
-      signals.add(const SmsSignal('money_moved', 3, detail: 'Wallet / deposit wording'));
+      signals.add(
+        const SmsSignal('money_moved', 3, detail: 'Wallet / deposit wording'),
+      );
     }
 
     final negatedShare = SmsGuards.shareIsNegated(lower);
     final credentialAsk = _isCredentialAsk(lower);
     if (credentialAsk) {
       phish += 8;
-      signals.add(const SmsSignal('credential_ask', -8, detail: 'Asks for an OTP/PIN/password'));
+      signals.add(
+        const SmsSignal(
+          'credential_ask',
+          -8,
+          detail: 'Asks for an OTP/PIN/password',
+        ),
+      );
     }
     final scamTemplate = _scamTemplate.hasMatch(lower);
     if (scamTemplate) {
       phish += 5;
-      signals.add(const SmsSignal('scam_template', -5, detail: 'Matches a known scam template'));
+      signals.add(
+        const SmsSignal(
+          'scam_template',
+          -5,
+          detail: 'Matches a known scam template',
+        ),
+      );
     }
     final fraudTemplate = _fraudTemplate.hasMatch(lower);
     if (!negatedShare && fraudTemplate) {
       phish += 5;
-      signals.add(const SmsSignal('fraud_template', -5, detail: 'Matches a known social-engineering template'));
+      signals.add(
+        const SmsSignal(
+          'fraud_template',
+          -5,
+          detail: 'Matches a known social-engineering template',
+        ),
+      );
     }
 
     if (_promoWord.hasMatch(lower)) {
       promo += 4;
-      signals.add(const SmsSignal('promo_wording', -4, detail: 'Marketing / cross-sell language'));
+      signals.add(
+        const SmsSignal(
+          'promo_wording',
+          -4,
+          detail: 'Marketing / cross-sell language',
+        ),
+      );
     }
-    if (RegExp(r'\b(?:unsubscribe|to stop (?:receiving|sms)|opt out)\b')
-        .hasMatch(lower)) {
+    if (RegExp(
+      r'\b(?:unsubscribe|to stop (?:receiving|sms)|opt out)\b',
+    ).hasMatch(lower)) {
       promo += 3;
-      signals.add(const SmsSignal('opt_out', -3, detail: 'Bulk-marketing opt-out text'));
+      signals.add(
+        const SmsSignal('opt_out', -3, detail: 'Bulk-marketing opt-out text'),
+      );
     }
 
     final safeContext = _safeContext.hasMatch(lower);
     final kycLure = !safeContext && _kycLure.hasMatch(lower);
     if (kycLure) {
       phish += 4;
-      signals.add(const SmsSignal('kyc_lure', -4, detail: 'KYC / block / expiry pressure wording'));
+      signals.add(
+        const SmsSignal(
+          'kyc_lure',
+          -4,
+          detail: 'KYC / block / expiry pressure wording',
+        ),
+      );
     }
 
     final url = _firstUrl(lower, body);
@@ -419,7 +503,8 @@ class SmsClassifier {
     }
     // `visit` / `call` only count as a call to action next to a link: a genuine
     // advisory says "visit your home branch" with no URL (info-05).
-    final linkCta = url != null && RegExp(r'\b(?:visit|click|call)\b').hasMatch(lower);
+    final linkCta =
+        url != null && RegExp(r'\b(?:visit|click|call)\b').hasMatch(lower);
     final callToAction = _phishCta.hasMatch(lower) || linkCta;
     final threat = _threatWording.hasMatch(lower);
     if (callToAction) {
@@ -428,7 +513,8 @@ class SmsClassifier {
     }
 
     final notMoved = SmsGuards.notMovedYet(lower);
-    final receipt = SmsGuards.merchantReceipt(lower) &&
+    final receipt =
+        SmsGuards.merchantReceipt(lower) &&
         amountFinder.balanceAfter(body) == null &&
         amountFinder.availableLimit(body) == null;
 
@@ -440,26 +526,39 @@ class SmsClassifier {
     // or an explicit loss threat), or an unregistered sender asking for money.
     final badChannel = suspiciousUrl || impersonation;
     final preciousPretext = kycLure || fraudTemplate;
+    // A `-G` header is issued by TRAI's DLT only to government senders: the
+    // CERT-In / state cyber-safety advisories ("never share your OTP, see
+    // csk.gov.in") quote scam wording to warn about it, and are not scams.
+    // The suffix does not launder a bad link or a credential request
+    // (`AD-UIDAI-G` with `uidai-verify.online` is still fraud).
+    final government =
+        sender.dltCategory == 'G' && !badChannel && !credentialAsk;
     final strongPhish =
-        SmsGuards.mistakenCreditScam(lower) ||
-        credentialAsk ||
-        scamTemplate ||
-        impersonation ||
-        (preciousPretext && badChannel) ||
-        // The issuer's own KYC reminder on its own domain from its registered
-        // header ("A/c will be blocked as KYC is due, update at i.airtel.in")
-        // is pushy, not fraud. Gold set: 5 of 5 such messages are genuine.
-        (kycLure && threat && !(_ownsLink(sender, url, risk.owned) && sender.trust == SenderTrust.known)) ||
-        (fraudTemplate && threat) ||
-        (sender.trust == SenderTrust.suspicious &&
-            callToAction &&
-            badChannel) ||
-        (sender.trust == SenderTrust.suspicious && _requestMoney.hasMatch(lower));
+        !government &&
+        (SmsGuards.mistakenCreditScam(lower) ||
+            credentialAsk ||
+            scamTemplate ||
+            impersonation ||
+            (preciousPretext && badChannel) ||
+            // The issuer's own KYC reminder on its own domain from its registered
+            // header ("A/c will be blocked as KYC is due, update at i.airtel.in")
+            // is pushy, not fraud. Gold set: 5 of 5 such messages are genuine.
+            (kycLure &&
+                threat &&
+                !(_ownsLink(sender, url, risk.owned) &&
+                    sender.trust == SenderTrust.known)) ||
+            (fraudTemplate && threat) ||
+            (sender.trust == SenderTrust.suspicious &&
+                callToAction &&
+                badChannel) ||
+            (sender.trust == SenderTrust.suspicious &&
+                _requestMoney.hasMatch(lower)));
     // No spam-as-spend: an amount plus a trusted header is not enough. Offer /
     // eligibility / limit wording ("Loan of INR 36,000 available for you") never
     // books a row; only a completed movement of money does.
     final moved = SmsGuards.moneyMoved(lower);
-    final genuineTransaction = tx >= 6 &&
+    final genuineTransaction =
+        tx >= 6 &&
         hasAmount &&
         moved &&
         // A `-P` DLT header is marketing by definition: "Salary credited, game
@@ -468,7 +567,8 @@ class SmsClassifier {
         sender.trust != SenderTrust.suspicious;
     // The merchant's own receipt (Swiggy, Zepto, …) is not the user's account.
     final merchantSender = registry.isMerchantReceiptSender(sender);
-    final paidReceipt = !notMoved &&
+    final paidReceipt =
+        !notMoved &&
         SmsGuards.paidReceipt(lower) &&
         (amount != null || SmsGuards.planAmountPaise(body) != null) &&
         sender.dltCategory != 'P' &&
@@ -481,9 +581,16 @@ class SmsClassifier {
       // A biller/merchant confirming a completed payment. It posts as a
       // `receipt` row and only counts when no bank alert covers it.
       cls = SmsClass.transaction;
-      signals.add(const SmsSignal('merchant_receipt', 3,
-          detail: 'Merchant confirms a completed payment'));
-    } else if (notMoved || receipt || merchantSender ||
+      signals.add(
+        const SmsSignal(
+          'merchant_receipt',
+          3,
+          detail: 'Merchant confirms a completed payment',
+        ),
+      );
+    } else if (notMoved ||
+        receipt ||
+        merchantSender ||
         SmsGuards.fundHouseConfirmation(lower)) {
       // Nothing has moved yet (bill due, decline, collect request, mandate
       // set-up), or a fund house is confirming units for a debit the bank
@@ -507,8 +614,13 @@ class SmsClassifier {
     // with…"). The real alert for the same payment arrives on an `-S` header.
     if (cls == SmsClass.transaction && sender.dltCategory == 'P') {
       cls = SmsClass.promo;
-      signals.add(const SmsSignal('dlt_promotional_veto', -6,
-          detail: 'Promotional (-P) headers never post a transaction'));
+      signals.add(
+        const SmsSignal(
+          'dlt_promotional_veto',
+          -6,
+          detail: 'Promotional (-P) headers never post a transaction',
+        ),
+      );
     }
 
     final score = _confidenceFor(
@@ -559,9 +671,18 @@ class SmsClassifier {
   static const Map<String, List<String>> _brandDomains = {
     // hdfcbk.io is HDFC's own short-link domain (166 false alarms without it).
     'hdfc': ['hdfcbank.com', 'hdfc.bank.in', 'hdfcbk.io'],
-    'icici': ['icicibank.com', 'icici.bank.in', 'icicipruamc.com', 'iciciprumf.com'],
+    'icici': [
+      'icicibank.com',
+      'icici.bank.in',
+      'icicipruamc.com',
+      'iciciprumf.com',
+    ],
     'sbi': [
-      'sbi.co.in', 'sbicard.com', 'onlinesbi.sbi', 'sbi.bank.in', 'sbiyono.sbi',
+      'sbi.co.in',
+      'sbicard.com',
+      'onlinesbi.sbi',
+      'sbi.bank.in',
+      'sbiyono.sbi',
       'onlinesbi.com',
     ],
     'axis': ['axisbank.com', 'axisbank.co.in', 'axbk.io'],
@@ -602,17 +723,43 @@ class SmsClassifier {
   /// Suffixes governed by a real institution (RBI's `.bank.in`, the government
   /// domains). A host under one of these is never a lookalike.
   static const Set<String> _trustedSuffixes = {
-    '.bank.in', '.gov.in', '.nic.in', '.rbi.org.in', '.sbi', '.amex',
+    '.bank.in',
+    '.gov.in',
+    '.nic.in',
+    '.rbi.org.in',
+    '.sbi',
+    '.amex',
   };
 
   static const Set<String> _shorteners = {
-    'bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly', 'is.gd', 'cutt.ly',
-    'rb.gy', 'shorturl.at', 'rebrand.ly', 't.ly', 'bit.do',
+    'bit.ly',
+    'tinyurl.com',
+    't.co',
+    'goo.gl',
+    'ow.ly',
+    'is.gd',
+    'cutt.ly',
+    'rb.gy',
+    'shorturl.at',
+    'rebrand.ly',
+    't.ly',
+    'bit.do',
   };
 
   static const Set<String> _oddTlds = {
-    '.xyz', '.top', '.club', '.live', '.icu', '.biz', '.vip', '.link',
-    '.online', '.shop', '.site', '.me', '.co',
+    '.xyz',
+    '.top',
+    '.club',
+    '.live',
+    '.icu',
+    '.biz',
+    '.vip',
+    '.link',
+    '.online',
+    '.shop',
+    '.site',
+    '.me',
+    '.co',
   };
 
   String _hostOf(String url) => url
@@ -647,14 +794,14 @@ class SmsClassifier {
     // A host that names a brand must be that brand's own domain.
     for (final entry in _brandDomains.entries) {
       final brand = entry.key;
-      final claimsBrand = RegExp(
-        '(^|[.\\-])${RegExp.escape(brand)}',
-      ).hasMatch(host) &&
+      final claimsBrand =
+          RegExp('(^|[.\\-])${RegExp.escape(brand)}').hasMatch(host) &&
           // A three-letter brand (`yes`, `sbi`) must stand alone as a label
           // prefix — `yesbankltd` is a VPA handle, not a Yes Bank claim.
           (brand.length >= 4 ||
-              RegExp('(^|[.\\-])${RegExp.escape(brand)}(?=[.\\-]|\\d)')
-                  .hasMatch(host));
+              RegExp(
+                '(^|[.\\-])${RegExp.escape(brand)}(?=[.\\-]|\\d)',
+              ).hasMatch(host));
       if (!claimsBrand) continue;
       final trusted = entry.value.any(
         (domain) => registrable == domain || host.endsWith('.$domain'),

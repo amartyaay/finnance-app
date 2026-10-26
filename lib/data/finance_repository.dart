@@ -5,6 +5,7 @@ import '../domain/sms_message.dart';
 import '../domain/transaction.dart';
 import '../engine/card_metrics.dart';
 import '../engine/txn_guards.dart';
+import '../engine/work_cards.dart';
 import '../engine/insights_engine.dart';
 import '../engine/monthly_summary.dart';
 import '../engine/recurring_detector.dart';
@@ -289,10 +290,13 @@ class HomeDataBuilder {
     // Ledger admission, applied to every data source (real, demo, import).
     // Dedupe already ran in the repository that owns the storage; this only
     // decides whether a parsed row is allowed to affect totals at all.
-    final counted = [
+    final admitted = [
       for (final txn in transactions)
         if (const TxnGuards().isCountable(txn)) txn,
     ];
+    // A corporate card's purchases are the employer's, not the owner's: out
+    // of every personal total, but still on that card's own balance below.
+    final counted = const WorkCards().apply(admitted);
 
     final visible = counted
         .where((t) => t.isDuplicateOfKey == null)
@@ -300,11 +304,18 @@ class HomeDataBuilder {
     final summary = summaryCalculator.forMonth(counted, now);
     final previous = summaryCalculator.forMonth(counted, now, monthOffset: -1);
 
+    // A meal / wallet card (Pluxee, Paytm) is prepaid: no limit, no bill.
+    // It is not a credit card and must not dilute utilisation.
+    final walletIssuer = RegExp(
+      r'pluxee|sodexo|paytm|amazon pay|phonepe|mobikwik',
+      caseSensitive: false,
+    );
     final cardMetrics = <CardMetrics>[
       for (final card in cards)
+        if (!walletIssuer.hasMatch(card.issuer))
         cardCalculator.compute(
           card: card,
-          transactions: counted,
+          transactions: admitted,
           now: now,
           latestBill: _latestBillFor(
             card,
@@ -380,6 +391,27 @@ class HomeDataBuilder {
         latest = bill;
       }
     }
-    return latest;
+    if (latest == null || latest.statementDateMs != null) return latest;
+    // A reminder repeats the statement's figures days later ("₹5,135.94 due
+    // on 2 Nov"). Payments count from the *first* notice of that bill, or a
+    // bill paid on the statement day stays "due" after the reminder arrives.
+    var firstMs = latest.receivedAtMs;
+    for (final bill in bills) {
+      if (bill.cardKey != latest.cardKey ||
+          bill.totalDuePaise != latest.totalDuePaise ||
+          bill.dueDateMs != latest.dueDateMs) {
+        continue;
+      }
+      final ms = bill.receivedAtMs;
+      if (ms != null && (firstMs == null || ms < firstMs)) firstMs = ms;
+    }
+    return CardBillNotice(
+      cardKey: latest.cardKey,
+      totalDuePaise: latest.totalDuePaise,
+      minimumDuePaise: latest.minimumDuePaise,
+      dueDateMs: latest.dueDateMs,
+      statementDateMs: latest.statementDateMs,
+      receivedAtMs: firstMs,
+    );
   }
 }

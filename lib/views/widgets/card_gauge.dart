@@ -159,7 +159,7 @@ class CardSummaryCard extends StatelessWidget {
               _StatDivider(color: p.outlineVariant),
               Expanded(
                 child: _SummaryStat(
-                  label: 'Total due',
+                  label: 'Still due',
                   value: moneyCompact(totalDue),
                   align: CrossAxisAlignment.start,
                 ),

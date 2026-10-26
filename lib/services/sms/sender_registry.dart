@@ -76,6 +76,9 @@ class SenderRegistry {
     'GPAY': (name: 'Google Pay', kind: 'wallet'),
     'GOOGLEP': (name: 'Google Pay', kind: 'wallet'),
     'AMZNPAY': (name: 'Amazon Pay', kind: 'wallet'),
+    // Employer meal benefit card: a wallet, never a credit card.
+    'PLUXEE': (name: 'Pluxee', kind: 'wallet'),
+    'SODEXO': (name: 'Pluxee', kind: 'wallet'),
     'AMAZON': (name: 'Amazon', kind: 'wallet'),
     'BHIM': (name: 'BHIM UPI', kind: 'wallet'),
     'UPI': (name: 'UPI', kind: 'wallet'),

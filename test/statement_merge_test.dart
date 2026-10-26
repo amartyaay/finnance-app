@@ -324,7 +324,10 @@ void main() {
       DateTime(2026, 10, 2),
       monthOffset: -1,
     );
-    expect(september.incomePaise, 8750000);
+    // A salary on the 30th pays for the month ahead: it is October's income.
+    expect(september.incomePaise, 0);
     expect(september.spendPaise, 0);
+    final october = calc.forMonth(out, DateTime(2026, 10, 2));
+    expect(october.incomePaise, 8750000);
   });
 }

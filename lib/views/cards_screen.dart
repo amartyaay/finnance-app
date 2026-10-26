@@ -68,9 +68,10 @@ class _CardsScreenState extends State<CardsScreen> {
       final band = utilization == null
           ? UtilizationBand.unknown
           : const CardMetricsCalculator().bandFor(utilization, limitTotal);
+      // What is still owed, not the sum of statements: a paid bill is done.
       final totalDue = cards.fold<int>(
         0,
-        (sum, card) => sum + card.totalDuePaise,
+        (sum, card) => sum + card.billDuePaise,
       );
       final nextDue = _nextDueDate(cards);
       final faceHeight = cardFaceHeight(context);
@@ -196,7 +197,8 @@ class _CardsScreenState extends State<CardsScreen> {
     DateTime? next;
     for (final card in cards) {
       final due = card.dueDate;
-      if (due == null) continue;
+      // A paid bill has no next due date to chase.
+      if (due == null || card.billIsPaid) continue;
       if (next == null || due.isBefore(next)) next = due;
     }
     return next;
@@ -273,17 +275,22 @@ class _BillRow extends StatelessWidget {
     final p = T.of(context);
     final due = metrics.dueDate;
     final hasBill = metrics.totalDuePaise > 0;
+    final paid = hasBill && metrics.billIsPaid;
     // Calendar days, not elapsed hours: a bill due tomorrow is never "today".
     final days = hasBill && due != null
         ? daysUntilDate(due, now: viewNow(context))
         : metrics.daysToDue;
-    final tone = days != null && days < 0 && hasBill
+    final tone = paid
+        ? p.positive
+        : days != null && days < 0 && hasBill
         ? p.danger
         : metrics.dueSoon
         ? p.caution
         : p.primary;
     final dueLabel = due == null
         ? 'No date set'
+        : paid
+        ? 'Paid · was due ${shortDate(due)}'
         : hasBill
         ? '${shortDate(due)} · ${days == null ? '' : daysUntilLabel(days)}'
         : 'Next ${shortDate(due)}';
@@ -292,7 +299,11 @@ class _BillRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: T.s3),
       child: Row(
         children: [
-          IconDisc(icon: Icons.event_rounded, color: tone, size: 40),
+          IconDisc(
+            icon: paid ? Icons.check_circle_rounded : Icons.event_rounded,
+            color: tone,
+            size: 40,
+          ),
           const SizedBox(width: T.s3),
           Expanded(
             child: Column(
@@ -325,7 +336,11 @@ class _BillRow extends StatelessWidget {
               ),
               const SizedBox(height: 1),
               Text(
-                hasBill ? 'total due' : 'this cycle',
+                paid
+                    ? 'paid'
+                    : hasBill
+                    ? 'total due'
+                    : 'this cycle',
                 style: T.bodySmall.copyWith(color: p.inkMuted, fontSize: 12),
               ),
             ],

@@ -221,7 +221,13 @@ class _StatementsScreenState extends State<StatementsScreen> {
             _EmptyImport(onImport: _importing ? null : _import)
           else
             ListView(
-              padding: const EdgeInsets.fromLTRB(T.s4, T.s2, T.s4, T.s8),
+              // Same gutter as the tabs, and clear of the gesture bar.
+              padding: EdgeInsets.fromLTRB(
+                T.s5,
+                T.s2,
+                T.s5,
+                T.s8 + MediaQuery.viewPaddingOf(context).bottom,
+              ),
               children: [
                 _AccountHeader(controller: controller),
                 const SizedBox(height: T.s4),

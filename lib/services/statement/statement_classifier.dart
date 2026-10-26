@@ -25,11 +25,15 @@ class StatementClassifier {
   static final _cashDeposit = _r(r'CASHDEPOSIT|CSHDEP|CDMDEP|BYCASH');
   static final _charges = _r(
     r'CHGS|CHARGES|ANNUALFEE|ANNUALMAINT|PROCESSINGFEE|FEEDEBIT|MINBAL|NONMAINT|'
-    r'GSTON|TAXDEDUCTION|DEBITINTEREST|TAXONPREVIOUS|SMSCHG',
+    r'GSTON|TAXDEDUCTION|DEBITINTEREST|TAXONPREVIOUS|SMSCHG|ATMCARDAMC',
   );
   static final _cardBill = _r(
     r'CRED(?:CLUB|\.CLUB|/)|^CRED|CHEQ|SBICARD|SBICREDITCARD|CREDITCARD|CCPAYMENT|'
-    r'CCPAY|AMEX|AMERICANEXPRESS|ONECARD|SCAPIA|UNICARDS|CARDPAYMENT|CARDBILL',
+    r'CCPAY|AMEX|AMERICANEXPRESS|ONECARD|SCAPIA|UNICARDS|CARDPAYMENT|CARDBILL|'
+    // Card bills paid through PhonePe's Bharat Connect (BBPS) land on a
+    // `SV…` collection VPA ("Bharat C/YESB/SV25121122"); Axis's own payment
+    // gateway is `fcpgaxisba`.
+    r'/(?:BHARATC|BHARATCONNECT|PHONEPE)/[A-Z]{4}/SV\d{6,}|FCPGAXIS',
   );
   static final _investment = _r(
     r'ZERODHA|GR[O0]WW|UPSTOX|ICCL|BSELTD|BSEL|NSECLEARING|MUTUALFUND|MUTUAL|'
@@ -177,7 +181,12 @@ class StatementClassifier {
       if (_cardBill.hasMatch(joined)) return as(StatementKind.cardBill);
       if (_investment.hasMatch(joined)) return as(StatementKind.investment);
       if (_loan.hasMatch(joined)) return as(StatementKind.loan);
-      if (_wallet.hasMatch(joined)) return as(StatementKind.selfTransfer);
+      if (_wallet.hasMatch(joined)) {
+        return as(
+          StatementKind.selfTransfer,
+          label: joined.contains('UPILITE') ? 'UPI Lite top-up' : null,
+        );
+      }
       if (_card.hasMatch(joined)) return as(StatementKind.spend);
       if (_billpay.hasMatch(joined)) {
         final c = _category(StatementKind.spend, counterparty, spaced);

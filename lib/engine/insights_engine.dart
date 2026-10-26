@@ -76,6 +76,9 @@ class InsightsEngine {
     for (final category in summary.byCategory) {
       if (category.paise < minAmountPaise) continue;
       if (category.previousPaise < minAmountPaise) continue;
+      // "Other is 3.6x your usual" says nothing a person can act on; an
+      // uncategorised pile is a review task, not a spending trend.
+      if (category.kind == SpendCategoryKind.other) continue;
       final ratio = category.paise / category.previousPaise;
       if (ratio < 1.4) continue;
       out.add(
@@ -84,7 +87,7 @@ class InsightsEngine {
           title:
               '${category.name} is ${ratio.toStringAsFixed(1)}× your usual',
           body:
-              '${inr(category.amount)} this month vs ${inr(category.previous)} last month. '
+              '${_rupees(category.amount)} this month vs ${_rupees(category.previous)} last month. '
               '${ratio > 2 ? 'That is a big jump — worth a look.' : 'Probably the extra week.'}',
           tone: ratio > 2 ? InsightTone.caution : InsightTone.neutral,
           chip: category.name,
@@ -123,7 +126,7 @@ class InsightsEngine {
             id: 'dup:${a.key}',
             title: 'Possible duplicate charge',
             body:
-                '${inr(a.amount)} at ${a.merchant} was charged twice within 30 minutes. '
+                '${_rupees(a.amount)} at ${a.merchant} was charged twice within 30 minutes. '
                 'If this was one payment, ask for a refund.',
             tone: InsightTone.warning,
             chip: a.merchant,
@@ -148,9 +151,9 @@ class InsightsEngine {
             id: 'util:${card.card.key}',
             title: '${card.card.displayName} is at ${(card.utilization! * 100).round()}% utilisation',
             body:
-                '${inr(card.outstanding)} of ${inr(card.limit)} used, ${card.daysToStatement} days before the statement date. '
+                '${_rupees(card.outstanding)} of ${_rupees(card.limit)} used, ${card.daysToStatement} days before the statement date. '
                 '${card.projectedUtilization != null ? 'On this pace you would end the cycle at ${(card.projectedUtilization! * 100).round()}%.' : ''} '
-                '${card.headroomTo30 != null && card.headroomTo30!.value > 0 ? 'Paying ${inr(card.headroomTo30!)} would bring it under 30%.' : ''}',
+                '${card.headroomTo30 != null && card.headroomTo30!.value > 0 ? 'Paying ${_rupees(card.headroomTo30!)} would bring it under 30%.' : ''}',
             tone: card.utilization! >= 0.5
                 ? InsightTone.warning
                 : InsightTone.caution,
@@ -168,8 +171,8 @@ class InsightsEngine {
             id: 'due:${card.card.key}',
             title: 'Bill due in ${card.daysToDue} days',
             body:
-                '${inr(card.totalDue)} on ${card.card.title}.'
-                '${card.minimumDue != null ? ' Minimum due ${inr(card.minimumDue!)}.' : ''} Paying the full amount avoids interest.',
+                '${_rupees(card.totalDue)} on ${card.card.title}.'
+                '${card.minimumDue != null ? ' Minimum due ${_rupees(card.minimumDue!)}.' : ''} Paying the full amount avoids interest.',
             tone: (card.daysToDue ?? 99) <= 2
                 ? InsightTone.warning
                 : InsightTone.caution,
@@ -189,8 +192,8 @@ class InsightsEngine {
             id: 'rec:${series.merchant}',
             title: '${series.merchant} renews soon',
             body:
-                '${inr(series.amount)} expected on ${_shortDate(series.nextExpected)}. '
-                'That is ${inr(Paise(series.annualisedPaise))} a year if it keeps going.',
+                '${_rupees(series.amount)} expected on ${_shortDate(series.nextExpected)}. '
+                'That is ${_rupees(Paise(series.annualisedPaise))} a year if it keeps going.',
             tone: InsightTone.neutral,
             chip: series.categoryName,
             amountPaise: series.medianAmountPaise,
@@ -199,30 +202,34 @@ class InsightsEngine {
     ];
   }
 
+  /// Measured exactly like Home's "Left": what came in minus everything that
+  /// went out (spend, cash and card bills), so the two never disagree.
   List<Insight> _savings(MonthlySummary summary) {
     if (summary.incomePaise <= 0) return const [];
-    if (summary.net.value < 0) {
+    final left = summary.left;
+    final out = summary.moneyOut;
+    if (left.value < 0) {
       return [
         Insight(
           id: 'savings:over',
-          title: 'You have spent more than came in',
+          title: 'More went out than came in',
           body:
-              '${inr(summary.spend)} out against ${inr(summary.income)} in this month, '
-              'a gap of ${inr(Paise(-summary.net.value))}. Check the top two categories.',
+              '${_rupees(out)} out against ${_rupees(summary.income)} in this month, '
+              'a gap of ${_rupees(Paise(-left.value))}. Check the top two categories.',
           tone: InsightTone.caution,
           action: InsightAction.categories,
         ),
       ];
     }
-    final rate = summary.savingsRate;
+    final rate = left.value / summary.incomePaise;
     if (rate >= 0.3) {
       return [
         Insight(
           id: 'savings:positive',
           title: 'You are keeping ${(rate * 100).round()}% of what came in',
           body:
-              '${inr(summary.net)} left after ${inr(summary.spend)} of spending this month. '
-              'Anything above 30% is a strong month.',
+              '${_rupees(left)} left after ${_rupees(out)} went out this month '
+              '(spending, cash and card bills). Anything above 30% is a strong month.',
           tone: InsightTone.positive,
           action: InsightAction.transactions,
         ),
@@ -234,8 +241,8 @@ class InsightsEngine {
           id: 'savings:low',
           title: 'Spending is close to income this month',
           body:
-              '${inr(summary.spend)} spent against ${inr(summary.income)} in, so only ${inr(summary.net)} is left. '
-              'Look at the top two categories below.',
+              '${_rupees(out)} went out against ${_rupees(summary.income)} in, so only '
+              '${_rupees(left)} is left.',
           tone: InsightTone.caution,
           action: InsightAction.categories,
         ),
@@ -243,6 +250,7 @@ class InsightsEngine {
     }
     return const [];
   }
+
 
   List<Insight> _projection(MonthlySummary summary) {
     if (summary.previousSpendPaise <= 0 || summary.daysElapsed < 5) {
@@ -255,8 +263,8 @@ class InsightsEngine {
         id: 'projection',
         title: 'On track to spend more than last month',
         body:
-            'At ${inr(summary.dailyAverage)} a day you will finish around ${inr(Paise(projected))}, '
-            'against ${inr(summary.previousSpend)} last month.',
+            'At ${_rupees(summary.dailyAverage)} a day you will finish around ${_rupees(Paise(projected))}, '
+            'against ${_rupees(summary.previousSpend)} last month.',
         tone: InsightTone.caution,
         amountPaise: projected - summary.previousSpendPaise,
         action: InsightAction.categories,
@@ -281,7 +289,7 @@ class InsightsEngine {
         id: 'small-spends',
         title: '${small.length} small payments added up',
         body:
-            'Payments under ₹300 came to ${inr(Paise(total))} this month across '
+            'Payments under ₹300 came to ${_rupees(Paise(total))} this month across '
             '${small.length} charges — the easiest place to find room.',
         tone: InsightTone.neutral,
         amountPaise: total,
@@ -310,7 +318,7 @@ class InsightsEngine {
         id: 'largest',
         title: 'Biggest payment: ${top.title}',
         body:
-            '${inr(top.amount)} on ${_shortDate(top.occurredAt)} — '
+            '${_rupees(top.amount)} on ${_shortDate(top.occurredAt)} — '
             '${(top.amountPaise / median).toStringAsFixed(1)}× your typical payment.',
         tone: InsightTone.neutral,
         chip: top.categoryName,
@@ -328,3 +336,8 @@ class InsightsEngine {
     return '${date.day} ${months[date.month - 1]}';
   }
 }
+
+/// Whole rupees for sentences: "₹21,380 this month vs ₹5,946" reads better
+/// than "₹21,379.60 vs ₹5,946".
+String _rupees(Paise amount) =>
+    inr(Paise(((amount.value / 100).round()) * 100));

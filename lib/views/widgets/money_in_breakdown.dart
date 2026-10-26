@@ -55,7 +55,16 @@ List<MoneyInGroup> moneyInGroups(
   final byKind = <MoneyInKind, int>{};
   for (final txn in transactions) {
     if (txn.isDuplicateOfKey != null) continue;
-    final at = txn.occurredAt;
+    var at = txn.occurredAt;
+    // Same rule as the monthly summary: a month-end salary is next month's.
+    final calendarMonth =
+        monthStart.day == 1 &&
+        monthEnd == DateTime(monthStart.year, monthStart.month + 1);
+    if (calendarMonth &&
+        txn.moneyInKind == MoneyInKind.salary &&
+        at.day >= 25) {
+      at = DateTime(at.year, at.month + 1);
+    }
     if (at.isBefore(monthStart) || !at.isBefore(monthEnd)) continue;
     var kind = txn.moneyInKind;
     if (kind == MoneyInKind.none) {
@@ -88,5 +97,8 @@ String moneyInAmount(Paise amount) => money(amount);
 
 /// `Refunds ₹3,939.66 · Transfers in ₹1.2L` — the one string every screen uses.
 String moneyInLine(List<MoneyInGroup> groups) => groups
-    .map((group) => '${moneyInKindLabel(group.kind)} ${moneyInAmount(group.amount)}')
+    .map(
+      (group) =>
+          '${moneyInKindLabel(group.kind)} ${moneyInAmount(group.amount)}',
+    )
     .join(' · ');

@@ -76,7 +76,7 @@ class _TransactionDetailSheet extends StatelessWidget {
                 const SizedBox(width: T.s3),
                 Expanded(
                   child: Text(
-                    txn.title,
+                    displayName(txn.title),
                     style: T.title.copyWith(color: p.ink, fontSize: 19),
                   ),
                 ),

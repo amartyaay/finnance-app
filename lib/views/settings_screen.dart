@@ -116,20 +116,6 @@ class SettingsScreen extends StatelessWidget {
                   trailing: chevron,
                   onTap: () => SmsInboxScreen.open(context),
                 ),
-                const SettingsTile(
-                  icon: Icons.file_upload_rounded,
-                  title: 'Import CSV',
-                  subtitle: 'Coming soon',
-                  enabled: false,
-                  trailing: Pill('Soon', dense: true),
-                ),
-                const SettingsTile(
-                  icon: Icons.file_download_rounded,
-                  title: 'Export CSV',
-                  subtitle: 'Coming soon',
-                  enabled: false,
-                  trailing: Pill('Soon', dense: true),
-                ),
                 SettingsTile(
                   icon: Icons.delete_rounded,
                   title: 'Clear all data',

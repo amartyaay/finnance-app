@@ -352,3 +352,58 @@ class PeriodTabs extends StatelessWidget {
     );
   }
 }
+
+/// Statement narrations and many alerts shout ("SWIGGY INSTAMART PRI");
+/// shown as written they read as alarms. An all-caps name is title-cased for
+/// display; short codes (UPI, HDFC, AMC) and anything already in mixed case
+/// are left alone.
+String displayName(String raw) {
+  final name = raw.trim();
+  if (name.length < 4 || name != name.toUpperCase()) return name;
+  if (!RegExp('[A-Z]{3}').hasMatch(name)) return name;
+  return name
+      .split(' ')
+      .map((word) {
+        final bare = word.replaceAll(RegExp('[^A-Z]'), '');
+        if (_acronyms.contains(bare) ||
+            (word.length <= 3 &&
+                !RegExp(r'^(?:LTD|THE|AND|PVT)$').hasMatch(word))) {
+          return word; // UPI, SBI, HDFC, ICICI stay codes
+        }
+        if (RegExp(r'\d').hasMatch(word)) return word;
+        return word[0] + word.substring(1).toLowerCase();
+      })
+      .join(' ');
+}
+
+const _acronyms = {
+  'HDFC',
+  'ICICI',
+  'IDFC',
+  'AXIS',
+  'SBI',
+  'UPI',
+  'NEFT',
+  'IMPS',
+  'RTGS',
+  'ATM',
+  'AMC',
+  'EMI',
+  'IRCTC',
+  'BSNL',
+  'LIC',
+  'KFC',
+  'ICCL',
+  'NSE',
+  'BSE',
+  'UMRN',
+  'POS',
+  'IOCL',
+  'HPCL',
+  'BPCL',
+  'AMEX',
+  'CRED',
+  'BBPS',
+  'KYC',
+  'GST',
+};

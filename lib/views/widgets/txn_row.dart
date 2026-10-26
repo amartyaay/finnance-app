@@ -102,7 +102,7 @@ class TxnRow extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          txn.title,
+                          displayName(txn.title),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: T.cardTitle.copyWith(color: p.ink),

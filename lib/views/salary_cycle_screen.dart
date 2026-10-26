@@ -58,7 +58,13 @@ class SalaryCycleScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(titleSpacing: T.s5, title: Text(cycleRange(cycle))),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(T.s4, T.s2, T.s4, T.s8),
+        // Same gutter as the tabs, and clear of the gesture bar.
+        padding: EdgeInsets.fromLTRB(
+          T.s5,
+          T.s2,
+          T.s5,
+          T.s8 + MediaQuery.viewPaddingOf(context).bottom,
+        ),
         children: [
           SalaryCycleCard(cycle: cycle),
           const SizedBox(height: T.s4),

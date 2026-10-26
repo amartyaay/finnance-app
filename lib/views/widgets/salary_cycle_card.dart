@@ -43,18 +43,24 @@ class SalaryCycleCard extends StatelessWidget {
     final income = cycle.salaryPaise + cycle.otherInPaise;
     final left = cycle.leftPaise;
     final segments = cycleSegments(context, cycle);
-    final total = segments.fold<int>(0, (s, x) => s + x.paise) + (left > 0 ? left - cycle.investedPaise : 0);
+    final total =
+        segments.fold<int>(0, (s, x) => s + x.paise) +
+        (left > 0 ? left - cycle.investedPaise : 0);
     final status = cycle.salaryRows.isEmpty
         ? 'Before first salary'
         : cycle.isPartial
         ? 'In progress · ${_days(cycle.days)}'
         : _days(cycle.days);
-    final categories = cycle.spendByCategory.where((e) => e.value > 0).take(3).toList();
+    final categories = cycle.spendByCategory
+        .where((e) => e.value > 0)
+        .take(3)
+        .toList();
 
     return AppCard(
       onTap: onTap,
       child: Semantics(
-        label: 'Cycle ${cycleRange(cycle)}. Salary ${moneySpoken(Paise(cycle.salaryPaise))}. '
+        label:
+            'Cycle ${cycleRange(cycle)}. Salary ${moneySpoken(Paise(cycle.salaryPaise))}. '
             '${left >= 0 ? 'Left' : 'Overspent'} ${moneySpoken(Paise(left.abs()))}.',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -69,11 +75,16 @@ class SalaryCycleCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: T.s2),
+                // Flush right: a Flexible alone leaves its child at the
+                // start of its half of the row.
                 Flexible(
-                  child: Pill(
-                    status,
-                    dense: true,
-                    tone: cycle.isPartial ? PillTone.info : PillTone.neutral,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Pill(
+                      status,
+                      dense: true,
+                      tone: cycle.isPartial ? PillTone.info : PillTone.neutral,
+                    ),
                   ),
                 ),
               ],
@@ -104,9 +115,11 @@ class SalaryCycleCard extends StatelessWidget {
                           income == 0
                               ? money(Paise(cycle.outPaise))
                               : money(Paise(left.abs())),
-                          style: T.moneyLarge(
-                            income > 0 && left < 0 ? p.danger : p.ink,
-                          ).copyWith(fontSize: 26),
+                          style: T
+                              .moneyLarge(
+                                income > 0 && left < 0 ? p.danger : p.ink,
+                              )
+                              .copyWith(fontSize: 26),
                         ),
                       ),
                     ],
@@ -114,16 +127,22 @@ class SalaryCycleCard extends StatelessWidget {
                 ),
                 if (cycle.salaryPaise > 0)
                   Flexible(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text('Salary', style: T.label.copyWith(color: p.inkSecondary)),
-                        Text(
-                          money(Paise(cycle.salaryPaise)),
-                          style: T.money.copyWith(color: p.positive),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                    child: Align(
+                      alignment: Alignment.bottomRight,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            'Salary',
+                            style: T.label.copyWith(color: p.inkSecondary),
+                          ),
+                          Text(
+                            money(Paise(cycle.salaryPaise)),
+                            style: T.money.copyWith(color: p.positive),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
               ],
@@ -152,7 +171,8 @@ class SalaryCycleCard extends StatelessWidget {
                         ),
                       if (left - cycle.investedPaise > 0)
                         Expanded(
-                          flex: ((left - cycle.investedPaise) * 1000 ~/ total).clamp(1, 1000),
+                          flex: ((left - cycle.investedPaise) * 1000 ~/ total)
+                              .clamp(1, 1000),
                           child: Container(color: p.surfaceSunken),
                         ),
                     ],
@@ -186,7 +206,11 @@ class SalaryCycleCard extends StatelessWidget {
 }
 
 class _Legend extends StatelessWidget {
-  const _Legend({required this.color, required this.label, required this.paise});
+  const _Legend({
+    required this.color,
+    required this.label,
+    required this.paise,
+  });
 
   final Color color;
   final String label;

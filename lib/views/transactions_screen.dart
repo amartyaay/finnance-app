@@ -139,7 +139,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         (txn) => txn.kind == TxnKind.transfer,
       );
       final query = _search.text.trim().toLowerCase();
-      final visible = monthTransactions.where((txn) {
+      // A search looks through everything, not just the period on screen:
+      // "when did I last pay Swiggy" should not depend on the month picked.
+      final pool = query.isEmpty ? monthTransactions : transactions;
+      final visible = pool.where((txn) {
         if (_kindFilter != null && txn.categoryKind != _kindFilter) {
           return false;
         }
@@ -173,122 +176,128 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(T.s5, T.s2, T.s5, 96),
           children: [
-            PeriodTabs(value: period, onChanged: state.setPeriod),
-            const SizedBox(height: T.s3),
-            AppCard(
-              shadow: true,
-              padding: const EdgeInsets.fromLTRB(T.s2, T.s2, T.s2, T.s4),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      IconButton(
-                        tooltip: 'Previous ${period.label.toLowerCase()}',
-                        onPressed: monthOffset > -state.periodsOfHistory
-                            ? () => state.setPeriodOffset(monthOffset - 1)
-                            : null,
-                        icon: const Icon(Icons.chevron_left_rounded),
-                        color: p.inkSecondary,
-                      ),
-                      Expanded(
-                        child: Text(
-                          periodTitle(period, monthStart, monthOffset),
-                          textAlign: TextAlign.center,
-                          style: T.cardTitle.copyWith(
-                            color: p.ink,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Next ${period.label.toLowerCase()}',
-                        onPressed: monthOffset >= 0
-                            ? null
-                            : () => state.setPeriodOffset(monthOffset + 1),
-                        icon: const Icon(Icons.chevron_right_rounded),
-                        color: p.inkSecondary,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: T.s1),
-                  Text(
-                    'Spent',
-                    style: T.label.copyWith(
-                      color: p.inkMuted,
-                      letterSpacing: 0.4,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: GradientText(
-                      child: MoneyText(
-                        summary.spend,
-                        animate: true,
-                        style: T
-                            .moneyLarge(Colors.white)
-                            .copyWith(fontSize: 34),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: T.s3),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: T.s2),
-                    child: Row(
+            // While searching, the period summary steps aside so the results
+            // sit right under the field instead of below the keyboard.
+            if (query.isEmpty) ...[
+              PeriodTabs(value: period, onChanged: state.setPeriod),
+              const SizedBox(height: T.s3),
+              AppCard(
+                shadow: true,
+                padding: const EdgeInsets.fromLTRB(T.s2, T.s2, T.s2, T.s4),
+                child: Column(
+                  children: [
+                    Row(
                       children: [
-                        Expanded(
-                          child: _ActivityStat(
-                            label: outLabel,
-                            value: money(summary.moneyOut),
-                          ),
+                        IconButton(
+                          tooltip: 'Previous ${period.label.toLowerCase()}',
+                          onPressed: monthOffset > -state.periodsOfHistory
+                              ? () => state.setPeriodOffset(monthOffset - 1)
+                              : null,
+                          icon: const Icon(Icons.chevron_left_rounded),
+                          color: p.inkSecondary,
                         ),
                         Expanded(
-                          child: _ActivityStat(
-                            label: 'Income',
-                            value: money(summary.income),
+                          child: Text(
+                            periodTitle(period, monthStart, monthOffset),
+                            textAlign: TextAlign.center,
+                            style: T.cardTitle.copyWith(
+                              color: p.ink,
+                              fontSize: 16,
+                            ),
                           ),
                         ),
-                        Expanded(
-                          child: _ActivityStat(
-                            label: summary.txnCount == 1 ? 'Entry' : 'Entries',
-                            value: '${summary.txnCount}',
-                          ),
+                        IconButton(
+                          tooltip: 'Next ${period.label.toLowerCase()}',
+                          onPressed: monthOffset >= 0
+                              ? null
+                              : () => state.setPeriodOffset(monthOffset + 1),
+                          icon: const Icon(Icons.chevron_right_rounded),
+                          color: p.inkSecondary,
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: T.s3),
-                  _ActivityCaption(
-                    periodLabel: outLabel,
-                    summary: summary,
-                    moneyIn: moneyInGroups(
-                      transactions,
-                      monthStart: monthStart,
-                      monthEnd: monthEnd,
-                    ),
-                  ),
-                  // A single day has no day-by-day bars.
-                  if (period != SpendPeriod.day) ...[
-                    const SizedBox(height: T.s2),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: T.s3),
-                      child: DailyBars(
-                        values: daily,
-                        month: monthStart,
-                        todayIndex: isCurrentMonth
-                            ? (summary.daysElapsed - 1).clamp(
-                                0,
-                                daily.length - 1,
-                              )
-                            : null,
-                        height: 62,
+                    const SizedBox(height: T.s1),
+                    Text(
+                      'Spent',
+                      style: T.label.copyWith(
+                        color: p.inkMuted,
+                        letterSpacing: 0.4,
                       ),
                     ),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: GradientText(
+                        child: MoneyText(
+                          summary.spend,
+                          animate: true,
+                          style: T
+                              .moneyLarge(Colors.white)
+                              .copyWith(fontSize: 34),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: T.s3),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: T.s2),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _ActivityStat(
+                              label: outLabel,
+                              value: money(summary.moneyOut),
+                            ),
+                          ),
+                          Expanded(
+                            child: _ActivityStat(
+                              label: 'Income',
+                              value: money(summary.income),
+                            ),
+                          ),
+                          Expanded(
+                            child: _ActivityStat(
+                              label: summary.txnCount == 1
+                                  ? 'Entry'
+                                  : 'Entries',
+                              value: '${summary.txnCount}',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: T.s3),
+                    _ActivityCaption(
+                      periodLabel: outLabel,
+                      summary: summary,
+                      moneyIn: moneyInGroups(
+                        transactions,
+                        monthStart: monthStart,
+                        monthEnd: monthEnd,
+                      ),
+                    ),
+                    // A single day has no day-by-day bars.
+                    if (period != SpendPeriod.day) ...[
+                      const SizedBox(height: T.s2),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: T.s3),
+                        child: DailyBars(
+                          values: daily,
+                          month: monthStart,
+                          todayIndex: isCurrentMonth
+                              ? (summary.daysElapsed - 1).clamp(
+                                  0,
+                                  daily.length - 1,
+                                )
+                              : null,
+                          height: 62,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-            const SizedBox(height: T.s4),
+              const SizedBox(height: T.s4),
+            ],
             TextField(
               controller: _search,
               onChanged: (_) => setState(() {}),

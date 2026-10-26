@@ -256,7 +256,7 @@ class SummaryCalculator {
       // must not move a total before the user confirms it. It stays in the
       // review queue; `ARCHITECTURE.md §7` promises exactly this.
       if (txn.isDuplicateOfKey != null || txn.needsReview) continue;
-      final at = txn.occurredAt;
+      final at = _effectiveAt(txn, period);
       if (at.isBefore(monthStart) || !at.isBefore(monthEnd)) {
         if (at.isBefore(monthStart) &&
             !at.isBefore(prevStart) &&
@@ -382,6 +382,21 @@ class SummaryCalculator {
       period: period,
     );
   }
+}
+
+/// A month-end salary pays for the month ahead: in India it lands on the
+/// 28th–1st, and booking it to the month it arrived in made every month show
+/// the *previous* month's pay and the current one "no salary" until payday.
+/// For the month view, a salary credited on or after the 25th counts from the
+/// 1st of the next month.
+DateTime _effectiveAt(Txn txn, SpendPeriod period) {
+  final at = txn.occurredAt;
+  if (period != SpendPeriod.month ||
+      txn.moneyInKind != MoneyInKind.salary ||
+      at.day < 25) {
+    return at;
+  }
+  return DateTime(at.year, at.month + 1);
 }
 
 class _Acc {

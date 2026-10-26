@@ -486,7 +486,9 @@ class _HeroCard extends StatelessWidget {
       if (!hasIncome && data.unpaidBillCount > 0)
         '${_spoken(data.stillDue)} still due across ${data.unpaidBillCount} ${data.unpaidBillCount == 1 ? 'card bill' : 'card bills'}',
       if (hasIncome) 'Out this month ${_spoken(data.moneyOut)}',
-      if (moneyIn.isNotEmpty) 'Money in, not income: ${moneyInLine(moneyIn)}',
+      if (moneyIn.any((g) => !g.kind.isTrueIncome))
+        'Money in, not income: ${moneyInLine([for (final g in moneyIn)
+          if (!g.kind.isTrueIncome) g])}',
     ].join('. ');
 
     // Everything that used to crowd the hero, one tap away.
