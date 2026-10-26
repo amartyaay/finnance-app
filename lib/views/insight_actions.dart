@@ -8,7 +8,7 @@ import 'widgets/txn_common.dart';
 ///
 /// The engine has been computing an action for every insight since round 1 and
 /// nothing consumed it, so every insight card was a dead end. Home and Insights
-/// both call this one function â€” an action must not mean two things on two
+/// both call this one function — an action must not mean two things on two
 /// screens, and the destination must not be re-invented per screen.
 ///
 /// Returns `null` when the caller has nothing to open (for example a screen with

@@ -473,7 +473,7 @@ class _FaceGauge extends StatelessWidget {
                 ),
               ),
               Text(
-                percent == null ? 'Ã¢â‚¬â€' : '$percent%',
+                percent == null ? '—' : '$percent%',
                 maxLines: 1,
                 style: T.money.copyWith(
                   color: ink,

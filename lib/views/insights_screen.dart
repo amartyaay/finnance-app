@@ -158,7 +158,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
               Padding(
                 padding: const EdgeInsets.only(top: T.s2, left: T.s1),
                 child: Text(
-                  'No insights yet â€” a few more messages will give this screen '
+                  'No insights yet — a few more messages will give this screen '
                   'something to work with.',
                   style: T.bodySmall.copyWith(color: p.inkMuted),
                 ),
@@ -178,7 +178,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                     const SizedBox(width: T.s2),
                     Expanded(
                       child: Text(
-                        'Nothing recurring detected yet â€” we need three similar charges.',
+                        'Nothing recurring detected yet — we need three similar charges.',
                         style: T.bodySmall.copyWith(color: p.inkMuted),
                       ),
                     ),
@@ -296,7 +296,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${shortDateWithYear(alert.receivedAt)} Â· '
+                  '${shortDateWithYear(alert.receivedAt)} · '
                   '${clockTime(alert.receivedAt)}',
                   style: T.bodySmall.copyWith(color: p.inkMuted),
                 ),
@@ -551,7 +551,7 @@ class _InsightsSkeleton extends StatelessWidget {
 String _preview(String body) {
   final clean = body.trim().replaceAll(RegExp(r'\s+'), ' ');
   if (clean.length <= 120) return clean;
-  return '${clean.substring(0, 120).trimRight()}â€¦';
+  return '${clean.substring(0, 120).trimRight()}…';
 }
 
 String _humanSignals(String raw) {
@@ -570,5 +570,5 @@ String _humanSignals(String raw) {
   if (words.isEmpty) {
     return 'The wording matches known fake-alert patterns.';
   }
-  return words.join(' Â· ');
+  return words.join(' · ');
 }

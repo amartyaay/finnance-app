@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../app/design_tokens.dart';
@@ -17,6 +19,7 @@ import '../state/app_state.dart';
 import 'insight_actions.dart';
 import 'sms_inbox_screen.dart';
 import 'transactions_screen.dart';
+import '../state/statements_controller.dart';
 import 'statements_screen.dart';
 import 'widgets/card_face.dart';
 import 'widgets/charts.dart';
@@ -270,6 +273,8 @@ class _HeroCard extends StatelessWidget {
     final cardBills = summary.cardBillPaymentPaise;
     final cash = summary.cashPaise;
     final otherTransfers = summary.transferPaise - cardBills;
+    // The salary an imported statement found, and the cycle it is in.
+    final statementLine = _statementLine(context.watch<StatementsController>());
     final included = <String>[
       if (cardBills > 0) '${money(Paise(cardBills))} card bills',
       if (cash > 0) '${money(Paise(cash))} cash',
@@ -323,10 +328,26 @@ class _HeroCard extends StatelessWidget {
       if (moneyIn.isNotEmpty) 'Money in, not income: ${moneyInLine(moneyIn)}',
     ].join('. ');
 
+    // The hero is read as one sentence (children excluded, so no number is
+    // read twice); its links stay reachable as custom actions, which TalkBack
+    // lists under "Actions".
+    final actions = <CustomSemanticsAction, VoidCallback>{
+      if (otherTransfers > 0 && onOpenActivity != null)
+        const CustomSemanticsAction(label: 'Show the transfers not counted'):
+            () => onOpenActivity!(const ActivityRequest(transfersOnly: true)),
+      if (!hasIncome)
+        CustomSemanticsAction(
+          label: statementLine == null
+              ? 'Import an SBI statement to find your salary'
+              : 'Open salary to salary',
+        ): () => StatementsScreen.open(context),
+    };
+
     return Semantics(
       container: true,
       label: spoken,
       excludeSemantics: true,
+      customSemanticsActions: actions.isEmpty ? null : actions,
       child: Container(
         decoration: BoxDecoration(
           gradient: p.heroGradient,
@@ -520,11 +541,12 @@ class _HeroCard extends StatelessWidget {
                       // SBI rarely sends a salary SMS; its statement shows it.
                       _HeroLink(
                         icon: Icons.account_balance_rounded,
-                        text: 'No salary in your SMS. Import an SBI statement to see '
-                            'each month salary to salary',
-                        semanticsLabel:
+                        text: statementLine ??
+                            'No salary in your SMS. Import an SBI statement to see '
+                                'each month salary to salary',
+                        semanticsLabel: statementLine ??
                             'No salary was found in your messages. Import an SBI '
-                            'statement to see spending salary to salary.',
+                                'statement to see spending salary to salary.',
                         onTap: () => StatementsScreen.open(context),
                       ),
                   ],
@@ -538,6 +560,17 @@ class _HeroCard extends StatelessWidget {
   }
 
   static String _spoken(Paise amount) => moneySpoken(amount);
+
+  static String? _statementLine(StatementsController statements) {
+    final analysis = statements.analysis;
+    if (analysis == null || !analysis.salary.found || analysis.cycles.isEmpty) {
+      return null;
+    }
+    final cycle = analysis.cycles.first;
+    return 'Salary ${money(Paise(analysis.salary.typicalPaise))} (SBI statement) · '
+        '${money(Paise(cycle.spentPaise))} spent from the account since '
+        '${DateFormat('d MMM').format(cycle.start)}';
+  }
 }
 
 /// A tappable line in the hero's receipt. It keeps a 48 dp target even though

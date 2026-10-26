@@ -1338,6 +1338,9 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
     await db.delete('merchant_rules');
     await db.delete('excluded_shapes');
     await db.delete('app_meta');
+    // Imported bank statements live in the same database and go too.
+    await db.delete('statement_rows');
+    await db.delete('statements');
   }
 
   /// Applies categories chosen from the Android notification shade.

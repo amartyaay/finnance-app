@@ -49,7 +49,7 @@ class ActivityRequest {
 }
 
 /// Activity: the month's ledger, grouped by day, with search and one-tap
-/// filtering. Amounts are never coloured red â€” spending is normal, not an error.
+/// filtering. Amounts are never coloured red — spending is normal, not an error.
 class TransactionsScreen extends StatefulWidget {
   const TransactionsScreen({
     super.key,
@@ -496,13 +496,13 @@ class _ActivityCaption extends StatelessWidget {
     ];
     final lines = <String?>[
       if (included.isNotEmpty)
-        '$periodLabel includes ${included.join(' Â· ')}',
+        '$periodLabel includes ${included.join(' · ')}',
       moneyIn.isEmpty
           ? (summary.hasTrueIncome
                 ? null
                 : 'No salary, refund or transfer messages this month.')
           : 'Money in: ${moneyInLine(moneyIn)}'
-                '${summary.hasTrueIncome ? '' : ' Â· Salary: none found'}',
+                '${summary.hasTrueIncome ? '' : ' · Salary: none found'}',
       if (!summary.hasTrueIncome && moneyIn.isNotEmpty)
         'Only salary and interest count as income; refunds and transfers do not.',
     ].whereType<String>().toList(growable: false);

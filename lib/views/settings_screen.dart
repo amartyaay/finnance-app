@@ -7,6 +7,7 @@ import '../domain/merchant_rule.dart';
 import '../state/app_state.dart';
 import '../viewmodels/theme_view_model.dart';
 import 'sms_inbox_screen.dart';
+import '../state/statements_controller.dart';
 import 'statements_screen.dart';
 import 'widgets/settings_tile.dart';
 import 'widgets/txn_common.dart';
@@ -292,9 +293,9 @@ class SettingsScreen extends StatelessWidget {
         return AlertDialog(
           title: const Text('Clear all data?'),
           content: Text(
-            'This removes parsed alerts, card settings and demo data from '
-            'this phone. Nothing has ever been uploaded, and there is no '
-            'account to delete.',
+            'This removes parsed alerts, imported bank statements, card '
+            'settings and demo data from this phone. Nothing has ever been '
+            'uploaded, and there is no account to delete.',
             style: T.body.copyWith(color: p.inkSecondary),
           ),
           actions: [
@@ -316,6 +317,8 @@ class SettingsScreen extends StatelessWidget {
     );
     if (confirmed != true) return;
     await state.clearAll();
+    if (!context.mounted) return;
+    await context.read<StatementsController>().load();
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Local data cleared.')),

@@ -64,6 +64,10 @@ class StatementsController extends ChangeNotifier {
   bool get isLoading => _loading;
   bool get hasLoaded => _loaded;
 
+  /// Why the last load failed (the statements screen shows it); null when ok.
+  String? get loadError => _loadError;
+  String? _loadError;
+
   Future<void> load() async {
     _loading = true;
     notifyListeners();
@@ -73,6 +77,13 @@ class StatementsController extends ChangeNotifier {
         _selected = _accounts.isEmpty ? null : _accounts.first.accountKey;
       }
       await _loadRows();
+      _loadError = null;
+    } catch (error) {
+      // A storage failure must not take the rest of the app down with it.
+      _accounts = const [];
+      _rows = const [];
+      _analysis = null;
+      _loadError = 'Imported statements could not be read on this phone.';
     } finally {
       _loading = false;
       _loaded = true;

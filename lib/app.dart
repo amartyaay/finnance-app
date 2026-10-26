@@ -55,6 +55,7 @@ class _FinanceAppState extends State<FinanceApp> {
     if (widget.autoInitialize) {
       _theme.initialize();
       _appState.init();
+      _statements.load();
       // The web build cannot read SMS, so it opens on generated demo data, and
       // it defaults to the light theme the design was built around (?theme=dark
       // opts out).
