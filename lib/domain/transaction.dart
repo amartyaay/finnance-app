@@ -120,6 +120,8 @@ class Txn {
     MoneyInKind? moneyInKind,
     String? isDuplicateOfKey,
     bool? needsReview,
+    String? merchant,
+    String? cardKey,
   }) {
     return Txn(
       key: key,
@@ -130,7 +132,7 @@ class Txn {
       id: id ?? this.id,
       smsId: smsId,
       sender: sender,
-      merchant: merchant,
+      merchant: merchant ?? this.merchant,
       counterpartyVpa: counterpartyVpa,
       categoryId: categoryId ?? this.categoryId,
       categoryName: categoryName ?? this.categoryName,
@@ -138,7 +140,7 @@ class Txn {
       categoryKind: categoryKind ?? this.categoryKind,
       transferReason: transferReason ?? this.transferReason,
       moneyInKind: moneyInKind ?? this.moneyInKind,
-      cardKey: cardKey,
+      cardKey: cardKey ?? this.cardKey,
       last4: last4,
       issuer: issuer,
       referenceId: referenceId,

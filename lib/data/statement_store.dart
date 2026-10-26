@@ -4,6 +4,7 @@ import '../domain/enums.dart';
 import '../domain/statement.dart';
 import '../engine/salary_cycles.dart';
 import '../engine/statement_merge.dart';
+import '../services/statement/statement_classifier.dart';
 import 'app_database.dart';
 
 /// One imported account, for the statements screen.
@@ -59,6 +60,7 @@ class StatementStore {
 
   final AppDatabase _db;
   final DateTime Function() _now;
+  static const _classifier = StatementClassifier();
 
   Future<StatementImportResult> save(
     BankStatement statement, {
@@ -166,28 +168,52 @@ class StatementStore {
       whereArgs: [accountKey],
       orderBy: 'txn_date ASC, id ASC',
     );
+    final holderRow = await db.query(
+      'statements',
+      columns: const ['holder_name'],
+      where: 'account_key = ? AND holder_name IS NOT NULL',
+      whereArgs: [accountKey],
+      limit: 1,
+    );
+    final holder = holderRow.isEmpty
+        ? null
+        : holderRow.first['holder_name'] as String?;
+    // Rows are re-read through the current classifier, so a rule added after
+    // the import (own FDs, a card bill paid via PhonePe) applies without
+    // re-importing. A category is replaced only when the kind changed; a
+    // category the user picked on an unchanged row stays.
+    StatementRow fresh(StatementRow stored) {
+      final next = _classifier.classify(stored, holderName: holder);
+      if (next.kind == stored.kind) {
+        return stored.copyWith(counterparty: next.counterparty);
+      }
+      return next.copyWith(isSalaryOverride: stored.isSalaryOverride);
+    }
+
     return [
       for (final r in rows)
-        StatementRow(
-          key: r['row_key'] as String,
-          date: DateTime.fromMillisecondsSinceEpoch(r['txn_date'] as int),
-          description: r['description'] as String,
-          reference: r['reference'] as String?,
-          debitPaise: r['debit_paise'] as int,
-          creditPaise: r['credit_paise'] as int,
-          balancePaise: r['balance_paise'] as int?,
-          balanceVerified: r['verified'] == 1,
-          kind: StatementKind.values.byName(r['kind'] as String),
-          counterparty: r['counterparty'] as String?,
-          categoryName: r['category_name'] as String,
-          categoryKind: SpendCategoryKind.values.byName(
-            r['category_kind'] as String,
+        fresh(
+          StatementRow(
+            key: r['row_key'] as String,
+            date: DateTime.fromMillisecondsSinceEpoch(r['txn_date'] as int),
+            description: r['description'] as String,
+            reference: r['reference'] as String?,
+            debitPaise: r['debit_paise'] as int,
+            creditPaise: r['credit_paise'] as int,
+            balancePaise: r['balance_paise'] as int?,
+            balanceVerified: r['verified'] == 1,
+            kind: StatementKind.values.byName(r['kind'] as String),
+            counterparty: r['counterparty'] as String?,
+            categoryName: r['category_name'] as String,
+            categoryKind: SpendCategoryKind.values.byName(
+              r['category_kind'] as String,
+            ),
+            isSalaryOverride: switch (r['salary_override']) {
+              1 => true,
+              0 => false,
+              _ => null,
+            },
           ),
-          isSalaryOverride: switch (r['salary_override']) {
-            1 => true,
-            0 => false,
-            _ => null,
-          },
         ),
     ];
   }

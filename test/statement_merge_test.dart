@@ -70,8 +70,12 @@ StatementRow _row(
   return row.copyWith(key: row.identity('SBI:4642'));
 }
 
-List<Txn> _merge(List<Txn> sms, List<StatementRow> rows) => const StatementMerge()
-    .merge(sms: sms, coverage: [_coverage], rows: {'SBI:4642': rows});
+List<Txn> _merge(List<Txn> sms, List<StatementRow> rows) =>
+    const StatementMerge().merge(
+      sms: sms,
+      coverage: [_coverage],
+      rows: {'SBI:4642': rows},
+    );
 
 void main() {
   test("the account's alerts in the period give way to the statement", () {
@@ -102,49 +106,118 @@ void main() {
     expect(statement.last.occurredAt, DateTime(2026, 9, 9, 12));
 
     const calc = SummaryCalculator();
-    final september = calc.forMonth(out, DateTime(2026, 10, 2), monthOffset: -1);
+    final september = calc.forMonth(
+      out,
+      DateTime(2026, 10, 2),
+      monthOffset: -1,
+    );
     expect(september.spendPaise, 50000 + 12000 + 30000);
   });
 
   test('the statement is the only source for every bank on its days', () {
-    final out = _merge(
-      [
-        // Another bank's account alert, and a merchant receipt: both gone.
-        _sms(
-          'hdfc-savings',
-          DateTime(2026, 9, 8, 10),
-          90000,
-          issuer: 'HDFC Bank',
-          sender: 'HDFCBK',
-          last4: '1111',
-          instrument: Instrument.bankAccount,
-        ),
-        _sms('receipt', DateTime(2026, 9, 8, 11), 36100, issuer: 'Airtel', sender: 'AIRTEL', last4: null),
-        // A wallet / meal-card spend is not in a bank statement: it stays.
-        _sms(
-          'pluxee',
-          DateTime(2026, 9, 9, 13),
-          25000,
-          issuer: 'Pluxee',
-          sender: 'PLUXEE',
-          last4: null,
-          instrument: Instrument.wallet,
-        ),
-        // The same day after the statement ends is still SMS.
-        _sms(
-          'hdfc-later',
-          DateTime(2026, 10, 1, 10),
-          40000,
-          issuer: 'HDFC Bank',
-          sender: 'HDFCBK',
-          last4: '1111',
-          instrument: Instrument.bankAccount,
-        ),
-      ],
-      const [],
+    final out = _merge([
+      // Another bank's account alert, and a merchant receipt: both gone.
+      _sms(
+        'hdfc-savings',
+        DateTime(2026, 9, 8, 10),
+        90000,
+        issuer: 'HDFC Bank',
+        sender: 'HDFCBK',
+        last4: '1111',
+        instrument: Instrument.bankAccount,
+      ),
+      _sms(
+        'receipt',
+        DateTime(2026, 9, 8, 11),
+        36100,
+        issuer: 'Airtel',
+        sender: 'AIRTEL',
+        last4: null,
+      ),
+      // A wallet / meal-card spend is not in a bank statement: it stays.
+      _sms(
+        'pluxee',
+        DateTime(2026, 9, 9, 13),
+        25000,
+        issuer: 'Pluxee',
+        sender: 'PLUXEE',
+        last4: null,
+        instrument: Instrument.wallet,
+      ),
+      // The same day after the statement ends is still SMS.
+      _sms(
+        'hdfc-later',
+        DateTime(2026, 10, 1, 10),
+        40000,
+        issuer: 'HDFC Bank',
+        sender: 'HDFCBK',
+        last4: '1111',
+        instrument: Instrument.bankAccount,
+      ),
+    ], const []);
+    // The other bank's debit stays, as a transfer (its card bill), never spend.
+    expect(
+      out.map((t) => t.key),
+      unorderedEquals(['hdfc-savings', 'pluxee', 'hdfc-later']),
     );
-    expect(out.map((t) => t.key), unorderedEquals(['pluxee', 'hdfc-later']));
+    final hdfc = out.firstWhere((t) => t.key == 'hdfc-savings');
+    expect(hdfc.kind, TxnKind.transfer);
+    expect(hdfc.transferReason, TransferReason.creditCardBill);
   });
+
+  test(
+    "another bank's debits: mandates are investments, the rest its card bill",
+    () {
+      Txn hdfc(String key, int paise, String body) => Txn(
+        key: key,
+        occurredAtMs: DateTime(2026, 9, 9, 10).millisecondsSinceEpoch,
+        amountPaise: paise,
+        kind: TxnKind.transfer,
+        instrument: Instrument.bankAccount,
+        sender: 'HDFCBK',
+        issuer: 'HDFC Bank',
+        last4: '3619',
+        rawBody: body,
+      );
+      final card = _sms(
+        'hdfc-card-spend',
+        DateTime(2026, 9, 2),
+        50000,
+        issuer: 'HDFC Bank',
+        sender: 'HDFCBK',
+        last4: '4821',
+        cardKey: 'HDFC Bank|4821',
+        instrument: Instrument.creditCard,
+      );
+      final out = _merge([
+        card,
+        hdfc(
+          'sip',
+          300000,
+          'PAYMENT ALERT! INR 3000.00 deducted from HDFC Bank A/C No 3619 '
+              'towards KOTAK MUTUAL FUND UMRN: HDFC2024318000001381',
+        ),
+        hdfc(
+          'bill',
+          1234500,
+          'Rs.12345.00 debited from HDFC Bank A/C No 3619 towards XXXX',
+        ),
+      ], const []);
+      final sip = out.firstWhere((t) => t.key == 'sip');
+      final bill = out.firstWhere((t) => t.key == 'bill');
+      expect(sip.transferReason, TransferReason.investment);
+      expect(bill.transferReason, TransferReason.creditCardBill);
+      expect(bill.cardKey, 'HDFC Bank|4821'); // the bank's only credit card
+      const calc = SummaryCalculator();
+      final september = calc.forMonth(
+        out,
+        DateTime(2026, 10, 2),
+        monthOffset: -1,
+      );
+      expect(september.spendPaise, 50000);
+      expect(september.cardBillPaymentPaise, 1234500);
+    },
+  );
 
   test('a debit-card alert from the same bank is the account too', () {
     final out = _merge(
@@ -203,7 +276,11 @@ void main() {
       final counted = out.where((t) => t.isDuplicateOfKey == null).toList();
       expect(counted.map((t) => t.key), ['issuer']);
       const calc = SummaryCalculator();
-      final september = calc.forMonth(out, DateTime(2026, 10, 2), monthOffset: -1);
+      final september = calc.forMonth(
+        out,
+        DateTime(2026, 10, 2),
+        monthOffset: -1,
+      );
       expect(september.cardBillPaymentPaise, 377200);
     }
   });
@@ -227,12 +304,26 @@ void main() {
 
   test('salary and transfers from the statement keep their meaning', () {
     final out = _merge(const [], [
-      _row(DateTime(2026, 9, 30), 0, credit: 8750000, kind: StatementKind.salary),
+      _row(
+        DateTime(2026, 9, 30),
+        0,
+        credit: 8750000,
+        kind: StatementKind.salary,
+      ),
       _row(DateTime(2026, 9, 12), 500000, kind: StatementKind.selfTransfer),
-      _row(DateTime(2026, 9, 13), 0, credit: 2000, kind: StatementKind.otherCredit),
+      _row(
+        DateTime(2026, 9, 13),
+        0,
+        credit: 2000,
+        kind: StatementKind.otherCredit,
+      ),
     ]);
     const calc = SummaryCalculator();
-    final september = calc.forMonth(out, DateTime(2026, 10, 2), monthOffset: -1);
+    final september = calc.forMonth(
+      out,
+      DateTime(2026, 10, 2),
+      monthOffset: -1,
+    );
     expect(september.incomePaise, 8750000);
     expect(september.spendPaise, 0);
   });

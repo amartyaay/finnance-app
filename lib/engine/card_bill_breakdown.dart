@@ -4,10 +4,10 @@ import '../domain/transaction.dart';
 /// What a credit-card bill payment paid for.
 ///
 /// A bank statement shows one large "card bill" debit; the card's own SMS
-/// show the purchases behind it. This groups the card's spends between the
-/// previous payment to the same card and this one, by category. It is an
-/// approximation of the billing cycle (the statement date is rarely known),
-/// and the screen says so.
+/// show the purchases behind it. A payment settles the latest card statement
+/// generated before it, and that statement covers the purchases since the
+/// statement before. When the card's statement SMS are on the phone, that is
+/// the window; otherwise it falls back to "since the previous payment".
 class CardBillBreakdown {
   const CardBillBreakdown({
     required this.cardKey,
@@ -16,34 +16,81 @@ class CardBillBreakdown {
     required this.byCategory,
     required this.count,
     required this.totalPaise,
+    this.statementDate,
+    this.statementTotalPaise,
   });
 
   final String cardKey;
 
-  /// Exclusive start (the previous payment, or 45 days back) and inclusive end.
+  /// Exclusive start and inclusive end of the purchases counted.
   final DateTime from;
   final DateTime to;
 
-  /// Category name → paise, largest first.
+  /// The card statement this payment settles, when its SMS was found.
+  final DateTime? statementDate;
+  final int? statementTotalPaise;
+
   final List<({String name, SpendCategoryKind kind, int paise, int count})>
   byCategory;
   final int count;
   final int totalPaise;
 
+  bool get byStatement => statementDate != null;
+
   /// Null when [payment] is not a card bill or the card cannot be named.
-  static CardBillBreakdown? of(Txn payment, List<Txn> ledger) {
+  static CardBillBreakdown? of(
+    Txn payment,
+    List<Txn> ledger, {
+    List<CardBillNotice> notices = const [],
+  }) {
     if (payment.transferReason != TransferReason.creditCardBill) return null;
     final card = payment.cardKey ?? _cardFromDuplicates(payment, ledger);
     if (card == null) return null;
+    final paidAt = payment.occurredAt;
 
-    final to = payment.occurredAt;
-    var from = to.subtract(const Duration(days: 45));
-    for (final t in ledger) {
-      if (t.key == payment.key || t.cardKey != card) continue;
-      if (t.transferReason != TransferReason.creditCardBill) continue;
-      if (t.isDuplicateOfKey != null) continue;
-      if (t.occurredAt.isBefore(to) && t.occurredAt.isAfter(from)) {
-        from = t.occurredAt;
+    DateTime? noticeDate(CardBillNotice n) {
+      final ms = n.statementDateMs ?? n.receivedAtMs;
+      return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
+    }
+
+    // The card's statements, oldest first, de-duplicated by day.
+    final statements = <DateTime, CardBillNotice>{};
+    for (final n in notices) {
+      if (n.cardKey != card) continue;
+      final d = noticeDate(n);
+      if (d == null) continue;
+      statements[DateTime(d.year, d.month, d.day)] = n;
+    }
+    final dates = statements.keys.toList()..sort();
+    DateTime? settled;
+    DateTime? before;
+    for (var i = 0; i < dates.length; i++) {
+      final d = dates[i];
+      if (d.isAfter(paidAt)) break;
+      if (paidAt.difference(d).inDays > 60) continue;
+      settled = d;
+      before = i > 0 ? dates[i - 1] : null;
+    }
+
+    late DateTime from;
+    late DateTime to;
+    if (settled != null) {
+      // Through the end of the statement day, from the end of the previous
+      // statement day (or a month back).
+      to = settled.add(const Duration(days: 1));
+      from = (before ?? settled.subtract(const Duration(days: 31))).add(
+        const Duration(days: 1),
+      );
+    } else {
+      to = paidAt;
+      from = paidAt.subtract(const Duration(days: 45));
+      for (final t in ledger) {
+        if (t.key == payment.key || t.cardKey != card) continue;
+        if (t.transferReason != TransferReason.creditCardBill) continue;
+        if (t.isDuplicateOfKey != null) continue;
+        if (t.occurredAt.isBefore(to) && t.occurredAt.isAfter(from)) {
+          from = t.occurredAt;
+        }
       }
     }
 
@@ -80,6 +127,10 @@ class CardBillBreakdown {
       byCategory: byCategory,
       count: count,
       totalPaise: total,
+      statementDate: settled,
+      statementTotalPaise: settled == null
+          ? null
+          : statements[settled]!.totalDuePaise,
     );
   }
 

@@ -141,7 +141,11 @@ class _TransactionDetailSheet extends StatelessWidget {
                 value: txn.referenceId!.trim(),
                 monospace: true,
               ),
-            if (CardBillBreakdown.of(txn, state.data.transactions)
+            if (CardBillBreakdown.of(
+                  txn,
+                  state.data.transactions,
+                  notices: state.data.billNotices,
+                )
                 case final breakdown?) ...[
               const SizedBox(height: T.s4),
               _BillBreakdown(breakdown: breakdown, payment: txn),
@@ -274,25 +278,29 @@ class _CategoryChoice extends StatelessWidget {
           HapticFeedback.selectionClick();
           onTap();
         },
-        child: Container(
+        // 48 dp tall to tap, but only as wide as the chip: an aligned
+        // Container expands to the Wrap's full width, one chip per row.
+        child: SizedBox(
           height: 48,
-          alignment: Alignment.center,
-          child: AnimatedContainer(
-            duration: T.fast,
-            height: 34,
-            padding: const EdgeInsets.symmetric(horizontal: T.s3),
-            decoration: BoxDecoration(
-              color: selected ? p.ink : p.surfaceMuted,
-              borderRadius: BorderRadius.circular(T.r5),
-              border: Border.all(color: selected ? p.ink : p.outlineVariant),
-            ),
-            child: Text(
-              name,
-              maxLines: 1,
-              style: T.bodySmall.copyWith(
-                color: selected ? p.bg : p.inkSecondary,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
+          child: Center(
+            widthFactor: 1,
+            child: AnimatedContainer(
+              duration: T.fast,
+              height: 34,
+              padding: const EdgeInsets.symmetric(horizontal: T.s3),
+              decoration: BoxDecoration(
+                color: selected ? p.ink : p.surfaceMuted,
+                borderRadius: BorderRadius.circular(T.r5),
+                border: Border.all(color: selected ? p.ink : p.outlineVariant),
+              ),
+              child: Text(
+                name,
+                maxLines: 1,
+                style: T.bodySmall.copyWith(
+                  color: selected ? p.bg : p.inkSecondary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -356,6 +364,14 @@ class _BillBreakdown extends StatelessWidget {
     final p = T.of(context);
     final card = breakdown.cardKey.replaceAll('|', ' ••');
     final rows = breakdown.byCategory;
+    // The last day counted (the window's end is exclusive of the next day).
+    final lastDay = breakdown.to.subtract(const Duration(minutes: 1));
+    final firstDay = breakdown.from;
+    final window = breakdown.byStatement
+        ? 'on the card statement of ${shortDate(breakdown.statementDate!)} '
+              '(${shortDate(firstDay)} – ${shortDate(lastDay)})'
+        : '${shortDate(firstDay)} – ${shortDate(lastDay)}, since the previous '
+              'payment (no statement SMS for this card)';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(T.s4),
@@ -366,12 +382,12 @@ class _BillBreakdown extends StatelessWidget {
           Text('What this paid for', style: T.cardTitle.copyWith(color: p.ink)),
           const SizedBox(height: 2),
           Text(
-            rows.isEmpty
-                ? 'No purchases on $card between ${shortDate(breakdown.from)} '
-                      'and ${shortDate(breakdown.to)} in your SMS.'
-                : '${breakdown.count} purchases on $card from your SMS, '
-                      '${shortDate(breakdown.from)} – ${shortDate(breakdown.to)} '
-                      '(since the previous payment).',
+            '${rows.isEmpty
+                ? 'No purchases'
+                : breakdown.count == 1
+                ? '1 purchase'
+                : '${breakdown.count} purchases'} '
+            'on $card in your SMS, $window.',
             style: T.bodySmall.copyWith(color: p.inkMuted),
           ),
           for (final r in rows) ...[
@@ -400,12 +416,15 @@ class _BillBreakdown extends StatelessWidget {
           if (rows.isNotEmpty) ...[
             const SizedBox(height: T.s3),
             Text(
-              breakdown.totalPaise == payment.amountPaise
-                  ? 'Matches the payment exactly.'
-                  : 'Purchases ${money(Paise(breakdown.totalPaise))} vs payment '
-                        '${money(payment.amount)}: the bill also carries earlier '
-                        'balance, fees or refunds, and a cycle rarely ends on a '
-                        'payment day.',
+              [
+                if (breakdown.statementTotalPaise != null)
+                  'Statement total ${money(Paise(breakdown.statementTotalPaise!))}.',
+                'Purchases found ${money(Paise(breakdown.totalPaise))}; this '
+                    'payment ${money(payment.amount)}.',
+                if (breakdown.totalPaise != payment.amountPaise)
+                  'A bill also carries earlier balance, EMIs, fees and refunds, '
+                      'and purchases with no SMS are not listed.',
+              ].join(' '),
               style: T.bodySmall.copyWith(color: p.inkMuted),
             ),
           ],

@@ -19,7 +19,9 @@ class StatementClassifier {
 
   static RegExp _r(String pattern) => RegExp(pattern, caseSensitive: false);
 
-  static final _cash = _r(r'ATMWDL|ATMCASH|CASHWITHDRAWAL|CASHCHEQUE|CHEQUEWDL|CSHWDL|CASHWDL');
+  static final _cash = _r(
+    r'ATMWDL|ATMCASH|CASHWITHDRAWAL|CASHCHEQUE|CHEQUEWDL|CSHWDL|CASHWDL',
+  );
   static final _cashDeposit = _r(r'CASHDEPOSIT|CSHDEP|CDMDEP|BYCASH');
   static final _charges = _r(
     r'CHGS|CHARGES|ANNUALFEE|ANNUALMAINT|PROCESSINGFEE|FEEDEBIT|MINBAL|NONMAINT|'
@@ -34,16 +36,41 @@ class StatementClassifier {
     r'(?:^|[^A-Z])MF(?:[^A-Z]|$)|KUVERA|PPF|NPSTRUST|(?:^|[^A-Z])SIP(?:[^A-Z]|$)|'
     r'INDIANCLEARING|ANGELONE|RENEWAL|TDR|STDR|SWEEP|FIXEDDEPOSIT|RECURRINGDEPOSIT',
   );
-  static final _loan = _r(r'LOAN|(?:^|[^A-Z])EMI(?:[^A-Z]|$)|BAJAJFIN|HOMEFIN|NBFC');
-  static final _refund = _r(r'REFUND|REVERSAL|(?:^|[^A-Z])REV(?:[^A-Z]|$)|CHARGEBACK|RETURN');
+  static final _loan = _r(
+    r'LOAN|(?:^|[^A-Z])EMI(?:[^A-Z]|$)|BAJAJFIN|HOMEFIN|NBFC',
+  );
+  static final _refund = _r(
+    r'REFUND|REVERSAL|(?:^|[^A-Z])REV(?:[^A-Z]|$)|CHARGEBACK|RETURN',
+  );
   static final _cashback = _r(r'CASHBACK|REWARD|(?:^|[^A-Z])CR_');
-  static final _interest = _r(r'INTERESTCREDIT|CREDITINTEREST|INT\.?PD|SBINT|DIVIDEND|INTCREDIT');
-  static final _wallet = _r(r'PAYTMWALLET|UPILITE|MOBIKWIK|WALLETLOAD|ADDMONEY');
+  static final _interest = _r(
+    r'INTERESTCREDIT|CREDITINTEREST|INT\.?PD|SBINT|DIVIDEND|INTCREDIT',
+  );
+  static final _wallet = _r(
+    r'PAYTMWALLET|UPILITE|MOBIKWIK|WALLETLOAD|ADDMONEY',
+  );
   // `UPI/DR/<rrn>/Bank Acc/HDFC/<account>`: paid to an account number +
   // IFSC rather than a VPA, which is how people move money to their own
   // account in another bank.
   static final _selfWords = _r(r'\bSELF\b|\bOWN A/?C\b|UPI/DR/\d+/\s*BANK ACC');
-  static final _card = _r(r'DEBITCARD|OTHPG|SBIPG|OTHPOS|SBIPOS|POSATMPURCH|POSPURCH|ECOMPUR');
+
+  /// A deposit account of the holder at the same bank: SBI prints the FD
+  /// booking as `FIRDFTFRREF … 00451… OF <holder>`, the RD instalment as
+  /// `DIRECT DR 00447… OF <holder>`, a closure as `DEP TFR 00451… OF <holder>`.
+  static final _ownDeposit = _r(
+    r'FIRDFTFR|DIRECTDR0\d{9,16}|(?:WDL|DEP)TFR0\d{9,16}OF|^0\d{9,16}OF',
+  );
+  static final _recurringDeposit = _r(r'DIRECTDR0\d{9,16}');
+
+  /// `UPI/DR/<rrn>/Bank Acc/HDFC/<account>`: the holder's account elsewhere.
+  static final _ownAccountElsewhere = RegExp(
+    r'UPI/DR/\d+/\s*BANK ACC[^/]*/([A-Z]{4})/',
+    caseSensitive: false,
+  );
+
+  static final _card = _r(
+    r'DEBITCARD|OTHPG|SBIPG|OTHPOS|SBIPOS|POSATMPURCH|POSPURCH|ECOMPUR',
+  );
   static final _billpay = _r(r'BILLPAY|BBPS');
   static final _bulk = _r(r'BULKPOSTING|CEMTEX');
 
@@ -53,7 +80,10 @@ class StatementClassifier {
     r'UPI/(DR|CR)/(\d{6,})/\s*([^/]*)(?:/([^/]*))?(?:/([^/]*))?(?:/(.*))?',
     caseSensitive: false,
   );
-  static final _neft = RegExp(r'NEFT\*([A-Z]{4}0[A-Z0-9]{6})\*([A-Z0-9 ]+)\*([^*]+)', caseSensitive: false);
+  static final _neft = RegExp(
+    r'NEFT\*([A-Z]{4}0[A-Z0-9]{6})\*([A-Z0-9 ]+)\*([^*]+)',
+    caseSensitive: false,
+  );
 
   /// The 2026 OnlineSBI PDF spaces the stars and runs the remitter on after
   /// the UTR: `NEFT * CITI0000006 * CITIN26661516108 DELOITTE CONSUL 0099…`.
@@ -78,7 +108,10 @@ class StatementClassifier {
   );
 
   StatementRow classify(StatementRow row, {String? holderName}) {
-    final spaced = row.description.toUpperCase().replaceAll(RegExp(r'\s+'), ' ');
+    final spaced = row.description.toUpperCase().replaceAll(
+      RegExp(r'\s+'),
+      ' ',
+    );
     final joined = spaced.replaceAll(' ', '');
     final debit = row.isDebit;
 
@@ -88,27 +121,58 @@ class StatementClassifier {
     final vpa = upi?.group(5)?.trim() ?? '';
     final note = upi?.group(6)?.trim() ?? '';
 
-    StatementRow as(StatementKind kind, {String? category, SpendCategoryKind? categoryKind}) {
+    StatementRow as(
+      StatementKind kind, {
+      String? category,
+      SpendCategoryKind? categoryKind,
+      String? label,
+    }) {
       final c = category == null
           ? _category(kind, counterparty, spaced)
           : (name: category, kind: categoryKind ?? SpendCategoryKind.other);
       return row.copyWith(
         kind: kind,
-        counterparty: counterparty,
+        counterparty: label ?? counterparty,
         categoryName: c.name,
         categoryKind: c.kind,
       );
     }
 
     if (_isSelf(spaced, joined, counterparty, holderName)) {
+      // The holder's own fixed / recurring deposits inside the same bank:
+      // booked after salary, broken mid-month to pay for things. Money
+      // parked, not spent; money un-parked, not earned.
+      if (_ownDeposit.hasMatch(joined)) {
+        final recurring = _recurringDeposit.hasMatch(joined);
+        return debit
+            ? as(
+                StatementKind.investment,
+                label: recurring ? 'Recurring deposit' : 'Fixed deposit',
+              )
+            : as(StatementKind.redemption, label: 'Deposit closed');
+      }
+      final other = _ownAccountElsewhere.firstMatch(spaced);
+      if (other != null) {
+        // The owner tops this account up to run SIPs from it (and pays that
+        // bank's credit card from it): for the salary cycle it is money
+        // invested. The ledger books it as a transfer, because the other
+        // bank's own SMS carry the individual investments and card bills.
+        return as(
+          debit ? StatementKind.investment : StatementKind.selfTransfer,
+          label: 'To your ${other.group(1)} account',
+        );
+      }
       return as(StatementKind.selfTransfer);
     }
 
     if (debit) {
       if (_cash.hasMatch(joined)) return as(StatementKind.cash);
       if (_charges.hasMatch(joined)) {
-        return as(StatementKind.charges,
-            category: 'Bills & utilities', categoryKind: SpendCategoryKind.bills);
+        return as(
+          StatementKind.charges,
+          category: 'Bills & utilities',
+          categoryKind: SpendCategoryKind.bills,
+        );
       }
       if (_cardBill.hasMatch(joined)) return as(StatementKind.cardBill);
       if (_investment.hasMatch(joined)) return as(StatementKind.investment);
@@ -118,17 +182,26 @@ class StatementClassifier {
       if (_billpay.hasMatch(joined)) {
         final c = _category(StatementKind.spend, counterparty, spaced);
         return c.kind == SpendCategoryKind.other
-            ? as(StatementKind.spend,
-                category: 'Bills & utilities', categoryKind: SpendCategoryKind.bills)
+            ? as(
+                StatementKind.spend,
+                category: 'Bills & utilities',
+                categoryKind: SpendCategoryKind.bills,
+              )
             : as(StatementKind.spend);
       }
-      if (upi != null || joined.contains('IMPS') || neft != null || joined.contains('INB')) {
+      if (upi != null ||
+          joined.contains('IMPS') ||
+          neft != null ||
+          joined.contains('INB')) {
         // A personal VPA decides first: "rent sept" in the note is a
         // category hint, not proof of a shop.
         if (_looksLikePerson(counterparty, vpa)) {
           if (RegExp(r'\bRENT\b').hasMatch(note) || joined.contains('RENT')) {
-            return as(StatementKind.toPerson,
-                category: 'Rent', categoryKind: SpendCategoryKind.rent);
+            return as(
+              StatementKind.toPerson,
+              category: 'Rent',
+              categoryKind: SpendCategoryKind.rent,
+            );
           }
           return as(StatementKind.toPerson);
         }
@@ -173,21 +246,32 @@ class StatementClassifier {
       return clean(upi.group(5));
     }
     if (neft != null) return clean(neft.group(3));
-    final card = RegExp(r'(?:OTHPG|SBIPG|OTHPOS|SBIPOS)\s*\d{6,}\s*([A-Z][A-Z .&]{2,40})')
-        .firstMatch(spaced.replaceAll(RegExp(r'(\d{6})\s+(\d)'), r'$1$2'));
+    final card = RegExp(
+      r'(?:OTHPG|SBIPG|OTHPOS|SBIPOS)\s*\d{6,}\s*([A-Z][A-Z .&]{2,40})',
+    ).firstMatch(spaced.replaceAll(RegExp(r'(\d{6})\s+(\d)'), r'$1$2'));
     if (card != null) return clean(card.group(1));
-    final bill = RegExp(r'BILLPAY\s*~?\s*IB\d+\s+([A-Z][A-Z .]{2,30})').firstMatch(spaced);
+    final bill = RegExp(
+      r'BILLPAY\s*~?\s*IB\d+\s+([A-Z][A-Z .]{2,30})',
+    ).firstMatch(spaced);
     if (bill != null) return clean(bill.group(1));
     return null;
   }
 
-  bool _isSelf(String spaced, String joined, String? counterparty, String? holder) {
+  bool _isSelf(
+    String spaced,
+    String joined,
+    String? counterparty,
+    String? holder,
+  ) {
     // Word test on the spaced text: joined, "HDFC SELF" reads "HDFCSELF".
     if (_selfWords.hasMatch(spaced)) return true;
     if (holder == null || holder.trim().isEmpty) return false;
     final h = holder.toUpperCase().replaceAll(RegExp(r'[^A-Z]'), '');
     if (h.length < 6) return false;
-    final c = (counterparty ?? '').toUpperCase().replaceAll(RegExp(r'[^A-Z]'), '');
+    final c = (counterparty ?? '').toUpperCase().replaceAll(
+      RegExp(r'[^A-Z]'),
+      '',
+    );
     if (c.length >= 6 && (c.contains(h) || h.contains(c))) return true;
     // "TRANSFER FROM Mr. AMARTYAAYUSHI" with the holder printed spaced.
     return joined.contains(h);
@@ -198,12 +282,17 @@ class StatementClassifier {
     if (name != null && _business.hasMatch(name)) return false;
     if (_personalHandle.hasMatch(vpa)) return true;
     if (name == null) return false;
-    if (RegExp(r'^(?:MR|MRS|MS|MISS|DR|SMT)\.?\s', caseSensitive: false).hasMatch(name)) {
+    if (RegExp(
+      r'^(?:MR|MRS|MS|MISS|DR|SMT)\.?\s',
+      caseSensitive: false,
+    ).hasMatch(name)) {
       return true;
     }
     // "RAMESH K", "PRIYA S": a given name and an initial is how SBI prints a
     // person when the VPA is not shown (layout A).
-    return RegExp(r'^[A-Z]{3,}(?: [A-Z]{3,})? [A-Z]$').hasMatch(name.toUpperCase());
+    return RegExp(
+      r'^[A-Z]{3,}(?: [A-Z]{3,})? [A-Z]$',
+    ).hasMatch(name.toUpperCase());
   }
 
   ({String name, SpendCategoryKind kind}) _category(

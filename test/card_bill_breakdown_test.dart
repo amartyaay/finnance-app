@@ -85,6 +85,63 @@ void main() {
     );
   });
 
+  test('a payment settles the latest card statement before it', () {
+    final ledger = [
+      _t(
+        'jun',
+        DateTime(2026, 6, 20),
+        10000,
+        TxnKind.spend,
+        category: 'Shopping',
+      ),
+      _t(
+        'jul-a',
+        DateTime(2026, 7, 2),
+        30000,
+        TxnKind.spend,
+        category: 'Shopping',
+      ),
+      _t(
+        'jul-b',
+        DateTime(2026, 7, 15, 9),
+        20000,
+        TxnKind.spend,
+        category: 'Travel',
+      ),
+      _t(
+        'after',
+        DateTime(2026, 7, 16, 9),
+        99900,
+        TxnKind.spend,
+        category: 'Shopping',
+      ),
+      _t(
+        'pay',
+        DateTime(2026, 7, 30),
+        50000,
+        TxnKind.transfer,
+        reason: TransferReason.creditCardBill,
+      ),
+    ];
+    CardBillNotice notice(DateTime d, int total) => CardBillNotice(
+      cardKey: 'Axis Bank|5365',
+      totalDuePaise: total,
+      statementDateMs: d.millisecondsSinceEpoch,
+    );
+    final b = CardBillBreakdown.of(
+      ledger.last,
+      ledger,
+      notices: [
+        notice(DateTime(2026, 6, 15), 1),
+        notice(DateTime(2026, 7, 15), 50000),
+      ],
+    )!;
+    expect(b.byStatement, isTrue);
+    expect(b.statementTotalPaise, 50000);
+    expect(b.count, 3); // 20 Jun, 2 Jul, 15 Jul; not 16 Jul
+    expect(b.totalPaise, 60000);
+  });
+
   test('not a card bill: no breakdown', () {
     final spend = _t('x', DateTime(2026, 7, 1), 100, TxnKind.spend);
     expect(CardBillBreakdown.of(spend, [spend]), isNull);

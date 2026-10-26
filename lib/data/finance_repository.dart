@@ -24,6 +24,7 @@ class HomeData {
     required this.smsMessagesRead,
     required this.isDemo,
     required this.categories,
+    this.billNotices = const [],
     int? needsReviewCount,
   }) : _needsReviewCount = needsReviewCount;
 
@@ -48,6 +49,10 @@ class HomeData {
   final int smsMessagesRead;
   final bool isDemo;
   final List<String> categories;
+
+  /// Every card statement notice ("statement generated … total due"), for
+  /// telling which purchases a bill payment paid for.
+  final List<CardBillNotice> billNotices;
 
   static HomeData empty(DateTime now) => HomeData(
     transactions: const [],
@@ -82,6 +87,7 @@ class HomeData {
         smsMessagesRead: smsMessagesRead,
         isDemo: isDemo,
         categories: categories,
+        billNotices: billNotices,
         needsReviewCount: _needsReviewCount,
       );
 
@@ -354,6 +360,7 @@ class HomeDataBuilder {
       smsMessagesRead: smsRead,
       isDemo: isDemo,
       categories: categories,
+      billNotices: bills,
       needsReviewCount: needsReviewCount,
     );
   }

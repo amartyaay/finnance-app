@@ -66,7 +66,16 @@ class StatementMerge {
       }
       final owner = covering.where((c) => _fromAccount(txn, c)).firstOrNull;
       if (owner == null) {
-        dropped.add(txn.key);
+        // Another bank's account, fed from the statement account. Its
+        // debits still say where that money went (see [_otherBank]); its
+        // credits are the statement's own transfers arriving, and receipts
+        // repeat what the statement already shows.
+        final routed = _sameBank(txn, covering) ? null : _otherBank(txn);
+        if (routed == null) {
+          dropped.add(txn.key);
+        } else {
+          kept.add(routed);
+        }
       } else {
         replaced.putIfAbsent(owner.accountKey, () => []).add(txn);
       }
@@ -167,9 +176,98 @@ class StatementMerge {
       }
     }
 
+    for (var j = 0; j < out.length; j++) {
+      final t = out[j];
+      if (t.sourceType != TxnSourceType.sms ||
+          t.transferReason != TransferReason.creditCardBill ||
+          _isInflow(t) ||
+          t.cardKey != null ||
+          !coverage.any((c) => c.coversDay(t.occurredAt))) {
+        continue;
+      }
+      final bank = (t.issuer ?? '').toLowerCase();
+      final cards = {
+        for (final o in out)
+          if (o.cardKey != null &&
+              bank.isNotEmpty &&
+              o.cardKey!.toLowerCase().startsWith(bank.split(' ').first))
+            o.cardKey!,
+      };
+      var updated = cards.length == 1 ? t.copyWith(cardKey: cards.first) : t;
+      if (updated.isDuplicateOfKey == null) {
+        final issuer = out
+            .where(
+              (o) =>
+                  o.isDuplicateOfKey == null &&
+                  !claimed.contains(o.key) &&
+                  o.moneyInKind == MoneyInKind.cardPayment &&
+                  o.amountPaise == t.amountPaise &&
+                  o.occurredAt.difference(t.occurredAt).inDays.abs() <= 3,
+            )
+            .firstOrNull;
+        if (issuer != null) {
+          claimed.add(issuer.key);
+          updated = updated.copyWith(isDuplicateOfKey: issuer.key);
+        }
+      }
+      out[j] = updated;
+    }
+
     out.addAll(fromStatement);
     out.sort((a, b) => a.occurredAtMs.compareTo(b.occurredAtMs));
     return out;
+  }
+
+  /// The statement's own bank, another account (its FDs and RDs): the
+  /// statement already shows every movement into and out of them.
+  static bool _sameBank(Txn txn, Iterable<StatementCoverage> covering) {
+    for (final c in covering) {
+      final probe = StatementCoverage(
+        accountKey: c.accountKey,
+        bank: c.bank,
+        accountMask: null,
+        from: c.from,
+        to: c.to,
+      );
+      if (_fromAccount(txn, probe)) return true;
+    }
+    return false;
+  }
+
+  static final RegExp _investmentWords = RegExp(
+    r'mutual\s*fund|\bumrn\b|\bsip\b|\bnach\b|\bach\b|asset\s*manag|'
+    r'debit\s*mandate|nippon|\bamc\b|'
+    r'groww|zerodha|upstox|iccl|indian clearing|kfin|cams',
+    caseSensitive: false,
+  );
+
+  /// A debit from another bank account the user tops up from the statement
+  /// account (the owner's HDFC account): mandates to mutual funds are the
+  /// investments it exists for; anything else leaving it is taken to be that
+  /// bank's credit-card bill. Neither is spend: the purchases are on the card.
+  /// Credits and receipts are dropped (null).
+  static Txn? _otherBank(Txn txn) {
+    if (txn.sourceType != TxnSourceType.sms) return null;
+    if (_isInflow(txn)) return null;
+    // Only a bank account alert names an account; a biller's message does not.
+    if (txn.last4 == null || txn.issuer == null) return null;
+    final body = txn.rawBody ?? '';
+    final investment =
+        txn.transferReason == TransferReason.investment ||
+        _investmentWords.hasMatch(body) ||
+        _investmentWords.hasMatch(txn.merchant ?? '');
+    return txn.copyWith(
+      kind: TxnKind.transfer,
+      transferReason: investment
+          ? TransferReason.investment
+          : TransferReason.creditCardBill,
+      categoryName: investment ? 'Investments' : 'Transfers',
+      categoryKind: investment
+          ? SpendCategoryKind.investments
+          : SpendCategoryKind.transfers,
+      merchant: investment ? null : '${txn.issuer ?? 'Card'} card bill',
+      needsReview: false,
+    );
   }
 
   /// Not in a bank statement: a credit card (not a debit card), a card
@@ -294,9 +392,13 @@ class StatementMerge {
         TransferReason.creditCardBill,
         MoneyInKind.none,
       ),
+      // A top-up of the holder's account at another bank is invested from
+      // there; that bank's SMS carry each SIP, so here it is a transfer.
       StatementKind.investment => (
         TxnKind.transfer,
-        TransferReason.investment,
+        (row.counterparty ?? '').startsWith('To your ')
+            ? TransferReason.selfTransfer
+            : TransferReason.investment,
         MoneyInKind.none,
       ),
       StatementKind.redemption => (
