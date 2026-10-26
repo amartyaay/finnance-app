@@ -381,7 +381,14 @@ class CardMetricsCalculator {
         (limit != null && limit > 0) ? (value / limit).clamp(0.0, 1.5) : null;
 
     final live = ratio(effectiveOutstanding);
-    final totalDue = latestBill?.totalDuePaise ?? 0;
+    // A statement whose due date passed more than 45 days ago describes a
+    // cycle that is long over; rolling its due day forward made a December
+    // 2023 bill read "due in 4 days" in June 2026. Only a recent bill is due.
+    final billAgeDays = latestBill?.dueDateMs == null
+        ? 0
+        : (now.millisecondsSinceEpoch - latestBill!.dueDateMs!) ~/
+              Duration.millisecondsPerDay;
+    final totalDue = billAgeDays > 45 ? 0 : (latestBill?.totalDuePaise ?? 0);
     final reported =
         (limit != null && limit > 0 && totalDue > 0) ? ratio(totalDue) : null;
     final basis = reported != null

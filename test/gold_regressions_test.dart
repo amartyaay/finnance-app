@@ -143,6 +143,41 @@ void main() {
     });
   });
 
+  group('card bills: pair the two legs, never two payments', () {
+    test('Axis ₹5,000 and HDFC ₹5,000 two hours apart stay two payments', () {
+      final rows = _ledger([
+        _msg('AX-AXISBK-S',
+            'Payment of INR 5000.00 received towards your Axis Bank Credit Card XX5365 on 01-07-26.'),
+        _msg('AD-HDFCBK-S',
+            'DEAR HDFCBANK CARDMEMBER, PAYMENT OF Rs. 5000.00 RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH 6859 ON 01-07-2026.',
+            minutes: 120),
+      ]);
+      expect(rows, hasLength(2));
+    });
+
+    test("HDFC's 'received' and next-day 'credited' notices are one payment", () {
+      final rows = _ledger([
+        _msg('AD-HDFCBK-S',
+            'DEAR HDFCBANK CARDMEMBER, PAYMENT OF Rs. 5552.00 RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH 6859 ON 01-07-2026.'),
+        _msg('VD-HDFCBK-S',
+            'HDFC Bank Cardmember, Online Payment of Rs.5552 vide Ref# 123BX45L6O7Z890 was credited to your card ending 6859 on 02-07-2026.',
+            minutes: 30 * 60),
+      ]);
+      expect(rows, hasLength(1));
+    });
+
+    test('two real ₹3,000 payments to one card a day apart stay two', () {
+      final rows = _ledger([
+        _msg('AD-HDFCBK-S',
+            'DEAR HDFCBANK CARDMEMBER, PAYMENT OF Rs. 3000.00 RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH 6859 ON 01-07-2026.'),
+        _msg('AD-HDFCBK-S',
+            'DEAR HDFCBANK CARDMEMBER, PAYMENT OF Rs. 3000.00 RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH 6859 ON 02-07-2026.',
+            minutes: 20 * 60),
+      ]);
+      expect(rows, hasLength(2));
+    });
+  });
+
   group('never count spam or restatements', () {
     test('a -P header never posts, whatever the copy says', () {
       final rows = _ledger([

@@ -168,6 +168,27 @@ void main(List<String> args) {
       if (t.isDuplicateOfKey == null) msgOfKey[t.key]!: t,
   };
 
+  // ---- Over-merge: the app folded two different real movements into one -----
+  // (the error the P2 check cannot see: it under-counts). The two legs of one
+  // card-bill payment are one movement even though the gold set leaves them
+  // unlinked, so that pairing is allowed.
+  final overMerged = <String>[];
+  for (final t in resolved) {
+    final winnerKey = t.isDuplicateOfKey;
+    if (winnerKey == null) continue;
+    final loser = gold[msgOfKey[t.key]];
+    final winner = gold[msgOfKey[winnerKey]];
+    if (loser == null || winner == null) continue;
+    if (!loser.movesMoney || !winner.movesMoney) continue;
+    if (root(loser.id) == root(winner.id)) continue;
+    final billLegs = loser.kind == 'card_bill_payment' &&
+        winner.kind == 'card_bill_payment' &&
+        loser.label != winner.label &&
+        loser.amountPaise == winner.amountPaise;
+    if (billLegs) continue;
+    overMerged.add('${loser.id}->${winner.id}');
+  }
+
   final unlabelled = counted.keys.where((id) => !gold.containsKey(id)).length;
   final labelled = gold.values.where((g) => classOf.containsKey(g.id)).toList();
 
@@ -322,6 +343,7 @@ void main(List<String> args) {
     ..writeln('    of which counted as SPEND         : ${falseSpend.length}')
     ..writeln('P2  movements counted twice           : ${doubles.length}')
     ..writeln('    card bills counted on both legs   : ${billDoubles.length}')
+    ..writeln('    distinct movements merged (under) : ${overMerged.length}')
     ..writeln('')
     ..writeln('Spend precision  ${pct(spendRight, spendCounted)}  ($spendRight of $spendCounted spend rows are real spend)')
     ..writeln('Spend recall     ${pct(spendRight, goldSpendRows)}  ($spendRight of $goldSpendRows real spends found)')
@@ -356,6 +378,7 @@ void main(List<String> args) {
   }
   list('P2 doubles', doubles.map((e) => '${e.key}<-${e.value.join('+')}'));
   list('P2 card-bill legs', billDoubles);
+  list('over-merged', overMerged);
   if (listAll) {
     list('missed spend', missedSpend.map((g) => g.id));
     list('missed other', missed.where((g) => !missedSpend.contains(g)).map((g) => '${g.id}(${g.label}/${g.kind})'));
@@ -409,6 +432,7 @@ void main(List<String> args) {
       'p1_false_spend': falseSpend.length,
       'p2_doubles': doubles.length,
       'p2_card_bill_doubles': billDoubles.length,
+      'over_merged': overMerged.length,
       'spend_precision': spendCounted == 0 ? null : spendRight / spendCounted,
       'spend_recall': goldSpendRows == 0 ? null : spendRight / goldSpendRows,
       'movement_recall': movements.isEmpty ? null : (movements.length - missed.length) / movements.length,

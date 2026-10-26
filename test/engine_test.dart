@@ -373,7 +373,7 @@ void main() {
       expect(metrics.availableLimitPaise, 8500000);
     });
 
-    test('a stale bill has no negative countdown and is not "due soon"', () {
+    test('a bill long past due is not a current bill', () {
       // Proved: a bill whose due date was more than a year old produced
       // daysToDue = -526 with dueSoon = true (the 12-iteration roll-forward
       // gave up). The next occurrence must be computed, then clamped at 0.
@@ -391,10 +391,12 @@ void main() {
         latestBill: staleBill,
       );
 
-      // 18 Oct is behind us, so the next occurrence is 18 Nov 2026.
-      expect(metrics.dueDate, DateTime(2026, 11, 18));
-      expect(metrics.daysToDue, 24);
-      expect(metrics.daysToDue!, greaterThanOrEqualTo(0));
+      // Round 3 (principal, proven): rolling a 2024 bill's due day forward
+      // turned it into a live "due in 24 days" for a statement that is two
+      // years over. A bill more than 45 days past due is not a current bill:
+      // nothing is owed on it, there is no countdown, and it is never due soon.
+      expect(metrics.totalDuePaise, 0);
+      expect(metrics.daysToDue, isNull);
       expect(metrics.dueSoon, isFalse);
     });
 

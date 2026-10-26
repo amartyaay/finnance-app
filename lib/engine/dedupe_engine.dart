@@ -104,21 +104,57 @@ class DedupeEngine {
         billByAmount.putIfAbsent(txn.amountPaise, () => <Txn>[]).add(txn);
       }
     }
+    // One payment = one bank debit leg + one issuer credit leg, paired 1:1 and
+    // nearest in time; a ₹5,000 Axis payment and a ₹5,000 HDFC payment two
+    // hours apart are two payments, and so are two ₹3,000 payments to one
+    // card a day apart. Same-direction alerts merge only as a re-sent notice:
+    // same card, within 30 minutes.
     for (final group in billByAmount.values) {
       if (group.length < 2) continue;
+      final paired = <String>{};
+      final credits = group.where(_issuerLeg).toList();
+      final debits = group.where((t) => !_issuerLeg(t)).toList();
+      for (final credit in credits) {
+        Txn? best;
+        for (final debit in debits) {
+          if (paired.contains(debit.key)) continue;
+          final gap = (credit.occurredAtMs - debit.occurredAtMs).abs();
+          if (gap > billWindowSeconds * 1000) continue;
+          if (_refsDistinguish(credit, debit)) continue;
+          if (!_sameCardOrUnknown(credit, debit)) continue;
+          if (best == null ||
+              gap < (credit.occurredAtMs - best.occurredAtMs).abs()) {
+            best = debit;
+          }
+        }
+        if (best == null) continue;
+        paired.add(best.key);
+        pairs.add((a: best.key, b: credit.key, closure: false, opposite: false));
+        union(best.key, credit.key);
+      }
+      // The issuer notifies one payment twice with two templates a day or so
+      // apart (HDFC: "PAYMENT OF Rs X RECEIVED …" at once, "Online Payment
+      // of Rs X vide Ref# … was credited" when it posts). Pair one notice of
+      // each template on the same card, 1:1 — two real payments then make two
+      // pairs. The same template again within 30 min is a re-sent alert.
+      final sameSide = <String>{};
       for (var i = 0; i < group.length; i++) {
         for (var j = i + 1; j < group.length; j++) {
-          if (group[j].occurredAtMs - group[i].occurredAtMs >
-              billWindowSeconds * 1000) {
-            break;
+          final a = group[i];
+          final b = group[j];
+          if (_issuerLeg(a) != _issuerLeg(b)) continue;
+          if (a.cardKey == null || a.cardKey != b.cardKey) continue;
+          if (sameSide.contains(a.key) || sameSide.contains(b.key)) continue;
+          final gap = (b.occurredAtMs - a.occurredAtMs).abs();
+          final sameTemplate = _template(a) == _template(b);
+          if (sameTemplate ? gap > 30 * 60 * 1000 : gap > billWindowSeconds * 1000) {
+            continue;
           }
-          // Two alerts that print two different reference ids are two genuine
-          // payments of the same amount, not one event notified twice.
-          if (_refsDistinguish(group[i], group[j])) continue;
-          pairs.add(
-            (a: group[i].key, b: group[j].key, closure: false, opposite: false),
-          );
-          union(group[i].key, group[j].key);
+          sameSide
+            ..add(a.key)
+            ..add(b.key);
+          pairs.add((a: a.key, b: b.key, closure: false, opposite: false));
+          union(a.key, b.key);
         }
       }
     }
@@ -309,6 +345,30 @@ class DedupeEngine {
             ? txn.copyWith(isDuplicateOfKey: duplicates[txn.key])
             : (rewritten[txn.key] ?? txn),
     ];
+  }
+
+  /// The card side of a bill payment: the issuer's "payment received" — an
+  /// inflow to the card that names the card. The bank leg ("debited from A/c
+  /// **4821 … Credit Card bill") is tagged credit-card too but names only the
+  /// account, so it carries no cardKey.
+  static bool _issuerLeg(Txn txn) =>
+      _isInflow(txn) ||
+      (txn.instrument == Instrument.creditCard && txn.cardKey != null);
+
+  /// The alert's wording with every number masked: which template it is.
+  static String _template(Txn txn) {
+    final body = (txn.rawBody ?? '').toLowerCase().replaceAll(RegExp(r'[0-9]+'), '9');
+    return body.length > 40 ? body.substring(0, 40) : body;
+  }
+
+  /// Both legs name a card (key or last four) only when it is the same card;
+  /// a bank debit that names no card can pair with any issuer credit.
+  static bool _sameCardOrUnknown(Txn a, Txn b) {
+    if (a.cardKey != null && b.cardKey != null) return a.cardKey == b.cardKey;
+    final aTail = a.cardKey == null ? null : a.last4;
+    final bTail = b.cardKey == null ? null : b.last4;
+    if (aTail != null && bTail != null) return aTail == bTail;
+    return true;
   }
 
   static bool _isInflow(Txn txn) =>
