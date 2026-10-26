@@ -142,6 +142,9 @@ class AppDatabase {
     // v8 column: older rows keep NULL, which the review rule reads as "unknown
     // amount evidence" rather than as a weak candidate.
     await _addColumnIfMissing(db, 'transactions', 'amount_score', 'INTEGER');
+    // The on-device model's P(money moved) — the second opinion behind the
+    // inbox's "Possibly missed" filter. Null until the message is processed.
+    await _addColumnIfMissing(db, 'sms_messages', 'model_money', 'REAL');
     // v9 column: the money-in taxonomy (`MoneyInKind`). Rows written before it
     // read as `none` and are re-derived by the reparse path.
     await _addColumnIfMissing(

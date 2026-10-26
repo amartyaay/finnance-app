@@ -13,9 +13,17 @@ class SmsMessageRow {
     required this.body,
     required this.receivedAtMs,
     this.className,
+    this.modelMoney,
   });
 
   final String id;
+
+  /// The on-device model's P(money moved); null before processing.
+  final double? modelMoney;
+
+  /// Not counted by the rules, but the model is at least 90 % sure money moved.
+  bool get possiblyMissed =>
+      smsClass != SmsClass.transaction && (modelMoney ?? 0) >= 0.9;
 
   /// Raw DLT header, e.g. `VM-HDFCBK-T`.
   final String sender;
@@ -48,6 +56,7 @@ class InboxStats {
     required this.notCounted,
     required this.flagged,
     required this.unreviewed,
+    this.possiblyMissed = 0,
   });
 
   final int total;
@@ -58,6 +67,9 @@ class InboxStats {
   /// Messages the classifier could not place. Reviewing them is optional; the
   /// count is information, never a blocker.
   final int unreviewed;
+
+  /// Not counted by the rules but likely a real payment (model ≥ 90 %).
+  final int possiblyMissed;
 
   static const empty = InboxStats(
     total: 0,
@@ -76,7 +88,11 @@ enum InboxFilter {
   transactions('Transactions', 'transaction'),
   notCounted('Not counted', 'notCounted'),
   flagged('Flagged', 'flagged'),
-  unreviewed('Unreviewed', 'unreviewed');
+  unreviewed('Unreviewed', 'unreviewed'),
+
+  /// Not counted, but the on-device model thinks money moved. The short,
+  /// worthwhile review queue (~12 a month on the owner's phone).
+  possiblyMissed('Possibly missed', 'possiblyMissed');
 
   const InboxFilter(this.label, this.slug);
 
@@ -98,7 +114,10 @@ enum InboxRowStatus {
   transaction('Transaction'),
   notCounted('Not counted'),
   flagged('Flagged'),
-  review('Review');
+  review('Review'),
+
+  /// Rules did not count it; the on-device model thinks money moved.
+  possiblyMissed('Possibly missed');
 
   const InboxRowStatus(this.label);
 
@@ -109,6 +128,7 @@ enum InboxRowStatus {
 /// be parsed/found. A `transaction` message that yielded no amount is shown as
 /// [InboxRowStatus.review] rather than a chip with no number.
 InboxRowStatus inboxRowStatus(SmsMessageRow row, {required bool hasTransaction}) {
+  if (row.possiblyMissed) return InboxRowStatus.possiblyMissed;
   switch (row.smsClass) {
     case SmsClass.phishing:
       return InboxRowStatus.flagged;

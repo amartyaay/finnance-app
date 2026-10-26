@@ -110,6 +110,13 @@ class InboxFunnelHeader extends StatelessWidget {
             runSpacing: T.s2,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
+              if (stats.possiblyMissed > 0)
+                Pill(
+                  '${_countFormat.format(stats.possiblyMissed)} possibly missed payments',
+                  tone: PillTone.info,
+                  icon: Icons.manage_search_rounded,
+                  dense: true,
+                ),
               Pill(
                 '${_countFormat.format(stats.unreviewed)} unreviewed',
                 tone: PillTone.caution,

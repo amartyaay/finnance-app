@@ -19,6 +19,7 @@ import '../engine/review_queue.dart';
 import '../services/categorizer.dart';
 import '../services/sms/sender_registry.dart';
 import '../services/sms/sms_classifier.dart';
+import '../services/sms/sms_model.dart';
 import '../services/sms/transaction_extractor.dart';
 import '../services/sms_reader.dart';
 import 'app_database.dart';
@@ -29,6 +30,8 @@ import 'finance_repository.dart';
 /// Ownership: this class is the only writer of `transactions`. The Kotlin
 /// receiver only appends to `sms_messages`, so parsing lives in one place.
 class SqliteFinanceRepository implements FinanceRepository, InboxStore {
+  final SmsModel? _injectedModel;
+
   /// Upper bound on one inbox read; the native side clamps to the same value.
   static const int maxInboxRead = 15000;
 
@@ -39,7 +42,9 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
     SmsClassifier? classifier,
     TransactionExtractor? extractor,
     Categorizer? categorizer,
-  }) : _db = database ?? AppDatabase(),
+    SmsModel? model,
+  }) : _injectedModel = model,
+       _db = database ?? AppDatabase(),
        _reader = reader ?? const ChannelSmsInboxReader(),
        _now = now ?? DateTime.now,
        _classifier = classifier ?? SmsClassifier(),
@@ -217,6 +222,7 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
       orderBy: 'received_at ASC',
     );
 
+    final model = await _secondOpinion();
     // Learned state is read once per scan and matched in memory: 2 000 alerts
     // against a handful of rules must not become 2 000 queries on a phone.
     final rules = await _loadMerchantRules(db);
@@ -325,6 +331,7 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
           'class': assessment.cls.name,
           'score': assessment.score,
           'sender_normalized': sender.normalized,
+          'model_money': model?.predict(message.sender, message.body).money,
         },
         where: 'id = ?',
         whereArgs: [message.id],
@@ -367,7 +374,7 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
   /// Stored in `app_meta`; together with the schema version it decides whether
   /// the stored ledger has to be re-derived. Bump this on every rule change
   /// that alters what a message becomes.
-  static const int parserVersion = 9;
+  static const int parserVersion = 10;
 
   @override
   Future<IngestResult> reparseAll() async {
@@ -890,7 +897,7 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
 
     final rows = await db.query(
       'sms_messages',
-      columns: const ['id', 'sender', 'body', 'received_at', 'class'],
+      columns: const ['id', 'sender', 'body', 'received_at', 'class', 'model_money'],
       where: clauses.isEmpty ? null : clauses.join(' AND '),
       whereArgs: args.isEmpty ? null : args,
       orderBy: 'received_at DESC, id DESC',
@@ -912,7 +919,9 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
         COALESCE(SUM(CASE WHEN class = 'phishing' THEN 1 ELSE 0 END), 0)
           AS flagged,
         COALESCE(SUM(CASE WHEN class IS NULL OR class = 'unknown' THEN 1 ELSE 0 END), 0)
-          AS unreviewed
+          AS unreviewed,
+        COALESCE(SUM(CASE WHEN $possiblyMissedClause THEN 1 ELSE 0 END), 0)
+          AS possibly_missed
       FROM sms_messages
     ''');
     final row = rows.isEmpty ? const <String, Object?>{} : rows.first;
@@ -923,6 +932,7 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
       notCounted: value('not_counted'),
       flagged: value('flagged'),
       unreviewed: value('unreviewed'),
+      possiblyMissed: value('possibly_missed'),
     );
   }
 
@@ -1167,6 +1177,29 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
     }
   }
 
+  /// Not counted by the rules, but the on-device model is at least 90 % sure
+  /// money moved. On the time-held-out gold set this is ~12 messages a month
+  /// and catches 10 of the rules' 16 misses (tool/audit_accuracy.dart --model).
+  static const String possiblyMissedClause =
+      "(class IS NULL OR class != 'transaction') AND model_money >= 0.9";
+
+  SmsModel? _model;
+  bool _modelTried = false;
+
+  /// The bundled model, loaded once; null when the asset is unavailable
+  /// (host tests), in which case processing simply records no second opinion.
+  Future<SmsModel?> _secondOpinion() async {
+    if (_modelTried) return _model;
+    _modelTried = true;
+    try {
+      _model = _injectedModel ??
+          SmsModel.fromJson(await rootBundle.loadString(SmsModel.assetPath));
+    } catch (_) {
+      _model = null;
+    }
+    return _model;
+  }
+
   String? _classClause(String? filter) {
     switch (filter) {
       case 'transactions':
@@ -1177,6 +1210,8 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
         return "class = 'phishing'";
       case 'unreviewed':
         return "(class IS NULL OR class = 'unknown')";
+      case 'possiblyMissed':
+        return possiblyMissedClause;
       default:
         return null;
     }
@@ -1196,6 +1231,7 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
     body: row['body'] as String,
     receivedAtMs: row['received_at'] as int,
     className: row['class'] as String?,
+    modelMoney: (row['model_money'] as num?)?.toDouble(),
   );
 
   Future<Map<String, MerchantRule>> _loadMerchantRules(Database db) async {

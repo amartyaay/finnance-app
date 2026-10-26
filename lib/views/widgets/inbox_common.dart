@@ -64,6 +64,7 @@ PillTone inboxStatusTone(InboxRowStatus status) => switch (status) {
   InboxRowStatus.notCounted => PillTone.neutral,
   InboxRowStatus.flagged => PillTone.danger,
   InboxRowStatus.review => PillTone.caution,
+  InboxRowStatus.possiblyMissed => PillTone.info,
 };
 
 IconData inboxStatusIcon(InboxRowStatus status) => switch (status) {
@@ -71,6 +72,7 @@ IconData inboxStatusIcon(InboxRowStatus status) => switch (status) {
   InboxRowStatus.notCounted => Icons.remove_circle_outline_rounded,
   InboxRowStatus.flagged => Icons.gpp_bad_rounded,
   InboxRowStatus.review => Icons.help_outline_rounded,
+  InboxRowStatus.possiblyMissed => Icons.manage_search_rounded,
 };
 
 Color inboxStatusColor(BuildContext context, InboxRowStatus status) {
@@ -80,6 +82,7 @@ Color inboxStatusColor(BuildContext context, InboxRowStatus status) {
     InboxRowStatus.notCounted => p.inkMuted,
     InboxRowStatus.flagged => p.danger,
     InboxRowStatus.review => p.caution,
+    InboxRowStatus.possiblyMissed => p.info,
   };
 }
 

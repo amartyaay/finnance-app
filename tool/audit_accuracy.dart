@@ -21,6 +21,7 @@ import 'package:finnance_app/engine/txn_guards.dart';
 import 'package:finnance_app/services/categorizer.dart';
 import 'package:finnance_app/services/sms/sender_registry.dart';
 import 'package:finnance_app/services/sms/sms_classifier.dart';
+import 'package:finnance_app/services/sms/sms_model.dart';
 import 'package:finnance_app/services/sms/transaction_extractor.dart';
 
 /// The app books every inflow as `income` and says what it really is in
@@ -153,6 +154,7 @@ void main(List<String> args) {
   }
 
   final admitted = parsed.where(guards.isCountable).toList();
+  final admittedIds = {for (final t in admitted) msgOfKey[t.key]!};
   final resolved = const DedupeEngine().mark(admitted);
   final idOfKey = {for (final e in msgOfKey.entries) e.key: e.value};
   for (final t in resolved) {
@@ -362,6 +364,41 @@ void main(List<String> args) {
     list('phishing false', phishingFalse);
     list('promo as txn', promoMissed);
     out.writeln('class confusion: ${(classConfusion.entries.toList()..sort((a, b) => b.value - a.value)).map((e) => '${e.key}=${e.value}').join('  ')}');
+  }
+
+  // ---- Second opinion: where the on-device model confidently disagrees -----
+  final modelPath = _flag(args, '--model');
+  if (modelPath != null) {
+    final model = SmsModel.fromJson(File(modelPath).readAsStringSync());
+    final bodies = {
+      for (final item in raw)
+        (item as Map<String, dynamic>)['id'] as String: item,
+    };
+    var flagNoMoney = 0, caughtP1 = 0, flagMoney = 0, caughtMiss = 0;
+    var rulesWrong = 0;
+    for (final g in labelled) {
+      final m = bodies[g.id]!;
+      final p = model.predict(m['sender'] as String, m['body'] as String);
+      final rules = admittedIds.contains(g.id);
+      final goldMoney = g.movesMoney;
+      if (rules != goldMoney && g.dupOf == null) rulesWrong++;
+      if (rules && p.money <= 0.1) {
+        flagNoMoney++;
+        if (!goldMoney) caughtP1++;
+      } else if (!rules && p.money >= 0.9) {
+        flagMoney++;
+        if (goldMoney && g.dupOf == null) caughtMiss++;
+      }
+    }
+    out
+      ..writeln('')
+      ..writeln('Second opinion ($modelPath)')
+      ..writeln('  rules admit, model says no money : $flagNoMoney '
+          '(of which truly not money: $caughtP1)')
+      ..writeln('  rules reject, model says money   : $flagMoney '
+          '(of which truly money, not a duplicate: $caughtMiss)')
+      ..writeln('  rule errors on money/no-money    : $rulesWrong · '
+          'review items added: ${flagNoMoney + flagMoney}');
   }
 
   if (jsonOut != null) {
