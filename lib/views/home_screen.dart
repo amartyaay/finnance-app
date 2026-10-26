@@ -21,6 +21,7 @@ import 'sms_inbox_screen.dart';
 import 'transactions_screen.dart';
 import '../state/statements_controller.dart';
 import 'statements_screen.dart';
+import 'tabs.dart';
 import 'widgets/money_in_breakdown.dart';
 import 'widgets/txn_common.dart';
 import 'widgets/txn_detail_sheet.dart';
@@ -152,7 +153,7 @@ class HomeScreen extends StatelessWidget {
                           index: 2,
                           child: _CategoryCard(
                             summary: summary,
-                            onSeeAll: () => onNavigate?.call(3),
+                            onSeeAll: () => onNavigate?.call(Tabs.insights),
                           ),
                         ),
                       ],
@@ -169,7 +170,7 @@ class HomeScreen extends StatelessWidget {
                                   t.occurredAt.isBefore(state.periodEnd))
                                 t,
                           ],
-                          onSeeAll: () => onNavigate?.call(1),
+                          onSeeAll: () => onNavigate?.call(Tabs.activity),
                         ),
                       ),
                       const SizedBox(height: T.s5),
@@ -1067,7 +1068,7 @@ class _AttentionState extends State<_Attention> {
                 : '${money(data.stillDue)} still due across $unpaid cards. '
                       'Paying in full avoids interest.',
             actionLabel: unpaid == 1 ? 'See card' : 'See cards',
-            onAction: () => onNavigate?.call(2),
+            onAction: () => onNavigate?.call(Tabs.cards),
           ),
         ),
       );

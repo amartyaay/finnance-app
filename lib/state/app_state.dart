@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../data/budget_store.dart';
 import '../data/demo_repository.dart';
 import '../data/finance_repository.dart';
 import '../data/sqlite_finance_repository.dart';
@@ -8,8 +9,10 @@ import '../domain/enums.dart';
 import '../domain/inbox_store.dart';
 import '../domain/merchant_rule.dart';
 import '../domain/transaction.dart';
+import '../engine/budget.dart';
 import '../engine/card_metrics.dart';
 import '../engine/monthly_summary.dart';
+import '../services/daily_digest_channel.dart';
 import '../services/sms_reader.dart';
 
 /// Single source of truth for the UI.
@@ -22,13 +25,73 @@ class AppState extends ChangeNotifier {
     FinanceRepository? repository,
     SmsPermissionGate? permissions,
     DateTime Function()? now,
+    BudgetStore? budgets,
+    DigestScheduler? digest,
   }) : _realRepository = repository ?? SqliteFinanceRepository(),
        _permissions = permissions ?? const PermissionHandlerGate(),
-       _now = now ?? DateTime.now {
+       _now = now ?? DateTime.now,
+       // The real app persists the plan; an injected (test) repository keeps
+       // it in memory.
+       _budgets = budgets ?? (repository == null ? BudgetStore() : null),
+       _digest =
+           digest ??
+           (repository == null ? const ChannelDigestScheduler() : null) {
     _data = HomeData.empty(_now());
   }
 
   final FinanceRepository _realRepository;
+  final BudgetStore? _budgets;
+  final DigestScheduler? _digest;
+  Budget _budget = const Budget();
+
+  /// The user's monthly plan (limit, category limits, savings goal, 10 pm
+  /// summary on/off).
+  Budget get budget => _budget;
+
+  /// This month measured against [budget]: the Budget tab and the 10 pm
+  /// summary print these same numbers.
+  BudgetStatus get budgetStatus {
+    const calc = SummaryCalculator();
+    return BudgetStatus.of(
+      budget: _budget,
+      month: calc.forMonth(_data.transactions, _now()),
+      ledger: _data.transactions,
+      now: _now(),
+    );
+  }
+
+  Future<void> setBudget(Budget next) async {
+    _budget = next;
+    notifyListeners();
+    try {
+      await _budgets?.save(next);
+    } on Object catch (error) {
+      debugPrint('budget save failed: $error');
+    }
+    await _digest?.schedule(enabled: next.dailyDigest);
+  }
+
+  /// Posts tonight's summary now, so the user can see what 10 pm looks like.
+  Future<void> sendTestDigest() async {
+    // Prefer the real background job, so the preview proves 10 pm works.
+    if (await _digest?.runNow() ?? false) return;
+    final digest = DailyDigest.compose(
+      budgetStatus,
+      topToday: DailyDigest.topToday(_data.transactions, _now()),
+    );
+    await _digest?.post(digest.title, digest.body);
+  }
+
+  Future<void> _loadBudget() async {
+    try {
+      final store = _budgets;
+      if (store != null) _budget = await store.load();
+    } on Object catch (error) {
+      debugPrint('budget load failed: $error');
+    }
+    await _digest?.schedule(enabled: _budget.dailyDigest);
+  }
+
   final SmsPermissionGate _permissions;
   final DateTime Function() _now;
 
@@ -106,6 +169,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
+      await _loadBudget();
       _hasSmsPermission = await _permissions.isGranted();
       _data = await _active.load();
       // First run with permission but nothing parsed: pull the inbox before

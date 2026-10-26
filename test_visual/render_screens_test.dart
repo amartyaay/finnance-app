@@ -200,7 +200,7 @@ Future<void> _render(
   }
   await tester.tap(find.text('Month').first);
   await tester.pumpAndSettle();
-  for (final tab in ['Activity', 'Cards', 'Insights']) {
+  for (final tab in ['Activity', 'Budget', 'Cards', 'Insights']) {
     await _tab(tester, tab);
     await _shot(tester, '${tab.toLowerCase()}-$t');
   }

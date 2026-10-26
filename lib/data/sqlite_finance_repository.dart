@@ -146,7 +146,8 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
             int.tryParse(lastScanRow.first['value'] as String) ?? 0,
           );
 
-    final smsCount = Sqflite.firstIntValue(
+    final smsCount =
+        Sqflite.firstIntValue(
           await db.rawQuery('SELECT COUNT(*) FROM sms_messages'),
         ) ??
         0;
@@ -227,6 +228,14 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
       duplicatesMerged: result.merged,
       phishingFound: result.phishing,
     );
+  }
+
+  /// Parses the messages the SMS receiver stored since the last scan,
+  /// without reading the inbox: the 10 pm background run has no activity to
+  /// read it through, but the receiver has already saved every new alert.
+  Future<void> processStored() async {
+    final db = await _db.database;
+    await _processPending(db, _now());
   }
 
   /// Parses every pending message into the ledger. Shared by [ingest] and
@@ -427,7 +436,8 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
         where: "category_source = ?",
         whereArgs: [CategorySource.user.name],
       );
-      final messages = Sqflite.firstIntValue(
+      final messages =
+          Sqflite.firstIntValue(
             await db.rawQuery('SELECT COUNT(*) FROM sms_messages'),
           ) ??
           0;
@@ -489,10 +499,12 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
     final meta = {
       for (final row in rows) row['key'] as String: row['value'] as String,
     };
-    final fresh = meta['parser_version'] == '$parserVersion' &&
+    final fresh =
+        meta['parser_version'] == '$parserVersion' &&
         meta['schema_version'] == '${AppDatabase.schemaVersion}';
     if (fresh) return;
-    final messages = Sqflite.firstIntValue(
+    final messages =
+        Sqflite.firstIntValue(
           await db.rawQuery('SELECT COUNT(*) FROM sms_messages'),
         ) ??
         0;
@@ -571,7 +583,10 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
       final moneyInChanged = row['money_in_kind'] != txn.moneyInKind.name;
       // A winner that was previously some other group's loser must be unmarked.
       final staleDuplicate = row['duplicate_of'] != null;
-      if (!kindChanged && !reasonChanged && !moneyInChanged && !staleDuplicate) {
+      if (!kindChanged &&
+          !reasonChanged &&
+          !moneyInChanged &&
+          !staleDuplicate) {
         continue;
       }
 
@@ -675,11 +690,7 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
       where: 'issuer = ? AND last4 = ?',
       whereArgs: [issuer, last4],
     );
-    await db.delete(
-      'card_bills',
-      where: 'card_key = ?',
-      whereArgs: [key],
-    );
+    await db.delete('card_bills', where: 'card_key = ?', whereArgs: [key]);
     // The phantom must not come back on the next scan, and a row that pointed
     // at it must not keep inflating a card.
     await db.update(
@@ -698,7 +709,25 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
   }) async {
     // A statement row's category lives with the statement.
     if (txnKey.startsWith('stmt:')) {
-      await StatementStore(database: _db).setCategory(txnKey, categoryName, kind);
+      final store = StatementStore(database: _db);
+      final row = await store.rowPayee(txnKey);
+      final payee = row?.payee?.trim().toUpperCase();
+      if (row == null || payee == null || payee.isEmpty) {
+        await store.setCategory(txnKey, categoryName, kind);
+        return;
+      }
+      // Like the SMS ledger's "every payment from X": this payment and every
+      // later one to the same payee (rent stays rent; earlier, different
+      // payments to the same person are left alone).
+      final day = DateTime(row.date.year, row.date.month, row.date.day);
+      await store.addPayeeRule(
+        PayeeRule(
+          payee: payee,
+          categoryName: categoryName,
+          kind: kind,
+          fromMs: day.millisecondsSinceEpoch,
+        ),
+      );
       return;
     }
     final db = await _db.database;
@@ -762,7 +791,10 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
     final stored = await db.query(
       'transactions',
       where: 'dedupe_key != ? AND occurred_at >= ?',
-      whereArgs: [txnKey, now.subtract(const Duration(days: 400)).millisecondsSinceEpoch],
+      whereArgs: [
+        txnKey,
+        now.subtract(const Duration(days: 400)).millisecondsSinceEpoch,
+      ],
     );
     var applied = 0;
     for (final row in stored) {
@@ -924,7 +956,14 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
 
     final rows = await db.query(
       'sms_messages',
-      columns: const ['id', 'sender', 'body', 'received_at', 'class', 'model_money'],
+      columns: const [
+        'id',
+        'sender',
+        'body',
+        'received_at',
+        'class',
+        'model_money',
+      ],
       where: clauses.isEmpty ? null : clauses.join(' AND '),
       whereArgs: args.isEmpty ? null : args,
       orderBy: 'received_at DESC, id DESC',
@@ -1179,11 +1218,7 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
     );
     await db.update(
       'sms_messages',
-      {
-        'processed': 1,
-        'class': SmsClass.transaction.name,
-        'score': 1.0,
-      },
+      {'processed': 1, 'class': SmsClass.transaction.name, 'score': 1.0},
       where: 'id = ?',
       whereArgs: [message.id],
     );
@@ -1219,7 +1254,8 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
     if (_modelTried) return _model;
     _modelTried = true;
     try {
-      _model = _injectedModel ??
+      _model =
+          _injectedModel ??
           SmsModel.fromJson(await rootBundle.loadString(SmsModel.assetPath));
     } catch (_) {
       _model = null;
@@ -1406,7 +1442,9 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
       occurredAtMs: row['occurred_at'] as int,
       amountPaise: row['amount_paise'] as int,
       kind: TxnKind.values.byName(row['kind'] as String? ?? 'spend'),
-      instrument: Instrument.values.byName(row['instrument'] as String? ?? 'unknown'),
+      instrument: Instrument.values.byName(
+        row['instrument'] as String? ?? 'unknown',
+      ),
       sender: row['sender'] as String?,
       merchant: row['merchant'] as String?,
       counterpartyVpa: row['vpa'] as String?,

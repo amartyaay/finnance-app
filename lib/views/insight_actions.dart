@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../domain/transaction.dart';
 import '../engine/insights_engine.dart';
 import 'transactions_screen.dart';
+import 'tabs.dart';
 import 'widgets/txn_common.dart';
 
 /// Turns [Insight.action] into a real destination.
@@ -26,10 +27,10 @@ VoidCallback? insightActionHandler(
       return null;
 
     case InsightAction.cards:
-      return openTab == null ? null : () => openTab(2);
+      return openTab == null ? null : () => openTab(Tabs.cards);
 
     case InsightAction.recurring:
-      return onRecurring ?? (openTab == null ? null : () => openTab(3));
+      return onRecurring ?? (openTab == null ? null : () => openTab(Tabs.insights));
 
     case InsightAction.categories:
       final chip = insight.chip?.trim();
@@ -39,7 +40,7 @@ VoidCallback? insightActionHandler(
         final kind = categoryKindForName(chip, transactions);
         return () => openActivity(ActivityRequest(category: kind));
       }
-      return openTab == null ? null : () => openTab(1);
+      return openTab == null ? null : () => openTab(Tabs.activity);
 
     case InsightAction.transactions:
       final chip = insight.chip?.trim();
@@ -48,6 +49,6 @@ VoidCallback? insightActionHandler(
         // dropping the reader at the top of the month.
         return () => openActivity(ActivityRequest(query: chip));
       }
-      return openTab == null ? null : () => openTab(1);
+      return openTab == null ? null : () => openTab(Tabs.activity);
   }
 }

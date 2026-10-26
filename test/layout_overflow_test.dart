@@ -209,6 +209,11 @@ final List<_Screen> _screens = [
     anchor: find.byType(RefreshIndicator),
   ),
   _Screen(
+    name: 'Budget',
+    open: (tester) async => _tapTab(tester, 'Budget'),
+    anchor: find.text('Set a monthly budget'),
+  ),
+  _Screen(
     name: 'Cards',
     open: (tester) async => _tapTab(tester, 'Cards'),
     anchor: find.byType(CardFace),

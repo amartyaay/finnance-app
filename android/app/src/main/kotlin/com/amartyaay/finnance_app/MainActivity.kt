@@ -67,6 +67,39 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DailyDigest.CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "schedule" -> {
+                        DailyDigest.setEnabled(this, call.argument<Boolean>("enabled") ?: true)
+                        result.success(null)
+                    }
+                    "post" -> {
+                        DailyDigest.post(
+                            this,
+                            call.argument<String>("title") ?: "Hisaab",
+                            call.argument<String>("body") ?: "",
+                        )
+                        result.success(null)
+                    }
+                    "done" -> result.success(null)
+                    // "Preview it now": the real 10 pm path (headless engine,
+                    // stored alerts parsed, budget read), just earlier.
+                    "runNow" -> {
+                        sendBroadcast(Intent(this, DailyDigestReceiver::class.java))
+                        result.success(null)
+                    }
+                    // The 10 pm notification opens the Budget tab: read once,
+                    // then cleared so a later resume does not jump again.
+                    "launchTarget" -> {
+                        val target = intent?.getStringExtra("open")
+                        intent?.removeExtra("open")
+                        result.success(target)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, importFileChannel)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -74,6 +107,11 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

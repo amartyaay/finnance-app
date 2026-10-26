@@ -11,7 +11,10 @@ import 'app/widgets/kit.dart';
 import 'state/app_state.dart';
 import 'state/statements_controller.dart';
 import 'viewmodels/theme_view_model.dart';
+import 'services/daily_digest_channel.dart';
+import 'views/budget_screen.dart';
 import 'views/cards_screen.dart';
+import 'views/tabs.dart';
 import 'views/home_screen.dart';
 import 'views/insights_screen.dart';
 import 'views/onboarding_screen.dart';
@@ -105,9 +108,8 @@ class _FinanceAppState extends State<FinanceApp> {
   }
 }
 
-/// Four destinations. Settings is a pushed route from the avatar rather than a
-/// fifth tab: five labels crowd a 360 dp bar at large text sizes, and settings is
-/// a rare visit compared with the four daily ones.
+/// Five destinations; Settings is a pushed route from the header rather than a
+/// sixth tab, since it is a rare visit.
 class AppShell extends StatefulWidget {
   const AppShell({super.key, this.initialIndex = 0});
 
@@ -117,7 +119,7 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   late int _index = _initialTab(widget.initialIndex);
 
   /// A filter request for Activity, produced by another tab (e.g. the hero's
@@ -129,13 +131,15 @@ class _AppShellState extends State<AppShell> {
     setState(() {
       _activitySerial += 1;
       _activityRequest = request.withSerial(_activitySerial);
-      _index = 1;
+      _index = Tabs.activity;
     });
   }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _followLaunchTarget();
     // `?tab=messages` opens the optional review screen after the first frame;
     // it is a route push, never a launch modal, and Back/Skip dismiss it.
     if (kIsWeb && Uri.base.queryParameters['tab'] == 'messages') {
@@ -146,11 +150,34 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _followLaunchTarget();
+  }
+
+  /// The 10 pm summary opens the app on Budget.
+  Future<void> _followLaunchTarget() async {
+    try {
+      final target = await ChannelDigestScheduler.channel.invokeMethod<String>(
+        'launchTarget',
+      );
+      if (target == 'budget' && mounted) setState(() => _index = Tabs.budget);
+    } on Object {
+      // No platform side (tests, other platforms): stay where we are.
+    }
+  }
+
   /// `?tab=2` lets screenshots and deep links land on a specific tab.
   static int _initialTab(int fallback) {
     if (!kIsWeb) return fallback;
     final parsed = int.tryParse(Uri.base.queryParameters['tab'] ?? '');
-    if (parsed == null || parsed < 0 || parsed > 3) return fallback;
+    if (parsed == null || parsed < 0 || parsed > 4) return fallback;
     return parsed;
   }
 
@@ -164,6 +191,11 @@ class _AppShellState extends State<AppShell> {
       icon: Icon(PhosphorIconsRegular.listBullets),
       selectedIcon: Icon(PhosphorIconsBold.listBullets),
       label: 'Activity',
+    ),
+    NavigationDestination(
+      icon: Icon(PhosphorIconsRegular.wallet),
+      selectedIcon: Icon(PhosphorIconsFill.wallet),
+      label: 'Budget',
     ),
     NavigationDestination(
       icon: Icon(PhosphorIconsRegular.creditCard),
@@ -214,6 +246,7 @@ class _AppShellState extends State<AppShell> {
                 onOpenActivity: _openActivity,
               ),
               TransactionsScreen(request: _activityRequest),
+              const BudgetScreen(),
               const CardsScreen(),
               InsightsScreen(
                 onNavigate: _openTab,

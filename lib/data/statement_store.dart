@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:sqflite/sqflite.dart';
 
 import '../domain/enums.dart';
@@ -182,12 +184,23 @@ class StatementStore {
     // the import (own FDs, a card bill paid via PhonePe) applies without
     // re-importing. A category is replaced only when the kind changed; a
     // category the user picked on an unchanged row stays.
+    final rules = await payeeRules();
     StatementRow fresh(StatementRow stored) {
       final next = _classifier.classify(stored, holderName: holder);
-      if (next.kind == stored.kind) {
-        return stored.copyWith(counterparty: next.counterparty);
-      }
-      return next.copyWith(isSalaryOverride: stored.isSalaryOverride);
+      final row = next.kind == stored.kind
+          ? stored.copyWith(counterparty: next.counterparty)
+          : next.copyWith(isSalaryOverride: stored.isSalaryOverride);
+      final rule = PayeeRule.matching(rules, row);
+      if (rule == null) return row;
+      // A payment the user named (rent to a person) is spending in that
+      // category; a payee rule never turns a credit into spend.
+      return row.copyWith(
+        kind: row.isDebit && rule.kind != SpendCategoryKind.transfers
+            ? StatementKind.spend
+            : row.kind,
+        categoryName: rule.categoryName,
+        categoryKind: rule.kind,
+      );
     }
 
     return [
@@ -266,6 +279,62 @@ class StatementStore {
     return out;
   }
 
+  /// Rules the user made by categorising one statement payment: "payments to
+  /// BANOTH from 30 Apr are Rent". Kept in `app_meta` as JSON.
+  Future<List<PayeeRule>> payeeRules() async {
+    final db = await _db.database;
+    final rows = await db.query(
+      'app_meta',
+      where: 'key = ?',
+      whereArgs: [_payeeRulesKey],
+      limit: 1,
+    );
+    if (rows.isEmpty) return const [];
+    try {
+      final list = jsonDecode(rows.first['value'] as String) as List<dynamic>;
+      return [
+        for (final item in list)
+          PayeeRule.fromJson(item as Map<String, dynamic>),
+      ];
+    } on FormatException {
+      return const [];
+    }
+  }
+
+  /// Categorises every payment to [payee] from [from] on (this one and later
+  /// ones), replacing an earlier rule for the same payee and start.
+  Future<void> addPayeeRule(PayeeRule rule) async {
+    final rules = [
+      for (final r in await payeeRules())
+        if (!(r.payee == rule.payee && r.fromMs == rule.fromMs)) r,
+      rule,
+    ];
+    final db = await _db.database;
+    await db.insert('app_meta', {
+      'key': _payeeRulesKey,
+      'value': jsonEncode([for (final r in rules) r.toJson()]),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  static const _payeeRulesKey = 'statement_payee_rules';
+
+  /// The counterparty and date of a stored row, for making a payee rule.
+  Future<({String? payee, DateTime date})?> rowPayee(String rowKey) async {
+    final db = await _db.database;
+    final rows = await db.query(
+      'statement_rows',
+      columns: const ['counterparty', 'txn_date'],
+      where: 'row_key = ?',
+      whereArgs: [rowKey],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return (
+      payee: rows.first['counterparty'] as String?,
+      date: DateTime.fromMillisecondsSinceEpoch(rows.first['txn_date'] as int),
+    );
+  }
+
   /// "This is / is not my salary"; null clears the choice.
   Future<void> setSalaryOverride(String rowKey, bool? isSalary) async {
     final db = await _db.database;
@@ -306,5 +375,51 @@ class StatementStore {
         whereArgs: [accountKey],
       );
     });
+  }
+}
+
+/// "Payments to [payee] from [fromMs] on are [categoryName]". The newest
+/// rule that has started wins, so rent can move to a new landlord.
+class PayeeRule {
+  const PayeeRule({
+    required this.payee,
+    required this.categoryName,
+    required this.kind,
+    this.fromMs,
+  });
+
+  /// Upper-cased counterparty as the statement prints it ("BANOTH").
+  final String payee;
+  final String categoryName;
+  final SpendCategoryKind kind;
+  final int? fromMs;
+
+  factory PayeeRule.fromJson(Map<String, dynamic> json) => PayeeRule(
+    payee: json['payee'] as String,
+    categoryName: json['category'] as String,
+    kind: SpendCategoryKind.values.byName(json['kind'] as String),
+    fromMs: json['from'] as int?,
+  );
+
+  Map<String, Object?> toJson() => {
+    'payee': payee,
+    'category': categoryName,
+    'kind': kind.name,
+    'from': fromMs,
+  };
+
+  static PayeeRule? matching(List<PayeeRule> rules, StatementRow row) {
+    final payee = row.counterparty?.trim().toUpperCase();
+    if (payee == null || payee.isEmpty) return null;
+    PayeeRule? best;
+    for (final rule in rules) {
+      if (rule.payee != payee) continue;
+      if (rule.fromMs != null &&
+          row.date.millisecondsSinceEpoch < rule.fromMs!) {
+        continue;
+      }
+      if (best == null || (rule.fromMs ?? 0) > (best.fromMs ?? 0)) best = rule;
+    }
+    return best;
   }
 }

@@ -23,6 +23,7 @@ import 'package:finnance_app/services/sms_reader.dart';
 import 'package:finnance_app/state/app_state.dart';
 import 'package:finnance_app/views/cards_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:finnance_app/views/tabs.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -149,7 +150,8 @@ void main() {
     await tester.pumpAndSettle();
     harness.drain(tester);
 
-    expect(tester.widget<NavigationBar>(navBar).selectedIndex, 2);
+    // Budget sits before Cards since the Budget tab was added.
+    expect(tester.widget<NavigationBar>(navBar).selectedIndex, Tabs.cards);
 
     // The Cards screen itself renders the card's display name and masked tail.
     final cardsScreen = find.byType(CardsScreen);
