@@ -5,7 +5,10 @@ import 'package:provider/provider.dart';
 import '../../app/design_tokens.dart';
 import '../../app/widgets/kit.dart';
 import '../../domain/enums.dart';
+import '../../domain/money.dart';
 import '../../domain/transaction.dart';
+import '../../engine/card_bill_breakdown.dart';
+import '../../app/money_format.dart';
 import '../../state/app_state.dart';
 import 'txn_common.dart';
 
@@ -92,17 +95,10 @@ class _TransactionDetailSheet extends StatelessWidget {
             ),
             if (txn.needsReview) ...[
               const SizedBox(height: T.s2),
-              const Pill(
-                'Needs review',
-                tone: PillTone.caution,
-                dense: true,
-              ),
+              const Pill('Needs review', tone: PillTone.caution, dense: true),
             ],
             const SizedBox(height: T.s5),
-            Text(
-              'Category',
-              style: T.label.copyWith(color: p.inkSecondary),
-            ),
+            Text('Category', style: T.label.copyWith(color: p.inkSecondary)),
             const SizedBox(height: T.s2),
             Wrap(
               spacing: T.s2,
@@ -144,6 +140,11 @@ class _TransactionDetailSheet extends StatelessWidget {
                 value: txn.referenceId!.trim(),
                 monospace: true,
               ),
+            if (CardBillBreakdown.of(txn, state.data.transactions)
+                case final breakdown?) ...[
+              const SizedBox(height: T.s4),
+              _BillBreakdown(breakdown: breakdown, payment: txn),
+            ],
             const SizedBox(height: T.s4),
             Row(
               children: [
@@ -282,9 +283,7 @@ class _CategoryChoice extends StatelessWidget {
             decoration: BoxDecoration(
               color: selected ? p.ink : p.surfaceMuted,
               borderRadius: BorderRadius.circular(T.r5),
-              border: Border.all(
-                color: selected ? p.ink : p.outlineVariant,
-              ),
+              border: Border.all(color: selected ? p.ink : p.outlineVariant),
             ),
             child: Text(
               name,
@@ -323,10 +322,7 @@ class _DetailRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 92,
-            child: Text(
-              label,
-              style: T.bodySmall.copyWith(color: p.inkMuted),
-            ),
+            child: Text(label, style: T.bodySmall.copyWith(color: p.inkMuted)),
           ),
           const SizedBox(width: T.s3),
           Expanded(
@@ -339,6 +335,79 @@ class _DetailRow extends StatelessWidget {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "What this paid for": the card's own purchases behind one bill payment,
+/// by category. The bank statement shows a single debit; the card's SMS fill
+/// in the detail.
+class _BillBreakdown extends StatelessWidget {
+  const _BillBreakdown({required this.breakdown, required this.payment});
+
+  final CardBillBreakdown breakdown;
+  final Txn payment;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = T.of(context);
+    final card = breakdown.cardKey.replaceAll('|', ' ••');
+    final rows = breakdown.byCategory;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(T.s4),
+      decoration: T.glass(radius: T.r3),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('What this paid for', style: T.cardTitle.copyWith(color: p.ink)),
+          const SizedBox(height: 2),
+          Text(
+            rows.isEmpty
+                ? 'No purchases on $card between ${shortDate(breakdown.from)} '
+                      'and ${shortDate(breakdown.to)} in your SMS.'
+                : '${breakdown.count} purchases on $card from your SMS, '
+                      '${shortDate(breakdown.from)} – ${shortDate(breakdown.to)} '
+                      '(since the previous payment).',
+            style: T.bodySmall.copyWith(color: p.inkMuted),
+          ),
+          for (final r in rows) ...[
+            const SizedBox(height: T.s3),
+            Row(
+              children: [
+                Icon(
+                  categoryIcon(r.kind),
+                  size: 18,
+                  color: categoryColor(context, r.kind),
+                ),
+                const SizedBox(width: T.s2),
+                Expanded(
+                  child: Text(
+                    '${r.name} · ${r.count}',
+                    style: T.body.copyWith(color: p.ink),
+                  ),
+                ),
+                Text(
+                  money(Paise(r.paise)),
+                  style: T.money.copyWith(color: p.ink, fontSize: 14),
+                ),
+              ],
+            ),
+          ],
+          if (rows.isNotEmpty) ...[
+            const SizedBox(height: T.s3),
+            Text(
+              breakdown.totalPaise == payment.amountPaise
+                  ? 'Matches the payment exactly.'
+                  : 'Purchases ${money(Paise(breakdown.totalPaise))} vs payment '
+                        '${money(payment.amount)}: the bill also carries earlier '
+                        'balance, fees or refunds, and a cycle rarely ends on a '
+                        'payment day.',
+              style: T.bodySmall.copyWith(color: p.inkMuted),
+            ),
+          ],
         ],
       ),
     );

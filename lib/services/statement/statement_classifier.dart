@@ -39,7 +39,10 @@ class StatementClassifier {
   static final _cashback = _r(r'CASHBACK|REWARD|(?:^|[^A-Z])CR_');
   static final _interest = _r(r'INTERESTCREDIT|CREDITINTEREST|INT\.?PD|SBINT|DIVIDEND|INTCREDIT');
   static final _wallet = _r(r'PAYTMWALLET|UPILITE|MOBIKWIK|WALLETLOAD|ADDMONEY');
-  static final _selfWords = _r(r'\bSELF\b|\bOWN A/?C\b');
+  // `UPI/DR/<rrn>/Bank Acc/HDFC/<account>`: paid to an account number +
+  // IFSC rather than a VPA, which is how people move money to their own
+  // account in another bank.
+  static final _selfWords = _r(r'\bSELF\b|\bOWN A/?C\b|UPI/DR/\d+/\s*BANK ACC');
   static final _card = _r(r'DEBITCARD|OTHPG|SBIPG|OTHPOS|SBIPOS|POSATMPURCH|POSPURCH|ECOMPUR');
   static final _billpay = _r(r'BILLPAY|BBPS');
   static final _bulk = _r(r'BULKPOSTING|CEMTEX');

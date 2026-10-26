@@ -106,6 +106,46 @@ void main() {
     expect(september.spendPaise, 50000 + 12000 + 30000);
   });
 
+  test('the statement is the only source for every bank on its days', () {
+    final out = _merge(
+      [
+        // Another bank's account alert, and a merchant receipt: both gone.
+        _sms(
+          'hdfc-savings',
+          DateTime(2026, 9, 8, 10),
+          90000,
+          issuer: 'HDFC Bank',
+          sender: 'HDFCBK',
+          last4: '1111',
+          instrument: Instrument.bankAccount,
+        ),
+        _sms('receipt', DateTime(2026, 9, 8, 11), 36100, issuer: 'Airtel', sender: 'AIRTEL', last4: null),
+        // A wallet / meal-card spend is not in a bank statement: it stays.
+        _sms(
+          'pluxee',
+          DateTime(2026, 9, 9, 13),
+          25000,
+          issuer: 'Pluxee',
+          sender: 'PLUXEE',
+          last4: null,
+          instrument: Instrument.wallet,
+        ),
+        // The same day after the statement ends is still SMS.
+        _sms(
+          'hdfc-later',
+          DateTime(2026, 10, 1, 10),
+          40000,
+          issuer: 'HDFC Bank',
+          sender: 'HDFCBK',
+          last4: '1111',
+          instrument: Instrument.bankAccount,
+        ),
+      ],
+      const [],
+    );
+    expect(out.map((t) => t.key), unorderedEquals(['pluxee', 'hdfc-later']));
+  });
+
   test('a debit-card alert from the same bank is the account too', () {
     final out = _merge(
       [

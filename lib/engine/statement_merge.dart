@@ -27,20 +27,21 @@ class StatementCoverage {
   }
 }
 
-/// One ledger from two sources: an imported bank statement is the record for
-/// the account and the days it covers; SMS fill in everything else (other
-/// banks, cards, and the days after the statement ends, like this month).
+/// One ledger from two sources. An imported bank statement is the single
+/// source of truth for the days it covers: **every** bank-account SMS on
+/// those days (this bank's and any other bank's, UPI, debit card, receipts)
+/// gives way to it. Credit cards and wallets are not in a bank statement, so
+/// their SMS stay; the statement shows one big card-bill payment, and the
+/// card's own alerts say what it paid for. Days the statement does not cover
+/// (this month, after the file ends) are SMS as before.
 ///
-/// The statement replaces that account's SMS rows outright, so nothing is
-/// counted twice and an SMS the bank never sent cannot leave a hole. The
-/// decisions the SMS ledger already made are kept, though:
+/// The decisions the SMS ledger already made are kept:
 /// - a replaced alert that was a duplicate of another sender's alert (the
 ///   bank leg of a card bill, whose issuer confirmation survives) hands that
 ///   status to its statement row;
 /// - a category the user chose on the alert stays on the statement row.
-/// When the account's SMS never arrived, the statement row still pairs with
-/// the card issuer's "payment received", and a merchant receipt folds into
-/// the statement row it confirms.
+/// When the bank's SMS never arrived, a card-bill row still pairs with the
+/// issuer's "payment received", so the bill is counted once.
 class StatementMerge {
   const StatementMerge();
 
@@ -51,20 +52,27 @@ class StatementMerge {
   }) {
     if (coverage.isEmpty) return sms;
 
-    // 1. The account's own alerts, on covered days, step aside.
+    // 1. Bank alerts on covered days step aside. The statement's own
+    //    account's alerts are kept aside for matching (clock, category,
+    //    duplicate status); other banks' are simply dropped.
     final replaced = <String, List<Txn>>{};
+    final dropped = <String>{};
     final kept = <Txn>[];
     for (final txn in sms) {
-      final owner = coverage
-          .where((c) => c.coversDay(txn.occurredAt) && _fromAccount(txn, c))
-          .firstOrNull;
-      if (owner == null) {
+      final covering = coverage.where((c) => c.coversDay(txn.occurredAt));
+      if (covering.isEmpty || _isCardOrWallet(txn)) {
         kept.add(txn);
+        continue;
+      }
+      final owner = covering.where((c) => _fromAccount(txn, c)).firstOrNull;
+      if (owner == null) {
+        dropped.add(txn.key);
       } else {
         replaced.putIfAbsent(owner.accountKey, () => []).add(txn);
       }
     }
     final replacedKeys = {
+      ...dropped,
       for (final list in replaced.values)
         for (final t in list) t.key,
     };
@@ -99,11 +107,17 @@ class StatementMerge {
 
     // 3. Alerts that pointed at a replaced alert now point at its statement
     //    row (they stay duplicates either way).
+    //    A card alert that deferred to a bank alert with no statement row
+    //    to inherit from would vanish with it; it counts again instead.
     final out = <Txn>[
       for (final t in kept)
-        t.isDuplicateOfKey != null && remap.containsKey(t.isDuplicateOfKey)
-            ? t.copyWith(isDuplicateOfKey: remap[t.isDuplicateOfKey])
-            : t,
+        if (t.isDuplicateOfKey != null && remap.containsKey(t.isDuplicateOfKey))
+          t.copyWith(isDuplicateOfKey: remap[t.isDuplicateOfKey])
+        else if (t.isDuplicateOfKey != null &&
+            replacedKeys.contains(t.isDuplicateOfKey))
+          _undup(t)
+        else
+          t,
     ];
 
     // 4. Rows whose alert never arrived: a card bill pairs with the issuer's
@@ -115,13 +129,14 @@ class StatementMerge {
     for (var i = 0; i < fromStatement.length; i++) {
       final s = fromStatement[i];
       if (s.isDuplicateOfKey != null) continue;
-      if (s.transferReason == TransferReason.creditCardBill && !_isInflow(s)) {
+      // A debit with the exact amount of a card's "payment received" is that
+      // bill, whatever the narration says ("trf to PhonePe", "CRED").
+      if (!_isInflow(s)) {
         final issuer = out
             .where(
               (t) =>
                   t.isDuplicateOfKey == null &&
                   !claimed.contains(t.key) &&
-                  t.cardKey != null &&
                   t.moneyInKind == MoneyInKind.cardPayment &&
                   t.amountPaise == s.amountPaise &&
                   t.occurredAt.difference(s.occurredAt).inDays.abs() <= 3,
@@ -129,9 +144,15 @@ class StatementMerge {
             .firstOrNull;
         if (issuer != null) {
           claimed.add(issuer.key);
-          fromStatement[i] = s.copyWith(isDuplicateOfKey: issuer.key);
+          fromStatement[i] = s.copyWith(
+            kind: TxnKind.transfer,
+            transferReason: TransferReason.creditCardBill,
+            isDuplicateOfKey: issuer.key,
+          );
+          continue;
         }
-      } else if (s.kind == TxnKind.spend) {
+      }
+      if (s.kind == TxnKind.spend) {
         for (var j = 0; j < out.length; j++) {
           final r = out[j];
           if (r.sourceType != TxnSourceType.receipt ||
@@ -151,6 +172,54 @@ class StatementMerge {
     return out;
   }
 
+  /// Not in a bank statement: a credit card (not a debit card), a card
+  /// issuer's own alert, or a wallet / meal card.
+  static bool _isCardOrWallet(Txn txn) {
+    if (txn.sourceType == TxnSourceType.statement) return false;
+    // "Payment of INR … received towards your Axis Bank Credit Card": the
+    // card's side of a bill payment, which the statement shows only as a debit.
+    if (txn.moneyInKind == MoneyInKind.cardPayment) return true;
+    if (txn.instrument == Instrument.creditCard ||
+        txn.instrument == Instrument.wallet) {
+      return true;
+    }
+    final debitCard =
+        txn.instrument == Instrument.debitCard ||
+        txn.instrument == Instrument.atm;
+    if (txn.cardKey != null && !debitCard) return true;
+    return (txn.issuer ?? '').toLowerCase().contains('card');
+  }
+
+  static Txn _undup(Txn t) => Txn(
+    key: t.key,
+    occurredAtMs: t.occurredAtMs,
+    amountPaise: t.amountPaise,
+    kind: t.kind,
+    instrument: t.instrument,
+    id: t.id,
+    smsId: t.smsId,
+    sender: t.sender,
+    merchant: t.merchant,
+    counterpartyVpa: t.counterpartyVpa,
+    categoryId: t.categoryId,
+    categoryName: t.categoryName,
+    categorySource: t.categorySource,
+    categoryKind: t.categoryKind,
+    transferReason: t.transferReason,
+    moneyInKind: t.moneyInKind,
+    cardKey: t.cardKey,
+    last4: t.last4,
+    issuer: t.issuer,
+    referenceId: t.referenceId,
+    balanceAfterPaise: t.balanceAfterPaise,
+    availableLimitPaise: t.availableLimitPaise,
+    confidence: t.confidence,
+    amountScore: t.amountScore,
+    sourceType: t.sourceType,
+    needsReview: t.needsReview,
+    rawBody: t.rawBody,
+  );
+
   /// An alert about this account: from the same bank, not a card, and naming
   /// this account's tail (or no account at all).
   static bool _fromAccount(Txn txn, StatementCoverage c) {
@@ -158,7 +227,8 @@ class StatementMerge {
     // A debit card spends from this account (its number is the card's, not
     // the account's); a credit card is a different ledger altogether.
     final debitCard =
-        txn.instrument == Instrument.debitCard || txn.instrument == Instrument.atm;
+        txn.instrument == Instrument.debitCard ||
+        txn.instrument == Instrument.atm;
     if (txn.instrument == Instrument.creditCard) return false;
     if (txn.cardKey != null && !debitCard) return false;
     if ((txn.issuer ?? '').toLowerCase().contains('card')) return false;

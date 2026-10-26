@@ -31,6 +31,7 @@ iteration. Working branch: `main` (single-developer repo).
 | 18 | "UI still bad and cluttered, colour scheme bad; make it fancy, use any Flutter package." Earlier: rename the app and make a logo. | Renamed **Hisaab** with a generated logo (`tool/make_logo.py`). Owner picked concept **C · Aurora Glass** (`docs/shots/concept-c-aurora.png`, `test_visual/concepts_test.dart`). Applied app-wide: always-dark aurora backdrop, glass surfaces, teal→blue→violet gradient numbers, Phosphor icons, fl_chart daily bars. Home cut to hero → one "things need you" row → where it went → recent; details behind an ⓘ sheet. Theme picker removed. |
 | 19 | "The SBI statement thing is not working; I can only see one month — let me see previous months over time." | Home steps through months (arrows, or tap the month for a month-by-month list), shared with Activity. Statement import fails loudly, accepts glued units and two-line headers, and shows a copyable layout report. **Root cause on the owner's file** (`AccountStatement_…pdf`, 2026 OnlineSBI): the column labels are vector art, only "Balance" is text, and narration is centred on the dated line. Now columns are measured from the rows (`_inferModel`), the line above a date joins its row, the branch name under each row is dropped, `01-04-2026` periods and `Mr. NAME` holders parse, and spaced NEFT (`NEFT * IFSC * UTR NAME`) yields the payer. Owner's file: **623 rows, 622 balance-verified** (the first has no opening balance), salary DELOITTE found in 6 months. |
 | 20 | "The bank statement should be the record: show SMS transactions only where no statement covers the period, like the current month." | `StatementMerge`: for each imported account and the days its statements cover, that account's SMS (UPI, CBS, and its debit card) give way to the statement rows; other banks, credit cards and uncovered days stay SMS. Dedupe decisions carry over (a card bill's bank leg stays a duplicate of the issuer's confirmation; a lone card-bill row pairs with it; a merchant receipt folds in), user categories carry over, salary verdict books salary. Measured on the real inbox + statement: 95 SMS replaced, 623 statement rows in, **2** same-amount cross-source pairs left, both genuinely separate payments. Also fixed: SBI `A/C XXXXX454642` gave tail `5464` (now `4642`); parser version 11. |
+| 21 | "SBI statement is the single source of truth — remove all banks. Credit-card payments in the statement: use the card SMS to break them down by category." | On covered days **every** bank-account SMS (any bank, UPI, debit card, receipts) gives way to the statement; credit cards, card-payment confirmations and wallets stay. A statement debit with the exact amount of a card's "payment received" (±3 days) becomes that card bill, whatever its narration (`trf to PhonePe`): 11 such payments on the owner's file. Tapping a card bill shows **What this paid for**: the card's purchases since the previous payment, by category (`CardBillBreakdown`). UPI to `Bank Acc/<IFSC>` is a self transfer. |
 
 ## Decisions to keep (with evidence)
 
@@ -60,7 +61,7 @@ Round-1 evidence: `docs/eval/round-1/`; round-2: `docs/eval/round-2/`; round-3: 
 |---|---:|---:|---:|
 | Evaluator scores | — | 5.3 / 6.2 / 6.4 / 6.7 | **6.8 / 7.1 / 7.2 / 7.4** (mean 7.1) |
 | Fixture corpus | 43.1 % (broken build) | 99.1 % / 100 % | **109/109** transactions, 100 % classification (the corpus has 109 checks; an earlier note said 111 — wrong) |
-| `flutter test` | 29 (old MVP) | 214 / 1 | **333/333** |
+| `flutter test` | 29 (old MVP) | 214 / 1 | **336/336** |
 | "Other" share of spend | 71.7 % | 2.9 % | **0.7 %** |
 | Spam counted · verbless · duplicate groups | 1 · 4 · 3 | 0 · 0 · 0 | **0 · 0 · 0** |
 | Cards in the ledger | 21 phantom | — | **4 real** (Amex, Axis, HDFC, Pluxee) |
@@ -128,7 +129,7 @@ Fixture corpus: **109/109 transactions**, **77/77 classification** (both correct
 
 ```powershell
 flutter analyze lib                          # must be zero issues
-flutter test                                 # 333/333
+flutter test                                 # 336/336
 flutter test test_visual/render_screens_test.dart  # host renders -> docs/shots/render-*.png
 $env:JAVA_HOME = "C:\Users\amart\.jdks\jbr-17.0.12"
 flutter build apk --debug                    # the only supported build
