@@ -81,10 +81,7 @@ class _CardLimitRow extends StatelessWidget {
                 Text(
                   '${card.masked} · ${facts.join(' · ')}',
                   maxLines: 2,
-                  style: T.bodySmall.copyWith(
-                    color: p.inkMuted,
-                    height: 1.4,
-                  ),
+                  style: T.bodySmall.copyWith(color: p.inkMuted, height: 1.4),
                 ),
               ],
             ),
@@ -106,7 +103,8 @@ Future<void> showCardEditSheet(BuildContext context, CardAccount card) {
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (context) => _CardEditSheet(card: card),
+    builder: (context) =>
+        SafeArea(top: false, child: _CardEditSheet(card: card)),
   );
 }
 
@@ -177,18 +175,13 @@ class _CardEditSheetState extends State<_CardEditSheet> {
   Widget build(BuildContext context) {
     final p = T.of(context);
     return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.viewInsetsOf(context).bottom,
-      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(T.s5, 0, T.s5, T.s5),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Card limits & dates',
-              style: T.title.copyWith(color: p.ink),
-            ),
+            Text('Card limits & dates', style: T.title.copyWith(color: p.ink)),
             const SizedBox(height: T.s1),
             Text(
               '${widget.card.issuer} · ${widget.card.masked}',
@@ -227,9 +220,7 @@ class _CardEditSheetState extends State<_CardEditSheet> {
                     keyboardType: TextInputType.number,
                     textInputAction: TextInputAction.next,
                     maxLength: 2,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                    ],
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     decoration: const InputDecoration(
                       labelText: 'Statement day',
                       helperText: '1–28',
@@ -244,9 +235,7 @@ class _CardEditSheetState extends State<_CardEditSheet> {
                     keyboardType: TextInputType.number,
                     textInputAction: TextInputAction.done,
                     maxLength: 2,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                    ],
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     decoration: const InputDecoration(
                       labelText: 'Due day',
                       helperText: '1–28',

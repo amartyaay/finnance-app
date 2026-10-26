@@ -84,19 +84,13 @@ class SettingsTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     subtitle!,
-                    style: T.bodySmall.copyWith(
-                      color: p.inkMuted,
-                      height: 1.4,
-                    ),
+                    style: T.bodySmall.copyWith(color: p.inkMuted, height: 1.4),
                   ),
                 ],
               ],
             ),
           ),
-          if (trailing != null) ...[
-            const SizedBox(width: T.s2),
-            trailing!,
-          ],
+          if (trailing != null) ...[const SizedBox(width: T.s2), trailing!],
         ],
       ),
     );
@@ -122,47 +116,50 @@ Future<void> showParsingSheet(BuildContext context) {
     useSafeArea: true,
     builder: (context) {
       final p = T.of(context);
-      return SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(T.s5, 0, T.s5, T.s5),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('How parsing works', style: T.title.copyWith(color: p.ink)),
-            const SizedBox(height: T.s1),
-            Text(
-              'Three checks run on every message before a rupee reaches your '
-              'totals.',
-              style: T.body.copyWith(color: p.inkSecondary),
-            ),
-            const SizedBox(height: T.s5),
-            const _ParsingPoint(
-              number: '1',
-              title: 'Sender id trust',
-              body:
-                  'The sender header is matched against known bank and wallet '
-                  'IDs. A plausible name alone never turns a message into a '
-                  'transaction.',
-            ),
-            const _ParsingPoint(
-              number: '2',
-              title: 'Amount scoring',
-              body:
-                  'When a message carries several numbers, the amount nearest '
-                  'the debit wording wins and balance-like numbers are ignored.',
-            ),
-            const _ParsingPoint(
-              number: '3',
-              title: 'Duplicate merge',
-              body:
-                  'Two alerts describing the same payment are merged into one '
-                  'row, so your monthly spend counts it once.',
-            ),
-            const SizedBox(height: T.s2),
-            Text(
-              'Nothing leaves the phone at any step.',
-              style: T.bodySmall.copyWith(color: p.inkMuted),
-            ),
-          ],
+      return SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(T.s5, 0, T.s5, T.s5),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('How parsing works', style: T.title.copyWith(color: p.ink)),
+              const SizedBox(height: T.s1),
+              Text(
+                'Three checks run on every message before a rupee reaches your '
+                'totals.',
+                style: T.body.copyWith(color: p.inkSecondary),
+              ),
+              const SizedBox(height: T.s5),
+              const _ParsingPoint(
+                number: '1',
+                title: 'Sender id trust',
+                body:
+                    'The sender header is matched against known bank and wallet '
+                    'IDs. A plausible name alone never turns a message into a '
+                    'transaction.',
+              ),
+              const _ParsingPoint(
+                number: '2',
+                title: 'Amount scoring',
+                body:
+                    'When a message carries several numbers, the amount nearest '
+                    'the debit wording wins and balance-like numbers are ignored.',
+              ),
+              const _ParsingPoint(
+                number: '3',
+                title: 'Duplicate merge',
+                body:
+                    'Two alerts describing the same payment are merged into one '
+                    'row, so your monthly spend counts it once.',
+              ),
+              const SizedBox(height: T.s2),
+              Text(
+                'Nothing leaves the phone at any step.',
+                style: T.bodySmall.copyWith(color: p.inkMuted),
+              ),
+            ],
+          ),
         ),
       );
     },
@@ -209,15 +206,9 @@ class _ParsingPoint extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: T.cardTitle.copyWith(color: p.ink),
-                ),
+                Text(title, style: T.cardTitle.copyWith(color: p.ink)),
                 const SizedBox(height: 2),
-                Text(
-                  body,
-                  style: T.body.copyWith(color: p.inkSecondary),
-                ),
+                Text(body, style: T.body.copyWith(color: p.inkSecondary)),
               ],
             ),
           ),

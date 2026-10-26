@@ -213,94 +213,95 @@ class HomeScreen extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (sheet) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.6,
-        maxChildSize: 0.92,
-        builder: (context, controller) => ListView(
-          controller: controller,
-          padding: const EdgeInsets.fromLTRB(T.s5, 0, T.s5, T.s6),
-          children: [
-            Text('Month by month', style: T.title.copyWith(color: p.ink)),
-            const SizedBox(height: T.s1),
-            Text(
-              'What you spent each month. Tap one to see it.',
-              style: T.bodySmall.copyWith(color: p.inkMuted),
-            ),
-            const SizedBox(height: T.s3),
-            for (final m in months)
-              InkWell(
-                borderRadius: BorderRadius.circular(T.r3),
-                onTap: () {
-                  Navigator.pop(sheet);
-                  state.setMonthOffset(m.offset);
-                },
-                child: Container(
-                  constraints: const BoxConstraints(minHeight: 56),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: T.s2,
-                    vertical: T.s2,
-                  ),
-                  decoration: m.offset == state.monthOffset
-                      ? T.glass(radius: T.r3)
-                      : null,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              m.offset == 0
-                                  ? '${monthYearLabel(m.summary.monthStart)} · so far'
-                                  : monthYearLabel(m.summary.monthStart),
-                              style: T.body.copyWith(
-                                color: p.ink,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            money(m.summary.spend),
-                            style: T.money.copyWith(
-                              color: p.ink,
-                              fontSize: 14.5,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(3),
-                        child: Stack(
+      builder: (sheet) => SafeArea(
+        top: false,
+        child: DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.6,
+          maxChildSize: 0.92,
+          builder: (context, controller) => ListView(
+            controller: controller,
+            padding: const EdgeInsets.fromLTRB(T.s5, 0, T.s5, T.s6),
+            children: [
+              Text('Month by month', style: T.title.copyWith(color: p.ink)),
+              const SizedBox(height: T.s1),
+              Text(
+                'What you spent each month. Tap one to see it.',
+                style: T.bodySmall.copyWith(color: p.inkMuted),
+              ),
+              const SizedBox(height: T.s3),
+              for (final m in months)
+                InkWell(
+                  borderRadius: BorderRadius.circular(T.r3),
+                  onTap: () {
+                    Navigator.pop(sheet);
+                    state.setMonthOffset(m.offset);
+                  },
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 56),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: T.s2,
+                      vertical: T.s2,
+                    ),
+                    decoration: m.offset == state.monthOffset
+                        ? T.glass(radius: T.r3)
+                        : null,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
                           children: [
-                            Container(
-                              height: 5,
-                              color: Colors.white.withValues(alpha: 0.07),
-                            ),
-                            FractionallySizedBox(
-                              widthFactor: (m.summary.spendPaise / peak).clamp(
-                                0.0,
-                                1.0,
-                              ),
-                              child: Container(
-                                height: 5,
-                                decoration: const BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [T.teal, T.blue],
-                                  ),
+                            Expanded(
+                              child: Text(
+                                m.offset == 0
+                                    ? '${monthYearLabel(m.summary.monthStart)} · so far'
+                                    : monthYearLabel(m.summary.monthStart),
+                                style: T.body.copyWith(
+                                  color: p.ink,
+                                  fontWeight: FontWeight.w600,
                                 ),
+                              ),
+                            ),
+                            Text(
+                              money(m.summary.spend),
+                              style: T.money.copyWith(
+                                color: p.ink,
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(3),
+                          child: Stack(
+                            children: [
+                              Container(
+                                height: 5,
+                                color: Colors.white.withValues(alpha: 0.07),
+                              ),
+                              FractionallySizedBox(
+                                widthFactor: (m.summary.spendPaise / peak)
+                                    .clamp(0.0, 1.0),
+                                child: Container(
+                                  height: 5,
+                                  decoration: const BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [T.teal, T.blue],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -464,72 +465,78 @@ class _HeroCard extends StatelessWidget {
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
-        builder: (sheet) => SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(T.s5, 0, T.s5, T.s6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'How this is counted',
-                style: T.title.copyWith(color: p.ink),
-              ),
-              const SizedBox(height: T.s2),
-              Text(
-                'Spent is what you paid merchants this month. Card-bill '
-                'payments, money moved between your own accounts, investments '
-                'and refunds are kept out of it.',
-                style: T.body.copyWith(color: p.inkSecondary),
-              ),
-              const SizedBox(height: T.s3),
-              for (final line in lines)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: T.s2),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 7, right: T.s2),
-                        child: Container(
-                          width: 5,
-                          height: 5,
-                          decoration: const BoxDecoration(
-                            color: T.teal,
-                            shape: BoxShape.circle,
+        builder: (sheet) => SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(T.s5, 0, T.s5, T.s6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'How this is counted',
+                  style: T.title.copyWith(color: p.ink),
+                ),
+                const SizedBox(height: T.s2),
+                Text(
+                  'Spent is what you paid merchants this month. Card-bill '
+                  'payments, money moved between your own accounts, investments '
+                  'and refunds are kept out of it.',
+                  style: T.body.copyWith(color: p.inkSecondary),
+                ),
+                const SizedBox(height: T.s3),
+                for (final line in lines)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: T.s2),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 7, right: T.s2),
+                          child: Container(
+                            width: 5,
+                            height: 5,
+                            decoration: const BoxDecoration(
+                              color: T.teal,
+                              shape: BoxShape.circle,
+                            ),
                           ),
                         ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          line,
-                          style: T.bodySmall.copyWith(color: p.inkSecondary),
+                        Expanded(
+                          child: Text(
+                            line,
+                            style: T.bodySmall.copyWith(color: p.inkSecondary),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              const SizedBox(height: T.s2),
-              if (otherTransfers > 0 && onOpenActivity != null)
-                _SheetLink(
-                  icon: PhosphorIconsRegular.arrowsLeftRight,
-                  text: '${money(Paise(otherTransfers))} transfers not counted',
-                  onTap: () {
-                    Navigator.pop(sheet);
-                    onOpenActivity!(const ActivityRequest(transfersOnly: true));
-                  },
-                ),
-              if (!hasIncome)
-                _SheetLink(
-                  icon: PhosphorIconsRegular.bank,
-                  text:
-                      statementLine ??
-                      'No salary in your SMS. Import an SBI statement to see '
-                          'each month salary to salary',
-                  onTap: () {
-                    Navigator.pop(sheet);
-                    StatementsScreen.open(context);
-                  },
-                ),
-            ],
+                const SizedBox(height: T.s2),
+                if (otherTransfers > 0 && onOpenActivity != null)
+                  _SheetLink(
+                    icon: PhosphorIconsRegular.arrowsLeftRight,
+                    text:
+                        '${money(Paise(otherTransfers))} transfers not counted',
+                    onTap: () {
+                      Navigator.pop(sheet);
+                      onOpenActivity!(
+                        const ActivityRequest(transfersOnly: true),
+                      );
+                    },
+                  ),
+                if (!hasIncome)
+                  _SheetLink(
+                    icon: PhosphorIconsRegular.bank,
+                    text:
+                        statementLine ??
+                        'No salary in your SMS. Import an SBI statement to see '
+                            'each month salary to salary',
+                    onTap: () {
+                      Navigator.pop(sheet);
+                      StatementsScreen.open(context);
+                    },
+                  ),
+              ],
+            ),
           ),
         ),
       );
@@ -1047,73 +1054,76 @@ class _AttentionState extends State<_Attention> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => Padding(
-        padding: const EdgeInsets.fromLTRB(T.s5, 0, T.s5, T.s6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Pill(
-                  'Likely fraud',
-                  tone: PillTone.danger,
-                  icon: Icons.gpp_bad_rounded,
+      builder: (context) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(T.s5, 0, T.s5, T.s6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Pill(
+                    'Likely fraud',
+                    tone: PillTone.danger,
+                    icon: Icons.gpp_bad_rounded,
+                  ),
+                  const Spacer(),
+                  Text(
+                    clockTime(alert.receivedAt),
+                    style: T.bodySmall.copyWith(color: p.inkMuted),
+                  ),
+                ],
+              ),
+              const SizedBox(height: T.s4),
+              Text(
+                'From ${alert.sender}',
+                style: T.cardTitle.copyWith(color: p.ink),
+              ),
+              const SizedBox(height: T.s3),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(T.s3),
+                decoration: BoxDecoration(
+                  color: p.surfaceMuted,
+                  borderRadius: BorderRadius.circular(T.r2),
                 ),
-                const Spacer(),
-                Text(
-                  clockTime(alert.receivedAt),
-                  style: T.bodySmall.copyWith(color: p.inkMuted),
+                child: Text(
+                  alert.preview,
+                  style: T.body.copyWith(fontSize: 13.5, color: p.inkSecondary),
                 ),
-              ],
-            ),
-            const SizedBox(height: T.s4),
-            Text(
-              'From ${alert.sender}',
-              style: T.cardTitle.copyWith(color: p.ink),
-            ),
-            const SizedBox(height: T.s3),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(T.s3),
-              decoration: BoxDecoration(
-                color: p.surfaceMuted,
-                borderRadius: BorderRadius.circular(T.r2),
               ),
-              child: Text(
-                alert.preview,
-                style: T.body.copyWith(fontSize: 13.5, color: p.inkSecondary),
+              const SizedBox(height: T.s4),
+              Text(
+                'Why this was flagged',
+                style: T.cardTitle.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: p.ink,
+                ),
               ),
-            ),
-            const SizedBox(height: T.s4),
-            Text(
-              'Why this was flagged',
-              style: T.cardTitle.copyWith(
-                fontWeight: FontWeight.w700,
-                color: p.ink,
+              const SizedBox(height: T.s2),
+              Text(
+                'This message uses the wording and links typical of KYC, refund or '
+                'parcel scams. Your bank never asks you to confirm details or share an '
+                'OTP through a link.',
+                style: T.body.copyWith(color: p.inkSecondary),
               ),
-            ),
-            const SizedBox(height: T.s2),
-            Text(
-              'This message uses the wording and links typical of KYC, refund or '
-              'parcel scams. Your bank never asks you to confirm details or share an '
-              'OTP through a link.',
-              style: T.body.copyWith(color: p.inkSecondary),
-            ),
-            const SizedBox(height: T.s3),
-            Text(
-              'It was kept out of your spending totals, and no link was opened.',
-              style: T.bodySmall.copyWith(color: p.inkMuted),
-            ),
-            const SizedBox(height: T.s5),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Got it'),
+              const SizedBox(height: T.s3),
+              Text(
+                'It was kept out of your spending totals, and no link was opened.',
+                style: T.bodySmall.copyWith(color: p.inkMuted),
               ),
-            ),
-          ],
+              const SizedBox(height: T.s5),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Got it'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1290,21 +1300,24 @@ class _AttentionRow extends StatelessWidget {
           context: context,
           isScrollControlled: true,
           useSafeArea: true,
-          builder: (sheet) => SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(T.s5, 0, T.s5, T.s5),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Needs you', style: T.title.copyWith(color: p.ink)),
-                const SizedBox(height: T.s4),
-                _Attention(
-                  data: data,
-                  onNavigate: (tab) {
-                    Navigator.pop(sheet);
-                    onNavigate?.call(tab);
-                  },
-                ),
-              ],
+          builder: (sheet) => SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(T.s5, 0, T.s5, T.s5),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Needs you', style: T.title.copyWith(color: p.ink)),
+                  const SizedBox(height: T.s4),
+                  _Attention(
+                    data: data,
+                    onNavigate: (tab) {
+                      Navigator.pop(sheet);
+                      onNavigate?.call(tab);
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
         ),

@@ -19,7 +19,8 @@ Future<void> showTransactionDetail(BuildContext context, Txn txn) {
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (context) => _TransactionDetailSheet(initial: txn),
+    builder: (context) =>
+        SafeArea(top: false, child: _TransactionDetailSheet(initial: txn)),
   );
 }
 

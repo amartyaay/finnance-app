@@ -23,7 +23,9 @@ class SalaryCycleScreen extends StatelessWidget {
 
   static Future<void> open(BuildContext context, SalaryCycle cycle) =>
       Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => SalaryCycleScreen(start: cycle.start)),
+        MaterialPageRoute<void>(
+          builder: (_) => SalaryCycleScreen(start: cycle.start),
+        ),
       );
 
   @override
@@ -31,7 +33,8 @@ class SalaryCycleScreen extends StatelessWidget {
     final controller = context.watch<StatementsController>();
     final p = T.of(context);
     final cycles = controller.analysis?.cycles ?? const <SalaryCycle>[];
-    final cycle = cycles.where((c) => c.start == start).firstOrNull ??
+    final cycle =
+        cycles.where((c) => c.start == start).firstOrNull ??
         cycles.where((c) => !c.start.isAfter(start)).firstOrNull;
     if (cycle == null) {
       return Scaffold(
@@ -39,12 +42,15 @@ class SalaryCycleScreen extends StatelessWidget {
         body: const EmptyState(
           icon: Icons.event_busy_rounded,
           title: 'This cycle changed',
-          body: 'Marking a salary moved the cycle boundaries. Go back to see the new cycles.',
+          body:
+              'Marking a salary moved the cycle boundaries. Go back to see the new cycles.',
         ),
       );
     }
 
-    final categories = cycle.spendByCategory.where((e) => e.value != 0).toList();
+    final categories = cycle.spendByCategory
+        .where((e) => e.value != 0)
+        .toList();
     final spent = cycle.spentPaise;
     final segments = cycleSegments(context, cycle);
     final rows = [...cycle.rows]..sort((a, b) => b.date.compareTo(a.date));
@@ -68,7 +74,9 @@ class SalaryCycleScreen extends StatelessWidget {
                 for (final s in segments) _Line(s.label, s.paise, dot: s.color),
                 const Divider(height: T.s5),
                 _Line(
-                  cycle.leftPaise >= 0 ? 'Saved (incl. invested)' : 'Spent more than came in',
+                  cycle.leftPaise >= 0
+                      ? 'Saved (incl. invested)'
+                      : 'Spent more than came in',
                   cycle.leftPaise.abs(),
                   bold: true,
                   color: cycle.leftPaise >= 0 ? p.ink : p.danger,
@@ -90,7 +98,11 @@ class SalaryCycleScreen extends StatelessWidget {
               child: Column(
                 children: [
                   for (final e in categories)
-                    _CategoryLine(name: e.key, paise: e.value, share: spent <= 0 ? 0 : e.value / spent),
+                    _CategoryLine(
+                      name: e.key,
+                      paise: e.value,
+                      share: spent <= 0 ? 0 : e.value / spent,
+                    ),
                 ],
               ),
             ),
@@ -116,7 +128,13 @@ class SalaryCycleScreen extends StatelessWidget {
 }
 
 class _Line extends StatelessWidget {
-  const _Line(this.label, this.paise, {this.color, this.dot, this.bold = false});
+  const _Line(
+    this.label,
+    this.paise, {
+    this.color,
+    this.dot,
+    this.bold = false,
+  });
 
   final String label;
   final int paise;
@@ -160,7 +178,11 @@ class _Line extends StatelessWidget {
 }
 
 class _CategoryLine extends StatelessWidget {
-  const _CategoryLine({required this.name, required this.paise, required this.share});
+  const _CategoryLine({
+    required this.name,
+    required this.paise,
+    required this.share,
+  });
 
   final String name;
   final int paise;
@@ -217,7 +239,9 @@ class _RowTile extends StatelessWidget {
     final p = T.of(context);
     final title = row.counterparty ?? row.description;
     final kindLabel = isSalary ? 'Salary' : row.kind.label;
-    final amount = row.isDebit ? '−${money(Paise(row.debitPaise))}' : '+${money(Paise(row.creditPaise))}';
+    final amount = row.isDebit
+        ? '−${money(Paise(row.debitPaise))}'
+        : '+${money(Paise(row.creditPaise))}';
     return InkWell(
       onTap: () => _showRow(context, row, isSalary),
       child: ConstrainedBox(
@@ -227,8 +251,12 @@ class _RowTile extends StatelessWidget {
           child: Row(
             children: [
               IconBadge(
-                icon: isSalary ? Icons.payments_rounded : categoryIcon(row.categoryKind),
-                color: isSalary ? p.positive : categoryColor(context, row.categoryKind),
+                icon: isSalary
+                    ? Icons.payments_rounded
+                    : categoryIcon(row.categoryKind),
+                color: isSalary
+                    ? p.positive
+                    : categoryColor(context, row.categoryKind),
                 size: 36,
                 iconSize: 18,
               ),
@@ -256,7 +284,9 @@ class _RowTile extends StatelessWidget {
               const SizedBox(width: T.s2),
               Text(
                 amount,
-                style: T.money.copyWith(color: row.isDebit ? p.ink : p.positive),
+                style: T.money.copyWith(
+                  color: row.isDebit ? p.ink : p.positive,
+                ),
               ),
             ],
           ),
@@ -274,73 +304,85 @@ void _showRow(BuildContext context, StatementRow row, bool isSalary) {
     isScrollControlled: true,
     builder: (context) {
       final p = T.of(context);
-      return SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(T.s5, 0, T.s5, T.s5),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              row.isDebit ? money(Paise(row.debitPaise)) : '+${money(Paise(row.creditPaise))}',
-              style: T.moneyLarge(row.isDebit ? p.ink : p.positive).copyWith(fontSize: 28),
-            ),
-            const SizedBox(height: T.s1),
-            Text(
-              '${DateFormat('EEE, d MMM yyyy').format(row.date)} · ${isSalary ? 'Salary' : row.kind.label}',
-              style: T.bodySmall.copyWith(color: p.inkMuted),
-            ),
-            const SizedBox(height: T.s3),
-            SoftSection(
-              child: Text(
-                row.description,
-                style: T.bodySmall.copyWith(color: p.inkSecondary),
-              ),
-            ),
-            if (row.balancePaise != null) ...[
-              const SizedBox(height: T.s2),
+      return SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(T.s5, 0, T.s5, T.s5),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
               Text(
-                'Balance after: ${money(Paise(row.balancePaise!))} '
-                '${row.balanceVerified ? '· checked against the previous row' : '· did not add up with the previous row'}',
-                style: T.bodySmall.copyWith(color: row.balanceVerified ? p.inkMuted : p.caution),
+                row.isDebit
+                    ? money(Paise(row.debitPaise))
+                    : '+${money(Paise(row.creditPaise))}',
+                style: T
+                    .moneyLarge(row.isDebit ? p.ink : p.positive)
+                    .copyWith(fontSize: 28),
               ),
-            ],
-            if (!row.isDebit) ...[
-              const SizedBox(height: T.s4),
-              Text('Is this your salary?', style: T.label.copyWith(color: p.ink)),
-              const SizedBox(height: T.s2),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        controller.setSalary(row, false);
-                        Navigator.pop(context);
-                      },
-                      child: const Text('Not salary'),
-                    ),
-                  ),
-                  const SizedBox(width: T.s3),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () {
-                        controller.setSalary(row, true);
-                        Navigator.pop(context);
-                      },
-                      child: const Text('My salary'),
-                    ),
-                  ),
-                ],
+              const SizedBox(height: T.s1),
+              Text(
+                '${DateFormat('EEE, d MMM yyyy').format(row.date)} · ${isSalary ? 'Salary' : row.kind.label}',
+                style: T.bodySmall.copyWith(color: p.inkMuted),
               ),
-              if (row.isSalaryOverride != null)
-                TextButton(
-                  onPressed: () {
-                    controller.setSalary(row, null);
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Let the app decide again'),
+              const SizedBox(height: T.s3),
+              SoftSection(
+                child: Text(
+                  row.description,
+                  style: T.bodySmall.copyWith(color: p.inkSecondary),
                 ),
+              ),
+              if (row.balancePaise != null) ...[
+                const SizedBox(height: T.s2),
+                Text(
+                  'Balance after: ${money(Paise(row.balancePaise!))} '
+                  '${row.balanceVerified ? '· checked against the previous row' : '· did not add up with the previous row'}',
+                  style: T.bodySmall.copyWith(
+                    color: row.balanceVerified ? p.inkMuted : p.caution,
+                  ),
+                ),
+              ],
+              if (!row.isDebit) ...[
+                const SizedBox(height: T.s4),
+                Text(
+                  'Is this your salary?',
+                  style: T.label.copyWith(color: p.ink),
+                ),
+                const SizedBox(height: T.s2),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          controller.setSalary(row, false);
+                          Navigator.pop(context);
+                        },
+                        child: const Text('Not salary'),
+                      ),
+                    ),
+                    const SizedBox(width: T.s3),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () {
+                          controller.setSalary(row, true);
+                          Navigator.pop(context);
+                        },
+                        child: const Text('My salary'),
+                      ),
+                    ),
+                  ],
+                ),
+                if (row.isSalaryOverride != null)
+                  TextButton(
+                    onPressed: () {
+                      controller.setSalary(row, null);
+                      Navigator.pop(context);
+                    },
+                    child: const Text('Let the app decide again'),
+                  ),
+              ],
             ],
-          ],
+          ),
         ),
       );
     },

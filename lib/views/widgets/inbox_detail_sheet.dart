@@ -34,12 +34,15 @@ Future<InboxSheetOutcome?> showInboxMessageSheet(
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    builder: (_) => _InboxMessageSheet(
-      row: row,
-      store: store,
-      status: status,
-      parsed: parsed,
-      stored: stored,
+    builder: (_) => SafeArea(
+      top: false,
+      child: _InboxMessageSheet(
+        row: row,
+        store: store,
+        status: status,
+        parsed: parsed,
+        stored: stored,
+      ),
     ),
   );
 }
@@ -79,9 +82,11 @@ class _InboxMessageSheetState extends State<_InboxMessageSheet> {
   );
   late final bool _hasTransaction = widget.status == InboxRowStatus.transaction;
   late final TextEditingController _amount = TextEditingController(
-    text: _txn == null ? '' : (_txn.amountPaise / 100).toStringAsFixed(
-      _txn.amountPaise % 100 == 0 ? 0 : 2,
-    ),
+    text: _txn == null
+        ? ''
+        : (_txn.amountPaise / 100).toStringAsFixed(
+            _txn.amountPaise % 100 == 0 ? 0 : 2,
+          ),
   );
   late final TextEditingController _merchant = TextEditingController(
     text: _txn?.merchant ?? '',
@@ -166,7 +171,8 @@ class _InboxMessageSheetState extends State<_InboxMessageSheet> {
       } else {
         setState(() {
           _busy = false;
-          _error = 'There is no parsed payment to update. Use “This is a '
+          _error =
+              'There is no parsed payment to update. Use “This is a '
               'transaction” below.';
         });
         return;
@@ -412,7 +418,8 @@ class _InboxMessageSheetState extends State<_InboxMessageSheet> {
               ),
               _ScopeOption(
                 title: 'Just this payment',
-                subtitle: 'Only this message changes; no other payment is '
+                subtitle:
+                    'Only this message changes; no other payment is '
                     'touched.',
                 selected: !_everyPayment,
                 onTap: () => setState(() => _everyPayment = false),
@@ -546,9 +553,7 @@ class _InboxMessageSheetState extends State<_InboxMessageSheet> {
               Center(
                 child: TextButton(
                   onPressed: _busy ? null : _close,
-                  style: TextButton.styleFrom(
-                    minimumSize: const Size(48, 48),
-                  ),
+                  style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
                   child: const Text('Skip'),
                 ),
               ),
@@ -633,7 +638,9 @@ class _ResultRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: T.s2),
-          Expanded(child: Align(alignment: Alignment.centerRight, child: child)),
+          Expanded(
+            child: Align(alignment: Alignment.centerRight, child: child),
+          ),
         ],
       ),
     );

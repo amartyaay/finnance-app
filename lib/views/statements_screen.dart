@@ -514,7 +514,10 @@ Future<String?> showStatementPasswordSheet(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (context) => _PasswordSheet(fileName: fileName, error: error),
+    builder: (context) => SafeArea(
+      top: false,
+      child: _PasswordSheet(fileName: fileName, error: error),
+    ),
   );
 }
 
@@ -684,7 +687,8 @@ Future<bool?> showStatementReviewSheet(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (context) => _ReviewSheet(preview: preview),
+    builder: (context) =>
+        SafeArea(top: false, child: _ReviewSheet(preview: preview)),
   );
 }
 
