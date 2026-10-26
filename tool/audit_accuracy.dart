@@ -193,6 +193,26 @@ void main(List<String> args) {
   }
   final doubles = perRoot.entries.where((e) => e.value.length > 1).toList();
 
+  // Card bills: the bank debit and the issuer's "payment received" are two
+  // legs of one payment that the gold set deliberately leaves unlinked (they
+  // sit on different instruments). Both legs counted = the bill counted twice.
+  final billLegs = [
+    for (final id in counted.keys)
+      if (gold[id]?.kind == 'card_bill_payment') gold[id]!,
+  ];
+  final msgTime = <String, int>{
+    for (final item in raw)
+      (item as Map<String, dynamic>)['id'] as String: item['received_at'] as int,
+  };
+  final billDoubles = <String>[];
+  for (final debit in billLegs.where((g) => g.label == 'debit')) {
+    for (final credit in billLegs.where((g) => g.label == 'credit')) {
+      if (debit.amountPaise != credit.amountPaise) continue;
+      final gap = (msgTime[debit.id]! - msgTime[credit.id]!).abs();
+      if (gap <= 3 * 24 * 60 * 60 * 1000) billDoubles.add('${debit.id}+${credit.id}');
+    }
+  }
+
   // ---- Recall: real movements the app never counted -------------------------
   final movements = labelled
       .where((g) => g.movesMoney && g.dupOf == null)
@@ -299,6 +319,7 @@ void main(List<String> args) {
         '${falseRows.entries.map((e) => '${e.key}=${e.value.length}').join(' ')}')
     ..writeln('    of which counted as SPEND         : ${falseSpend.length}')
     ..writeln('P2  movements counted twice           : ${doubles.length}')
+    ..writeln('    card bills counted on both legs   : ${billDoubles.length}')
     ..writeln('')
     ..writeln('Spend precision  ${pct(spendRight, spendCounted)}  ($spendRight of $spendCounted spend rows are real spend)')
     ..writeln('Spend recall     ${pct(spendRight, goldSpendRows)}  ($spendRight of $goldSpendRows real spends found)')
@@ -332,6 +353,7 @@ void main(List<String> args) {
     list('P1 ${e.key}', e.value);
   }
   list('P2 doubles', doubles.map((e) => '${e.key}<-${e.value.join('+')}'));
+  list('P2 card-bill legs', billDoubles);
   if (listAll) {
     list('missed spend', missedSpend.map((g) => g.id));
     list('missed other', missed.where((g) => !missedSpend.contains(g)).map((g) => '${g.id}(${g.label}/${g.kind})'));
@@ -349,6 +371,7 @@ void main(List<String> args) {
       'p1_false_rows': sum(falseRows.values.map((v) => v.length)),
       'p1_false_spend': falseSpend.length,
       'p2_doubles': doubles.length,
+      'p2_card_bill_doubles': billDoubles.length,
       'spend_precision': spendCounted == 0 ? null : spendRight / spendCounted,
       'spend_recall': goldSpendRows == 0 ? null : spendRight / goldSpendRows,
       'movement_recall': movements.isEmpty ? null : (movements.length - missed.length) / movements.length,

@@ -22,10 +22,10 @@ iteration. Working branch: `main` (single-developer repo).
 | 9 | **Screen listing all SMS with manual categorisation**, remembered and applied to previous transactions; **optional**, never compulsory. | Done and reachable: Settings › Data › "All messages", plus the dismissible review banner. "Every payment from X" rewrites history and stores a rule; Settings › Learned categories has undo. |
 | 10 | "Work on UI/UX, make it fancy, modern and good looking, along with backend/data." | Redesign landed and device-verified (`9c55679`), then wired to the real data (`abd2f3f`): true hero, inbox door, learned-rules list. Round-2 end-user score 5.3 → **6.8**. |
 | 11 | "Keep updating the goal file and keep doing git commits." | This file, updated every round; every iteration is committed. |
-| 12 | Session 3 focus: **spam identification**; "very very accurate" on SMS that show expenses. | In progress. Gold answer key: 2 000 real messages hand-labelled (`docs/eval/gold-labelling.md`, data in gitignored `.local/gold/`). |
-| 13 | **Screen to upload an SBI bank statement with a password field**; find salary; per salary-to-salary cycle, categorise expenses. | In progress. Research `docs/research/07-sbi-statement.md`. |
-| 14 | Classifier: "super accurate", budget **≤ $2–3 / year**, cheapest best, on-device (S24 FE) preferred; network allowed only for classification. | In progress. Research `docs/research/08-classifier-budget.md`. |
-| 15 | **A subagent whose whole job is checking accuracy**: classification accuracy, spam counted, double counts. | In progress: `tool/audit_accuracy.dart` against the gold set + an auditor agent each round. |
+| 12 | Session 3 focus: **spam identification**; "very very accurate" on SMS that show expenses. | Done and measured on **5 274 hand-labelled real messages** (3 274 held out, never tuned on): P1 **0**, P2 **1**, card bills on both legs **0**, spend recall **98.7 %** / precision **96.5 %** (held-out), phishing false alarms 172 → **1**, promos kept out **100 %**. |
+| 13 | **Screen to upload an SBI bank statement with a password field**; find salary; per salary-to-salary cycle, categorise expenses. | Done (`67ca87c`): Settings › Salary & statements and a Home hero link. pdfrx/PDFium on-device, password used once; 4 SBI layouts; every row balance-checked; salary by recurrence or keyword + overrides; cycle screens. Not yet tried on a real SBI file (needs the owner's PDF + password). |
+| 14 | Classifier: "super accurate", budget **≤ $2–3 / year**, cheapest best, on-device (S24 FE) preferred; network allowed only for classification. | Decided (`docs/research/08-classifier-budget.md`): **$0/year** on-device logistic regression as a second opinion over the rules; disagreements go to review. Paid APIs end up ~$5/yr (prepaid minimums); Gemini free tier trains on inputs; Gemini Nano absent on S24 FE. Model not trained yet. |
+| 15 | **A subagent whose whole job is checking accuracy**: classification accuracy, spam counted, double counts. | `tool/audit_accuracy.dart` (gold set, P1/P2/card-bill legs/recall/precision/kind/amount/phishing) + an auditor agent each round. |
 | 16 | No Google sign-in, no account, no network (except optional classification). | Holds: no INTERNET use at runtime. |
 
 ## Decisions to keep (with evidence)
@@ -62,6 +62,23 @@ Round-1 evidence: `docs/eval/round-1/`; round-2: `docs/eval/round-2/`.
 | Bill notices stored | 0 | — | **6** with due dates |
 
 
+## Gold-set accuracy (hand-labelled real inbox, `tool/audit_accuracy.dart`)
+
+Labels in `.local/gold/` (gitignored); guide and rulings in `docs/eval/gold-labelling.md`.
+Run: `dart run tool/audit_accuracy.dart .local/inbox_full.json .local/gold_heldout` (held-out) or `.local/gold` (all).
+
+| Metric | Session start (2 000) | Held-out 3 274 | All 5 274 |
+|---|---:|---:|---:|
+| Non-money rows counted (P1) | 3 | **0** | **0** |
+| Movements counted twice (P2) | 18 | 1 | 1 |
+| Card bills counted on both legs | — | 0 | **0** |
+| Spend recall | 81.5 % | **98.7 %** | 98.9 % |
+| Spend precision | 99.2 % | 96.5 % | 97.2 % |
+| Phishing false alarms | 2 (172 on older mail) | **1** | 1 |
+| Money / no-money agreement | — | 99.2 % | 99.1 % |
+
+Remaining error is mostly UPI to a person's name with no honorific counted as spend (≈ +4 % spend).
+
 ## Real-inbox measurements (2 000 messages, Galaxy S24)
 
 Tracked with `tool/replay_inbox.dart` (offline, re-parses raw messages with current code — the source of truth) and `tool/measure_inbox.py` (checks a pulled DB).
@@ -85,8 +102,10 @@ Fixture corpus: **109/109 transactions**, **77/77 classification** (both correct
 - [ ] **Period labels**: Insights shows all-time counts under an October heading; hero "3 % vs last month" and Insights' projection must be labelled as actual vs projected.
 - [ ] **Duplicate per-day figure** in the hero (₹812.52 a day and Spend/day ₹813).
 - [ ] **Android notification**: group amounts (₹105590 → ₹1,05,590), an "Other" action that opens the message, one notification per batch, and a permission prompt with copy instead of silent.
-- [ ] Salary capture: the owner's inbox has **no salary SMS**; allow marking an inflow as salary once so `Left` becomes answerable.
-- [ ] `CBSSBI` missing from `SenderRegistry` (30 transactions on this device).
+- [ ] Salary from SMS: 4 salary SMS exist in 5 274 messages; feed the statement's salary verdict (or a marked SMS credit) into Home's `Left`.
+- [ ] Train the $0 on-device LR second opinion on the gold set (time split) and wire disagreements into review.
+- [ ] Try the statement import on the owner's real SBI PDF; record which layout it is.
+- [ ] Reconcile statement rows with SMS rows (UPI RRN join) to measure SMS coverage of the SBI account.
 - [ ] Delete the legacy `savingsRate` getter; `savingsRateOrNull` is the truth.
 - [ ] Schema drift: `schemaVersion` 9 vs v9 block (harmless today, a trap later).
 - [ ] Device migration test for v7→v8 (FFI native-assets build hung; proven only by a contract test).
