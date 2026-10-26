@@ -40,9 +40,7 @@ void main() {
   test('a statement with no column labels in its text', () {
     final text = File('test/fixtures/sbi_statement_2026.txt')
         .readAsStringSync()
-        .replaceAll('
-', '
-'); // a Windows checkout adds CR
+        .replaceAll('\r\n', '\n'); // a Windows checkout adds CR
     final statement = _importer.parse(wordsFromText(text));
     expect(statement.periodFrom, DateTime(2026, 9, 1));
     expect(statement.rows, hasLength(5));
