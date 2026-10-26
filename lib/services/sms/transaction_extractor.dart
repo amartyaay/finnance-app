@@ -283,6 +283,11 @@ class TransactionExtractor {
     caseSensitive: false,
   );
 
+  static final RegExp _neftRemitter = RegExp(
+    r'\bthrough\s+(?:neft|rtgs|imps)\b.{0,60}?\bby\s+([A-Za-z][A-Za-z0-9 &.\-]{2,60}?)\s*(?:,|\binfo\b|$)',
+    caseSensitive: false,
+  );
+
   static final RegExp _honorific = RegExp(
     r'^(?:mr|mrs|ms|miss|dr|smt)\.?\s',
     caseSensitive: false,
@@ -468,7 +473,13 @@ class TransactionExtractor {
     final cardLast4 = _extractCardLast4(body, sender);
     final issuer = _issuer(lower, sender);
     final vpa = _counterpartyVpa(body);
-    final merchant = (sbiPayee != null && !sbiSelf ? sbiPayee : null) ??
+    // NEFT/RTGS credit: "… through NEFT with UTR … by DELOITTE CONSULTING
+    // INDIA P LTD, INFO: …" — the payer is the name after "by".
+    final remitter = isCredit
+        ? _neftRemitter.firstMatch(body)?.group(1)?.trim()
+        : null;
+    final merchant = remitter ??
+        (sbiPayee != null && !sbiSelf ? sbiPayee : null) ??
         _merchant(body, cash: cash, keepCompanySuffix: isCredit) ??
         _cardPostTimestampMerchant(body) ??
         _p2pMerchant(body);

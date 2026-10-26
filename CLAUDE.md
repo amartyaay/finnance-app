@@ -102,7 +102,7 @@ Fixture corpus: **109/109 transactions**, **77/77 classification** (both correct
 - [ ] **Period labels**: Insights shows all-time counts under an October heading; hero "3 % vs last month" and Insights' projection must be labelled as actual vs projected.
 - [ ] **Duplicate per-day figure** in the hero (₹812.52 a day and Spend/day ₹813).
 - [ ] **Android notification**: group amounts (₹105590 → ₹1,05,590), an "Other" action that opens the message, one notification per batch, and a permission prompt with copy instead of silent.
-- [ ] Salary from SMS: 4 salary SMS exist in 5 274 messages; feed the statement's salary verdict (or a marked SMS credit) into Home's `Left`.
+- [ ] Salary from SMS: only 2 real salary SMS (₹76,113) in 5 274 messages; feed the statement's salary verdict (or a marked SMS credit) into Home's `Left`.
 - [ ] Train the $0 on-device LR second opinion on the gold set (time split) and wire disagreements into review.
 - [ ] Try the statement import on the owner's real SBI PDF; record which layout it is.
 - [ ] Reconcile statement rows with SMS rows (UPI RRN join) to measure SMS coverage of the SBI account.
