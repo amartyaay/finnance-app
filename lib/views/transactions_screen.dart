@@ -62,7 +62,6 @@ class TransactionsScreen extends StatefulWidget {
 
 class _TransactionsScreenState extends State<TransactionsScreen> {
   final TextEditingController _search = TextEditingController();
-  int _monthOffset = 0;
   SpendCategoryKind? _kindFilter;
 
   /// Money moved, not spend: card bill payments, SIPs, self transfers. This is
@@ -86,7 +85,6 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
   void _applyRequest(ActivityRequest request) {
     if (request.serial == 0) return;
-    _monthOffset = 0;
     _kindFilter = request.category;
     _transfersOnly = request.transfersOnly;
     _needsReviewOnly = request.needsReviewOnly;
@@ -104,15 +102,17 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     final state = context.watch<AppState>();
     final p = T.of(context);
     final now = state.now;
-    final monthStart = DateTime(now.year, now.month + _monthOffset);
-    final monthEnd = DateTime(now.year, now.month + _monthOffset + 1);
+    // One month for the whole app: Home and Activity step through it together.
+    final monthOffset = state.monthOffset;
+    final monthStart = DateTime(now.year, now.month + monthOffset);
+    final monthEnd = DateTime(now.year, now.month + monthOffset + 1);
     final transactions = state.data.transactions;
     // One summary for the displayed month, so the header's "out", "income" and
     // entry count are the *same* definitions Home prints.
     final summary = const SummaryCalculator().forMonth(
       transactions,
       now,
-      monthOffset: _monthOffset,
+      monthOffset: monthOffset,
     );
     final monthTransactions = transactions
         .where((txn) {
@@ -156,9 +156,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         monthTransactions,
         daysInMonth,
         now,
-        _monthOffset,
+        monthOffset,
       );
-      final isCurrentMonth = _monthOffset == 0;
+      final isCurrentMonth = monthOffset == 0;
 
       body = RefreshIndicator(
         onRefresh: state.scanInbox,
@@ -175,8 +175,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     children: [
                       IconButton(
                         tooltip: 'Previous month',
-                        onPressed: () =>
-                            setState(() => _monthOffset = _monthOffset - 1),
+                        onPressed: monthOffset > -state.monthsOfHistory
+                            ? () => state.setMonthOffset(monthOffset - 1)
+                            : null,
                         icon: const Icon(Icons.chevron_left_rounded),
                         color: p.inkSecondary,
                       ),
@@ -192,11 +193,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       ),
                       IconButton(
                         tooltip: 'Next month',
-                        onPressed: _monthOffset >= 0
+                        onPressed: monthOffset >= 0
                             ? null
-                            : () => setState(
-                                () => _monthOffset = _monthOffset + 1,
-                              ),
+                            : () => state.setMonthOffset(monthOffset + 1),
                         icon: const Icon(Icons.chevron_right_rounded),
                         color: p.inkSecondary,
                       ),

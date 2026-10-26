@@ -27,8 +27,9 @@ iteration. Working branch: `main` (single-developer repo).
 | 14 | Classifier: "super accurate", budget **≤ $2–3 / year**, cheapest best, on-device (S24 FE) preferred; network allowed only for classification. | Decided (`docs/research/08-classifier-budget.md`): **$0/year** on-device logistic regression as a second opinion over the rules; disagreements go to review. Paid APIs end up ~$5/yr (prepaid minimums); Gemini free tier trains on inputs; Gemini Nano absent on S24 FE. Model not trained yet. |
 | 15 | **A subagent whose whole job is checking accuracy**: classification accuracy, spam counted, double counts. | `tool/audit_accuracy.dart` (gold set, P1/P2/card-bill legs/recall/precision/kind/amount/phishing) + an auditor agent each round. |
 | 16 | No Google sign-in, no account, no network (except optional classification). | Holds: no INTERNET use at runtime. |
-| 17 | "UI still bad and cluttered, colour scheme bad; make it fancy, use any Flutter package." Earlier: rename the app and make a logo. | Renamed **Hisaab** with a generated logo (`tool/make_logo.py`). Owner picked concept **C · Aurora Glass** (`docs/shots/concept-c-aurora.png`, `test_visual/concepts_test.dart`). Applied app-wide: always-dark aurora backdrop, glass surfaces, teal→blue→violet gradient numbers, Phosphor icons, fl_chart daily bars. Home cut to hero → one "things need you" row → where it went → recent; details behind an ⓘ sheet. Theme picker removed. |
 | 17 | "Improve UI, make it modern and fancy." | Visual pass `338a543`: bundled Inter, mesh-gradient heroes (`HeroSurface`), soft-shadow cards, floating frosted dock, frosted hero tiles, column charts, per-category hues, calm notice cards. Verified by host renders (`docs/shots/render-*.png`); not yet on the phone. |
+| 18 | "UI still bad and cluttered, colour scheme bad; make it fancy, use any Flutter package." Earlier: rename the app and make a logo. | Renamed **Hisaab** with a generated logo (`tool/make_logo.py`). Owner picked concept **C · Aurora Glass** (`docs/shots/concept-c-aurora.png`, `test_visual/concepts_test.dart`). Applied app-wide: always-dark aurora backdrop, glass surfaces, teal→blue→violet gradient numbers, Phosphor icons, fl_chart daily bars. Home cut to hero → one "things need you" row → where it went → recent; details behind an ⓘ sheet. Theme picker removed. |
+| 19 | "The SBI statement thing is not working; I can only see one month — let me see previous months over time." | Home now steps through months (arrows, or tap the month for a month-by-month list with totals), shared with Activity. Statement import: every failure now shows its error instead of failing silently; header detection accepts glued units (`Withdrawals(INR)`) and labels wrapped over two lines; when no rows are found the dialog shows a copyable layout report (column labels and counts only). **Root cause on the owner's file still unknown** — needs that report or the PDF. |
 
 ## Decisions to keep (with evidence)
 
@@ -58,7 +59,7 @@ Round-1 evidence: `docs/eval/round-1/`; round-2: `docs/eval/round-2/`; round-3: 
 |---|---:|---:|---:|
 | Evaluator scores | — | 5.3 / 6.2 / 6.4 / 6.7 | **6.8 / 7.1 / 7.2 / 7.4** (mean 7.1) |
 | Fixture corpus | 43.1 % (broken build) | 99.1 % / 100 % | **109/109** transactions, 100 % classification (the corpus has 109 checks; an earlier note said 111 — wrong) |
-| `flutter test` | 29 (old MVP) | 214 / 1 | **325/325** |
+| `flutter test` | 29 (old MVP) | 214 / 1 | **327/327** |
 | "Other" share of spend | 71.7 % | 2.9 % | **0.7 %** |
 | Spam counted · verbless · duplicate groups | 1 · 4 · 3 | 0 · 0 · 0 | **0 · 0 · 0** |
 | Cards in the ledger | 21 phantom | — | **4 real** (Amex, Axis, HDFC, Pluxee) |
@@ -126,7 +127,7 @@ Fixture corpus: **109/109 transactions**, **77/77 classification** (both correct
 
 ```powershell
 flutter analyze lib                          # must be zero issues
-flutter test                                 # 325/325
+flutter test                                 # 327/327
 flutter test test_visual/render_screens_test.dart  # host renders -> docs/shots/render-*.png
 $env:JAVA_HOME = "C:\Users\amart\.jdks\jbr-17.0.12"
 flutter build apk --debug                    # the only supported build

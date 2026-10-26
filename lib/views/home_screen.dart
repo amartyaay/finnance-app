@@ -47,7 +47,7 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final data = state.data;
+    var data = state.data;
 
     if (state.isLoading && data.isEmpty) {
       return const _HomeSkeleton();
@@ -56,11 +56,24 @@ class HomeScreen extends StatelessWidget {
       return _EmptyHome(state: state);
     }
 
+    // Home can show any month back to the oldest transaction. Only the two
+    // summaries change; alerts and bills always describe today.
+    final offset = state.monthOffset;
+    final isCurrent = offset == 0;
+    final now = state.now;
+    if (!isCurrent) {
+      const calc = SummaryCalculator();
+      data = data.withSummaries(
+        calc.forMonth(data.transactions, now, monthOffset: offset),
+        calc.forMonth(data.transactions, now, monthOffset: offset - 1),
+      );
+    }
     final summary = data.summary;
     final hasAttention =
-        data.phishingAlerts.isNotEmpty ||
-        data.unpaidBillCount > 0 ||
-        data.needsReviewCount > 0;
+        isCurrent &&
+        (data.phishingAlerts.isNotEmpty ||
+            data.unpaidBillCount > 0 ||
+            data.needsReviewCount > 0);
 
     return RefreshIndicator(
       onRefresh: state.scanInbox,
@@ -72,21 +85,13 @@ class HomeScreen extends StatelessWidget {
             backgroundColor: Colors.transparent,
             surfaceTintColor: Colors.transparent,
             titleSpacing: T.s5,
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _greeting(context.read<AppState>().now),
-                  style: T.bodySmall.copyWith(
-                    color: T.of(context).inkMuted,
-                    fontSize: 12,
-                  ),
-                ),
-                Text(
-                  monthYearLabel(summary.monthStart),
-                  style: T.title.copyWith(color: T.of(context).ink),
-                ),
-              ],
+            title: _MonthSwitcher(
+              month: summary.monthStart,
+              offset: offset,
+              history: state.monthsOfHistory,
+              greeting: isCurrent ? _greeting(now) : 'Looking back',
+              onChange: state.setMonthOffset,
+              onPick: () => _showMonths(context, state),
             ),
             actions: [
               if (state.isDemo)
@@ -118,7 +123,11 @@ class HomeScreen extends StatelessWidget {
               children: [
                 Entrance(
                   index: 0,
-                  child: _HeroCard(data: data, onOpenActivity: onOpenActivity),
+                  child: _HeroCard(
+                    data: data,
+                    isCurrent: isCurrent,
+                    onOpenActivity: onOpenActivity,
+                  ),
                 ),
                 if (hasAttention) ...[
                   const SizedBox(height: T.s3),
@@ -141,7 +150,22 @@ class HomeScreen extends StatelessWidget {
                 Entrance(
                   index: 3,
                   child: _RecentList(
-                    transactions: data.transactions,
+                    title: isCurrent
+                        ? 'Recent'
+                        : 'Latest in ${monthYearLabel(summary.monthStart)}',
+                    transactions: isCurrent
+                        ? data.transactions
+                        : [
+                            for (final t in data.transactions)
+                              if (!t.occurredAt.isBefore(summary.monthStart) &&
+                                  t.occurredAt.isBefore(
+                                    DateTime(
+                                      summary.monthStart.year,
+                                      summary.monthStart.month + 1,
+                                    ),
+                                  ))
+                                t,
+                          ],
                     onSeeAll: () => onNavigate?.call(1),
                   ),
                 ),
@@ -168,6 +192,120 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  /// Every month back to the oldest transaction, newest first, with what was
+  /// spent: the "over time" view, and a way to jump to any month.
+  static void _showMonths(BuildContext context, AppState state) {
+    final p = T.of(context);
+    const calc = SummaryCalculator();
+    final now = state.now;
+    final months = [
+      for (var o = 0; o >= -state.monthsOfHistory; o--)
+        (
+          offset: o,
+          summary: calc.forMonth(state.data.transactions, now, monthOffset: o),
+        ),
+    ];
+    final peak = months.fold<int>(
+      1,
+      (m, e) => math.max(m, e.summary.spendPaise),
+    );
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheet) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.92,
+        builder: (context, controller) => ListView(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(T.s5, 0, T.s5, T.s6),
+          children: [
+            Text('Month by month', style: T.title.copyWith(color: p.ink)),
+            const SizedBox(height: T.s1),
+            Text(
+              'What you spent each month. Tap one to see it.',
+              style: T.bodySmall.copyWith(color: p.inkMuted),
+            ),
+            const SizedBox(height: T.s3),
+            for (final m in months)
+              InkWell(
+                borderRadius: BorderRadius.circular(T.r3),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  state.setMonthOffset(m.offset);
+                },
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 56),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: T.s2,
+                    vertical: T.s2,
+                  ),
+                  decoration: m.offset == state.monthOffset
+                      ? T.glass(radius: T.r3)
+                      : null,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              m.offset == 0
+                                  ? '${monthYearLabel(m.summary.monthStart)} · so far'
+                                  : monthYearLabel(m.summary.monthStart),
+                              style: T.body.copyWith(
+                                color: p.ink,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            money(m.summary.spend),
+                            style: T.money.copyWith(
+                              color: p.ink,
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(3),
+                        child: Stack(
+                          children: [
+                            Container(
+                              height: 5,
+                              color: Colors.white.withValues(alpha: 0.07),
+                            ),
+                            FractionallySizedBox(
+                              widthFactor: (m.summary.spendPaise / peak).clamp(
+                                0.0,
+                                1.0,
+                              ),
+                              child: Container(
+                                height: 5,
+                                decoration: const BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [T.teal, T.blue],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   static String _greeting(DateTime now) {
     final hour = now.hour;
     if (hour < 5) return 'Late night';
@@ -188,15 +326,24 @@ class HomeScreen extends StatelessWidget {
 }
 
 class _HeroCard extends StatelessWidget {
-  const _HeroCard({required this.data, this.onOpenActivity});
+  const _HeroCard({
+    required this.data,
+    required this.isCurrent,
+    this.onOpenActivity,
+  });
 
   final HomeData data;
+
+  /// False when Home is looking at a past month: no pace, no "still due".
+  final bool isCurrent;
   final ValueChanged<ActivityRequest>? onOpenActivity;
 
   @override
   Widget build(BuildContext context) {
     final p = T.of(context);
     final summary = data.summary;
+    final monthName = DateFormat.MMMM().format(summary.monthStart);
+    final outLabel = isCurrent ? 'Out this month' : 'Out in $monthName';
 
     // True income only. When no salary/interest credit exists there is no honest
     // "left over", so the row reports what left the accounts and what is still
@@ -208,15 +355,15 @@ class _HeroCard extends StatelessWidget {
         (label: 'Came in', value: money(summary.income)),
         // The same definition Activity and Cards use: spend + cash + card
         // bills, never category spend alone.
-        (label: 'Out this month', value: money(data.moneyOut)),
+        (label: outLabel, value: money(data.moneyOut)),
         (
           label: left.value < 0 ? 'Over' : 'Left',
           // "Over" is a magnitude, so it never carries a minus sign.
           value: money(Paise(left.value.abs())),
         ),
       ] else ...[
-        (label: 'Out this month', value: money(data.moneyOut)),
-        if (data.unpaidBillCount > 0)
+        (label: outLabel, value: money(data.moneyOut)),
+        if (isCurrent && data.unpaidBillCount > 0)
           (
             label: data.unpaidBillCount == 1
                 ? 'Still due'
@@ -245,7 +392,7 @@ class _HeroCard extends StatelessWidget {
         ? null
         : hasIncome
         ? 'Left is after ${included.join(' + ')}'
-        : 'Out this month includes ${included.join(' + ')}';
+        : '$outLabel includes ${included.join(' + ')}';
 
     // All money-in, by why it arrived. Refunds and transfers are shown but
     // never re-badged as income: that was the "no income vs +₹3,939 in" clash.
@@ -264,6 +411,7 @@ class _HeroCard extends StatelessWidget {
     // Projection, not a like-for-like comparison with a full previous month.
     // Saying "on pace" here keeps this pill and Insights' projection identical.
     final showPace =
+        isCurrent &&
         summary.daysElapsed < summary.daysInMonth &&
         summary.projectedSpendPaise > 0;
     final paceLabel = 'On pace for ${money(summary.projectedSpend)}';
@@ -408,7 +556,7 @@ class _HeroCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        'Spent this month',
+                        isCurrent ? 'Spent this month' : 'Spent in $monthName',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: T.body.copyWith(
@@ -447,7 +595,9 @@ class _HeroCard extends StatelessWidget {
                 ),
                 const SizedBox(height: T.s2),
                 Text(
-                  showPace
+                  !isCurrent
+                      ? '${summary.txnCount} payments · ${money(summary.dailyAverage)} a day'
+                      : showPace
                       ? '$paceLabel · Day ${summary.daysElapsed} of ${summary.daysInMonth}'
                       : 'Day ${summary.daysElapsed} of ${summary.daysInMonth}',
                   maxLines: 2,
@@ -1201,7 +1351,13 @@ class _AttentionRow extends StatelessWidget {
 }
 
 class _RecentList extends StatelessWidget {
-  const _RecentList({required this.transactions, this.onSeeAll});
+  const _RecentList({
+    required this.title,
+    required this.transactions,
+    this.onSeeAll,
+  });
+
+  final String title;
 
   final List<Txn> transactions;
   final VoidCallback? onSeeAll;
@@ -1218,7 +1374,7 @@ class _RecentList extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SectionHeader(
-          title: 'Recent',
+          title: title,
           action: 'See all',
           onAction: onSeeAll,
           padding: EdgeInsets.zero,
@@ -1330,6 +1486,93 @@ class _HomeSkeleton extends StatelessWidget {
           SkeletonBox(height: 238, radius: T.r3),
         ],
       ),
+    );
+  }
+}
+
+/// The page title: a greeting over the month, with arrows either side to step
+/// through months, and the month itself opening the month-by-month list.
+class _MonthSwitcher extends StatelessWidget {
+  const _MonthSwitcher({
+    required this.month,
+    required this.offset,
+    required this.history,
+    required this.greeting,
+    required this.onChange,
+    required this.onPick,
+  });
+
+  final DateTime month;
+  final int offset;
+  final int history;
+  final String greeting;
+  final ValueChanged<int> onChange;
+  final VoidCallback onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = T.of(context);
+    return Row(
+      children: [
+        IconButton(
+          tooltip: 'Previous month',
+          visualDensity: VisualDensity.compact,
+          onPressed: offset > -history ? () => onChange(offset - 1) : null,
+          icon: const Icon(PhosphorIconsRegular.caretLeft, size: 20),
+        ),
+        Flexible(
+          child: InkWell(
+            borderRadius: BorderRadius.circular(T.r3),
+            onTap: onPick,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: T.s1,
+                vertical: 2,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    greeting,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: T.bodySmall.copyWith(
+                      color: p.inkMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          monthYearLabel(month),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: T.title.copyWith(color: p.ink),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        PhosphorIconsRegular.caretDown,
+                        size: 16,
+                        color: p.inkMuted,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        IconButton(
+          tooltip: 'Next month',
+          visualDensity: VisualDensity.compact,
+          onPressed: offset < 0 ? () => onChange(offset + 1) : null,
+          icon: const Icon(PhosphorIconsRegular.caretRight, size: 20),
+        ),
+      ],
     );
   }
 }

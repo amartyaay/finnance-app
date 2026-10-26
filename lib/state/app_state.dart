@@ -38,8 +38,23 @@ class AppState extends ChangeNotifier {
   String? _errorMessage;
   bool _hasSmsPermission = false;
   bool _demoMode = false;
+  int _monthOffset = 0;
 
   HomeData get data => _data;
+
+  /// The month Home shows: 0 is this month, -1 last month, and so on back to
+  /// the oldest transaction.
+  int get monthOffset => _monthOffset;
+
+  /// How far back [monthOffset] may go.
+  int get monthsOfHistory => _data.monthsOfHistory(_now());
+
+  void setMonthOffset(int offset) {
+    final next = offset.clamp(-monthsOfHistory, 0);
+    if (next == _monthOffset) return;
+    _monthOffset = next;
+    notifyListeners();
+  }
 
   /// The app's clock. Screens read this instead of DateTime.now() so a fixed
   /// clock (tests, demo renders) gives every screen the same month.

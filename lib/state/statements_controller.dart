@@ -18,9 +18,14 @@ class StatementPreview {
     required this.fileHash,
     required this.fileName,
     required this.analysis,
+    this.layout = '',
   });
 
   final BankStatement statement;
+
+  /// What the reader saw, with no amounts or narration
+  /// ([StatementTableBuilder.layoutReport]); shown when no rows were found.
+  final String layout;
   final String fileHash;
   final String fileName;
 
@@ -28,7 +33,8 @@ class StatementPreview {
   final StatementAnalysis analysis;
 }
 
-typedef WordReader = Future<List<PdfWord>> Function(String path, {String? password});
+typedef WordReader =
+    Future<List<PdfWord>> Function(String path, {String? password});
 
 /// The bank-statement feature's state: imported accounts, the selected
 /// account's rows, its salary verdict and salary-to-salary cycles.
@@ -141,11 +147,15 @@ class StatementsController extends ChangeNotifier {
       fileHash: hash,
       fileName: name,
       analysis: analysis,
+      layout: statement.rows.isEmpty ? _importer.table.layoutReport(words) : '',
     );
   }
 
   Future<StatementImportResult> commit(StatementPreview preview) async {
-    final result = await _store.save(preview.statement, fileHash: preview.fileHash);
+    final result = await _store.save(
+      preview.statement,
+      fileHash: preview.fileHash,
+    );
     _selected = preview.statement.accountKey;
     await load();
     return result;
@@ -168,7 +178,11 @@ class StatementsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setCategory(StatementRow row, String name, SpendCategoryKind kind) async {
+  Future<void> setCategory(
+    StatementRow row,
+    String name,
+    SpendCategoryKind kind,
+  ) async {
     final key = row.key;
     if (key == null) return;
     await _store.setCategory(key, name, kind);

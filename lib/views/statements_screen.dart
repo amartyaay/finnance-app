@@ -49,7 +49,13 @@ class _StatementsScreenState extends State<StatementsScreen> {
   Future<void> _import() async {
     final controller = context.read<StatementsController>();
     final messenger = ScaffoldMessenger.of(context);
-    final picked = await controller.pickPdf();
+    final ({String path, String name})? picked;
+    try {
+      picked = await controller.pickPdf();
+    } catch (e) {
+      if (mounted) _showFailure('Could not open the file picker', e);
+      return;
+    }
     if (picked == null || !mounted) return;
     setState(() => _importing = true);
     try {
@@ -73,6 +79,12 @@ class _StatementsScreenState extends State<StatementsScreen> {
           );
           return;
         }
+        // Anything else (the PDF engine failing to start, a file the picker
+        // could not copy) used to vanish silently; now it is shown.
+        catch (e) {
+          if (mounted) _showFailure('Could not read this statement', e);
+          return;
+        }
         if (preview != null) break;
         if (!mounted) return;
         password = await showStatementPasswordSheet(
@@ -84,16 +96,42 @@ class _StatementsScreenState extends State<StatementsScreen> {
       }
       if (!mounted) return;
       if (preview.statement.rows.isEmpty) {
+        final layout = preview.layout;
         await showDialog<void>(
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('No transactions found'),
-            content: const Text(
-              "This doesn't look like an SBI account statement we can read yet. "
-              'Statements downloaded from OnlineSBI or YONO, or the monthly '
-              'e-statement email, work best.',
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    layout.contains('no text layer')
+                        ? 'This PDF is a scanned image with no text in it, so '
+                              'it cannot be read. Download the statement again '
+                              'from OnlineSBI or YONO as a PDF.'
+                        : "The file opened, but its table layout isn't one "
+                              'Hisaab knows yet. Copy the details below and '
+                              'send them over: they hold only the column '
+                              'labels and counts, never amounts or names.',
+                  ),
+                  const SizedBox(height: T.s3),
+                  SelectableText(
+                    layout,
+                    style: T.bodySmall.copyWith(fontSize: 11.5),
+                  ),
+                ],
+              ),
             ),
             actions: [
+              TextButton(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: layout));
+                  Navigator.pop(context);
+                },
+                child: const Text('Copy details'),
+              ),
               TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('OK'),
@@ -122,6 +160,37 @@ class _StatementsScreenState extends State<StatementsScreen> {
       await controller.discardPickedFiles();
       if (mounted) setState(() => _importing = false);
     }
+  }
+
+  /// The error's type and message, never the password (it is not in any
+  /// exception this flow raises).
+  void _showFailure(String title, Object error) {
+    final details = '${error.runtimeType}: $error';
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: SingleChildScrollView(
+          child: SelectableText(
+            details.length > 600 ? details.substring(0, 600) : details,
+            style: T.bodySmall,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: details));
+              Navigator.pop(context);
+            },
+            child: const Text('Copy details'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

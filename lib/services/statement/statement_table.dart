@@ -192,11 +192,23 @@ class StatementTableBuilder {
 
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];
-      final header = _header(line, i + 1 < lines.length ? lines[i + 1] : null);
+      final next = i + 1 < lines.length ? lines[i + 1] : null;
+      var header = _header(line.words);
+      var consumed = 0;
+      if (header == null &&
+          next != null &&
+          next.page == line.page &&
+          (next.top - line.top).abs() < 30 &&
+          _looksLikeHeader(line.lower)) {
+        header = _header([...line.words, ...next.words]
+          ..sort((a, b) => a.x0.compareTo(b.x0)));
+        if (header != null) consumed = 1;
+      }
       if (header != null) {
         model = header;
         inTable = true;
         current = null;
+        i += consumed;
         continue;
       }
       if (model == null) continue;
@@ -306,34 +318,80 @@ class StatementTableBuilder {
   // ---- Header ---------------------------------------------------------------
 
   static final RegExp _descLabel = RegExp(
-    r'^(?:description|details|narration|particulars)$',
+    r'^(?:description|details|narration|particulars|remarks|transaction)',
     caseSensitive: false,
   );
 
-  _ColumnModel? _header(_Line line, _Line? next) {
-    final lower = line.lower;
-    if (!lower.contains('date')) return null;
-    final desc = line.words.where((w) => _descLabel.hasMatch(_clean(w.text)));
-    if (desc.isEmpty) return null;
-    PdfWord? find(String label) => line.words
-        .where((w) => _clean(w.text).toLowerCase() == label)
+  /// Cheap pre-check before trying a two-line header: a header line names at
+  /// least one of the money columns.
+  static bool _looksLikeHeader(String lower) =>
+      RegExp(r'date|debit|credit|withdraw|deposit|balance|description|narration|particulars|details')
+          .hasMatch(lower);
+
+  /// Column labels, matched loosely: "Debit", "Debit(₹)", "Withdrawals(INR)",
+  /// "Withdrawal Amt." and "Balance(INR)" all name the same columns.
+  _ColumnModel? _header(List<PdfWord> words) {
+    if (!words.any((w) => w.text.toLowerCase().contains('date'))) return null;
+    String norm(PdfWord w) => _clean(w.text).toLowerCase();
+    PdfWord? find(List<String> prefixes) => words
+        .where((w) => prefixes.any((p) => norm(w).startsWith(p)))
         .firstOrNull;
-    final debit = find('debit') ?? find('withdrawal') ?? find('withdrawals');
-    final credit = find('credit') ?? find('deposit') ?? find('deposits');
-    final balance = find('balance');
+    // "Transaction Date" is a date column, not the narration.
+    PdfWord? desc;
+    for (var i = 0; i < words.length; i++) {
+      if (!_descLabel.hasMatch(norm(words[i]))) continue;
+      if (norm(words[i]).startsWith('transaction') &&
+          i + 1 < words.length &&
+          norm(words[i + 1]).startsWith('date')) {
+        continue;
+      }
+      desc = words[i];
+      break;
+    }
+    if (desc == null) return null;
+    final debit = find(const ['debit', 'withdrawal']);
+    final credit = find(const ['credit', 'deposit']);
+    final balance = find(const ['balance']);
     if (debit == null || credit == null || balance == null) return null;
-    final ref = line.words
+    final ref = words
         .where((w) => RegExp(r'^(?:ref|chq|cheque)', caseSensitive: false)
             .hasMatch(_clean(w.text)))
         .firstOrNull;
     return _ColumnModel(
-      dateX0: line.words.first.x0,
-      descX0: desc.first.x0,
-      refX0: ref != null && ref.x0 > desc.first.x0 ? ref.x0 : null,
+      dateX0: words.first.x0,
+      descX0: desc.x0,
+      refX0: ref != null && ref.x0 > desc.x0 ? ref.x0 : null,
       debitX1: debit.x1,
       creditX1: credit.x1,
       balanceX1: balance.x1,
     );
+  }
+
+  /// What the reader saw, without a single amount or narration: page and word
+  /// counts, whether a table header was recognised, and the header-like lines
+  /// (column labels only). Safe to copy into a bug report.
+  String layoutReport(List<PdfWord> words) {
+    final lines = _lines(words);
+    final pages = words.map((w) => w.page).toSet().length;
+    final headers = <String>[];
+    var recognised = 0;
+    for (var i = 0; i < lines.length; i++) {
+      final lower = lines[i].lower;
+      final labels = RegExp(r'debit|credit|withdraw|deposit|balance')
+          .allMatches(lower)
+          .length;
+      if (!lower.contains('date') || labels < 2) continue;
+      if (_header(lines[i].words) != null) recognised++;
+      final text = lines[i].text.replaceAll(RegExp(r'\d'), '#');
+      headers.add(text.length > 140 ? text.substring(0, 140) : text);
+      if (headers.length >= 4) break;
+    }
+    return [
+      'pages: $pages, words: ${words.length}, lines: ${lines.length}',
+      'header recognised: $recognised',
+      for (final h in headers) 'header-like: $h',
+      if (words.isEmpty) 'no text layer (scanned image?)',
+    ].join('\n');
   }
 
   String _clean(String text) =>

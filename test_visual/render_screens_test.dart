@@ -181,6 +181,18 @@ Future<void> _render(
   await tester.drag(find.byType(Scrollable).first, const Offset(0, -700));
   await tester.pumpAndSettle();
   await _shot(tester, 'home-scroll-$t');
+  await tester.drag(find.byType(Scrollable).first, const Offset(0, 1400));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byTooltip('Previous month'));
+  await tester.pumpAndSettle();
+  await _shot(tester, 'home-past-$t');
+  await tester.tap(find.byTooltip('Next month'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.textContaining('2026').first);
+  await tester.pumpAndSettle();
+  await _shot(tester, 'months-$t');
+  Navigator.of(tester.element(find.text('Month by month'))).pop();
+  await tester.pumpAndSettle();
   for (final tab in ['Activity', 'Cards', 'Insights']) {
     await _tab(tester, tab);
     await _shot(tester, '${tab.toLowerCase()}-$t');

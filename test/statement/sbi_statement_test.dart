@@ -32,6 +32,29 @@ const _expectedKinds = [
 ];
 
 void main() {
+  // Header variants seen in other exports: units glued to the labels, and the
+  // labels wrapped across two printed lines.
+  group('header variants', () {
+    const header =
+        'Txn Date  Value     Description                   Ref No./Cheque          Debit       Credit       Balance';
+    test('units glued to the labels', () {
+      final text = sbiLayoutB.replaceFirst(
+        header,
+        'Txn Date  Value     Narration                     Ref No./Cheque     Withdrawals(INR) Deposits(INR) Balance(INR)',
+      );
+      expect(_importer.parse(wordsFromText(text)).rows, hasLength(15));
+    });
+    test('labels split over two lines', () {
+      final text = sbiLayoutB.replaceFirst(
+        '$header\n          Date                                    No.',
+        'Txn Date  Value     Description                   Ref No./Cheque\n'
+            '          Date                                    No.                Debit       Credit       Balance',
+      );
+      expect(text, isNot(sbiLayoutB));
+      expect(_importer.parse(wordsFromText(text)).rows, hasLength(15));
+    });
+  });
+
   // Layout A prints no UPI note, so "rent sept" is only known in B and C.
   for (final (name, text, printsNote) in [
     ('A (CBS e-statement)', sbiLayoutA, false),

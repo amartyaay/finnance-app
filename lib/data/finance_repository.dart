@@ -66,6 +66,37 @@ class HomeData {
 
   bool get isEmpty => transactions.isEmpty && smsMessagesRead == 0;
 
+  /// This data seen from another month: only the two summaries change, so
+  /// every figure derived from them (out, left, money in) follows the month.
+  HomeData withSummaries(MonthlySummary month, MonthlySummary previous) =>
+      HomeData(
+        transactions: transactions,
+        summary: month,
+        previousSummary: previous,
+        cards: cards,
+        recurring: recurring,
+        insights: insights,
+        phishingAlerts: phishingAlerts,
+        needsReview: needsReview,
+        lastScanAt: lastScanAt,
+        smsMessagesRead: smsMessagesRead,
+        isDemo: isDemo,
+        categories: categories,
+        needsReviewCount: _needsReviewCount,
+      );
+
+  /// Months back from the current one to the oldest transaction (0 when all
+  /// data is from this month).
+  int monthsOfHistory(DateTime now) {
+    if (transactions.isEmpty) return 0;
+    var oldest = transactions.first.occurredAt;
+    for (final txn in transactions) {
+      if (txn.occurredAt.isBefore(oldest)) oldest = txn.occurredAt;
+    }
+    final months = (now.year - oldest.year) * 12 + now.month - oldest.month;
+    return months < 0 ? 0 : months;
+  }
+
   /// Money that actually left the accounts this month (spend + cash + card
   /// bill payments). "Left"/"Over" is measured against this, not against
   /// category spend alone.
@@ -98,6 +129,10 @@ class HomeData {
       final kind = txn.moneyInKind;
       if (kind == MoneyInKind.none) continue;
       if (txn.occurredAt.isBefore(summary.monthStart)) continue;
+      final start = summary.monthStart;
+      if (!txn.occurredAt.isBefore(DateTime(start.year, start.month + 1))) {
+        continue;
+      }
       byKind.update(kind, (v) => v + txn.amountPaise, ifAbsent: () => txn.amountPaise);
     }
     return byKind;
