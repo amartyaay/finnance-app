@@ -1,6 +1,8 @@
 // The SBI statement pipeline on the three synthetic layouts from
 // docs/research/07-sbi-statement.md §8 — the same 15 transactions each time,
 // so one expected table covers all of them.
+import 'dart:io';
+
 import 'package:finnance_app/domain/enums.dart';
 import 'package:finnance_app/domain/statement.dart';
 import 'package:finnance_app/engine/salary_cycles.dart';
@@ -32,6 +34,24 @@ const _expectedKinds = [
 ];
 
 void main() {
+  // The 2026 OnlineSBI "Account Statement" PDF: column labels drawn as vector
+  // art (only "Balance" is text), slash dates, "-" in empty cells, narration
+  // centred on the dated line, and the branch name under every row.
+  test('a statement with no column labels in its text', () {
+    final text = File('test/fixtures/sbi_statement_2026.txt').readAsStringSync();
+    final statement = _importer.parse(wordsFromText(text));
+    expect(statement.periodFrom, DateTime(2026, 9, 1));
+    expect(statement.rows, hasLength(5));
+    expect(statement.verifiedRows, 4); // the first has no opening balance
+    expect([for (final r in statement.rows) r.debitPaise], [50000, 0, 24500, 16100, 0]);
+    expect([for (final r in statement.rows) r.creditPaise], [0, 8000000, 0, 0, 120000]);
+    // "WDL TFR" printed above the date belongs to its own row, and the branch
+    // name is dropped rather than glued onto the next one.
+    expect(statement.rows[2].description, startsWith('WDL TFR UPI/DR/222/ZEPTO'));
+    expect(statement.rows.any((r) => r.description.contains('JAWAHARNAGAR')), isFalse);
+    expect(statement.rows[1].counterparty, 'DELOITTE CONSUL');
+  });
+
   // Header variants seen in other exports: units glued to the labels, and the
   // labels wrapped across two printed lines.
   group('header variants', () {

@@ -200,7 +200,9 @@ class TransactionExtractor {
     r'[\s:.#-]*',
     caseSensitive: false,
   );
-  static final RegExp _maskSegment = RegExp(r'[xX*]{1,12}[\s-]*\d{3,5}');
+  // Up to 8 digits after the mask: SBI prints `A/C XXXXX454642`, and taking
+  // only five of them gave the tail `5464` instead of `4642`.
+  static final RegExp _maskSegment = RegExp(r'[xX*]{1,12}[\s-]*\d{3,8}(?!\d)');
   static final RegExp _bareMaskDigits = RegExp(r'^\s*(\d{3,5})(?!\d)');
 
   static final RegExp _billRef = RegExp(

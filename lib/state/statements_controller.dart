@@ -47,11 +47,17 @@ class StatementsController extends ChangeNotifier {
     StatementStore? store,
     StatementImporter importer = const StatementImporter(),
     WordReader? readWords,
+    this.onLedgerChanged,
   }) : _store = store ?? StatementStore(),
        _importer = importer,
        _readWords = readWords ?? readPdfWords;
 
   final StatementStore _store;
+
+  /// Called after anything that changes the ledger (an import, a salary or
+  /// category choice, a deleted account): statement rows replace that
+  /// account's SMS on Home and Activity, so those screens must reload.
+  final Future<void> Function()? onLedgerChanged;
   final StatementImporter _importer;
   final WordReader _readWords;
 
@@ -158,6 +164,7 @@ class StatementsController extends ChangeNotifier {
     );
     _selected = preview.statement.accountKey;
     await load();
+    await onLedgerChanged?.call();
     return result;
   }
 
@@ -176,6 +183,7 @@ class StatementsController extends ChangeNotifier {
     await _store.setSalaryOverride(key, isSalary);
     await _loadRows();
     notifyListeners();
+    await onLedgerChanged?.call();
   }
 
   Future<void> setCategory(
@@ -188,11 +196,13 @@ class StatementsController extends ChangeNotifier {
     await _store.setCategory(key, name, kind);
     await _loadRows();
     notifyListeners();
+    await onLedgerChanged?.call();
   }
 
   Future<void> deleteAccount(String accountKey) async {
     await _store.deleteAccount(accountKey);
     if (_selected == accountKey) _selected = null;
     await load();
+    await onLedgerChanged?.call();
   }
 }

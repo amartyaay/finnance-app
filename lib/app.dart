@@ -52,7 +52,8 @@ class _FinanceAppState extends State<FinanceApp> {
   late final AppState _appState = widget.appState ?? AppState();
   late final ThemeViewModel _theme = widget.themeViewModel ?? ThemeViewModel();
   late final StatementsController _statements =
-      widget.statements ?? StatementsController();
+      widget.statements ??
+      StatementsController(onLedgerChanged: () => _appState.refresh());
 
   @override
   void initState() {

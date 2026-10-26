@@ -18,6 +18,9 @@ class TxnGuards {
     // CSV imports and manual entries are typed by a human: nothing to re-derive.
     if (body == null || body.trim().isEmpty) return true;
 
+    // A bank statement row is the bank's own record, reconciled against the
+    // running balance: it has no message wording to vet.
+    if (txn.sourceType == TxnSourceType.statement) return true;
     final lower = body.toLowerCase();
     // A phone-number or look-alike header never posts money, in either
     // direction: "Rs 15,000 credited to your a/c … Bal …" from a 10-digit

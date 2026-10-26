@@ -2,6 +2,8 @@ import 'package:sqflite/sqflite.dart';
 
 import '../domain/enums.dart';
 import '../domain/statement.dart';
+import '../engine/salary_cycles.dart';
+import '../engine/statement_merge.dart';
 import 'app_database.dart';
 
 /// One imported account, for the statements screen.
@@ -71,7 +73,11 @@ class StatementStore {
       limit: 1,
     );
     if (existing.isNotEmpty) {
-      return const StatementImportResult(added: 0, alreadyKnown: 0, sameFile: true);
+      return const StatementImportResult(
+        added: 0,
+        alreadyKnown: 0,
+        sameFile: true,
+      );
     }
 
     return db.transaction((txn) async {
@@ -115,7 +121,11 @@ class StatementStore {
           known++;
         }
       }
-      return StatementImportResult(added: added, alreadyKnown: known, sameFile: false);
+      return StatementImportResult(
+        added: added,
+        alreadyKnown: known,
+        sameFile: false,
+      );
     });
   }
 
@@ -170,7 +180,9 @@ class StatementStore {
           kind: StatementKind.values.byName(r['kind'] as String),
           counterparty: r['counterparty'] as String?,
           categoryName: r['category_name'] as String,
-          categoryKind: SpendCategoryKind.values.byName(r['category_kind'] as String),
+          categoryKind: SpendCategoryKind.values.byName(
+            r['category_kind'] as String,
+          ),
           isSalaryOverride: switch (r['salary_override']) {
             1 => true,
             0 => false,
@@ -178,6 +190,54 @@ class StatementStore {
           },
         ),
     ];
+  }
+
+  /// The days each imported account is covered by a statement: from the
+  /// earliest statement period start to the latest period end (row dates
+  /// when a file printed no period).
+  Future<List<StatementCoverage>> coverage() async {
+    final db = await _db.database;
+    final rows = await db.rawQuery('''
+      SELECT s.account_key, s.bank, s.account_mask,
+             MIN(COALESCE(s.period_from, r.txn_date)) AS first_date,
+             MAX(COALESCE(s.period_to, r.txn_date)) AS last_date
+      FROM statements s JOIN statement_rows r ON r.statement_id = s.id
+      GROUP BY s.account_key
+    ''');
+    return [
+      for (final r in rows)
+        StatementCoverage(
+          accountKey: r['account_key'] as String,
+          bank: r['bank'] as String,
+          accountMask: r['account_mask'] as String?,
+          from: DateTime.fromMillisecondsSinceEpoch(r['first_date'] as int),
+          to: DateTime.fromMillisecondsSinceEpoch(r['last_date'] as int),
+        ),
+    ];
+  }
+
+  /// Every account's rows for the ledger, with the salary verdict applied:
+  /// a credit the detector (or the user) calls salary is booked as salary.
+  Future<Map<String, List<StatementRow>>> ledgerRows() async {
+    final out = <String, List<StatementRow>>{};
+    for (final c in await coverage()) {
+      final sorted = await rows(c.accountKey);
+      final verdict = const SalaryDetector().detect(sorted);
+      out[c.accountKey] = [
+        for (var i = 0; i < sorted.length; i++)
+          verdict.rowIndexes.contains(i) &&
+                  sorted[i].kind != StatementKind.salary
+              ? sorted[i].copyWith(
+                  kind: StatementKind.salary,
+                  categoryName: 'Income',
+                )
+              : sorted[i].isSalaryOverride == false &&
+                    sorted[i].kind == StatementKind.salary
+              ? sorted[i].copyWith(kind: StatementKind.otherCredit)
+              : sorted[i],
+      ];
+    }
+    return out;
   }
 
   /// "This is / is not my salary"; null clears the choice.
@@ -209,8 +269,16 @@ class StatementStore {
   Future<void> deleteAccount(String accountKey) async {
     final db = await _db.database;
     await db.transaction((txn) async {
-      await txn.delete('statement_rows', where: 'account_key = ?', whereArgs: [accountKey]);
-      await txn.delete('statements', where: 'account_key = ?', whereArgs: [accountKey]);
+      await txn.delete(
+        'statement_rows',
+        where: 'account_key = ?',
+        whereArgs: [accountKey],
+      );
+      await txn.delete(
+        'statements',
+        where: 'account_key = ?',
+        whereArgs: [accountKey],
+      );
     });
   }
 }

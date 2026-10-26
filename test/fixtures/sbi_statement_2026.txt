@@ -1,0 +1,29 @@
+Statement From   : 01-09-2026 to 30-09-2026
+
+                                                                                Balance
+                          WDL TFR
+01/09/2026   01/09/2026   UPI/DR/111/SWIGGY                 -             500.00               -        9,500.00
+                          SWIGGY/UTIB/swiggyupi@/Paym/ORDER
+                          0097692162094 AT 21092
+                          JAWAHARNAGAR ( Bits)
+                          DEP TFR
+02/09/2026   02/09/2026   NEFT * CITI0000006 * CITIN1       -                  -       80,000.00       89,500.00
+                          DELOITTE CONSUL
+                          0097692162094 AT 21092
+                          JAWAHARNAGAR ( Bits)
+                          WDL TFR
+03/09/2026   03/09/2026   UPI/DR/222/ZEPTO                  -             245.00               -       89,255.00
+                          ZEPTO/YESB/zepto@/UPI
+                          0097692162094 AT 21092
+                          JAWAHARNAGAR ( Bits)
+                          WDL TFR
+05/09/2026   05/09/2026   UPI/DR/333/AIRTEL                 -             161.00               -       89,094.00
+                          Airtel/AIRP/airtelpaym/UPI
+                          0097692162094 AT 21092
+                          JAWAHARNAGAR ( Bits)
+                          DEP TFR
+07/09/2026   07/09/2026   UPI/CR/444/RAHUL                  -                  -        1,200.00       90,294.00
+                          RAHUL/SBIN/9000000000/Paym
+                          0097692162094 AT 21092
+                          JAWAHARNAGAR ( Bits)
+Page no. 1

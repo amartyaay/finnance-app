@@ -416,7 +416,22 @@ class _HeroCard extends StatelessWidget {
         summary.projectedSpendPaise > 0;
     final paceLabel = 'On pace for ${money(summary.projectedSpend)}';
 
+    final monthEnd = DateTime(
+      summary.monthStart.year,
+      summary.monthStart.month + 1,
+    );
+    final fromStatement = data.transactions
+        .where(
+          (t) =>
+              t.sourceType == TxnSourceType.statement &&
+              !t.occurredAt.isBefore(summary.monthStart) &&
+              t.occurredAt.isBefore(monthEnd),
+        )
+        .length;
     final provenance = <String>[
+      if (fromStatement > 0)
+        '$fromStatement from your bank statement (it replaces that '
+            "account's SMS for the days it covers)",
       if (data.smsMessagesRead > 0) '${data.smsMessagesRead} messages read',
       data.needsReviewCount > 0
           ? '${data.needsReviewCount} to confirm'

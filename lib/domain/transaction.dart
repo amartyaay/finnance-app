@@ -163,6 +163,10 @@ enum TxnSourceType {
   /// only counts when no bank or card alert reports the same payment; the
   /// dedupe engine folds it into that alert otherwise.
   receipt,
+
+  /// A row of an imported bank statement. It replaces that account's SMS
+  /// alerts for the days the statement covers (`StatementMerge`).
+  statement,
 }
 
 /// A credit-card bill/statement reminder captured from an SMS.

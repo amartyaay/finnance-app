@@ -16,6 +16,7 @@ import '../engine/card_metrics.dart';
 import '../engine/dedupe_engine.dart';
 import '../engine/merchant_learning.dart';
 import '../engine/review_queue.dart';
+import '../engine/statement_merge.dart';
 import '../services/categorizer.dart';
 import '../services/sms/sender_registry.dart';
 import '../services/sms/sms_classifier.dart';
@@ -24,6 +25,7 @@ import '../services/sms/transaction_extractor.dart';
 import '../services/sms_reader.dart';
 import 'app_database.dart';
 import 'finance_repository.dart';
+import 'statement_store.dart';
 
 /// SQLite-backed repository: the real app.
 ///
@@ -82,7 +84,24 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
       whereArgs: [since.millisecondsSinceEpoch],
       orderBy: 'occurred_at DESC',
     );
-    final transactions = _dedupe.mark(txnRows.map(_txnFromRow).toList());
+    final smsLedger = _dedupe.mark(txnRows.map(_txnFromRow).toList());
+    // An imported bank statement is the record for its account and period;
+    // SMS cover everything else (other banks, cards, the days since).
+    var transactions = smsLedger;
+    try {
+      final statements = StatementStore(database: _db);
+      final coverage = await statements.coverage();
+      if (coverage.isNotEmpty) {
+        transactions = const StatementMerge().merge(
+          sms: smsLedger,
+          coverage: coverage,
+          rows: await statements.ledgerRows(),
+        );
+      }
+    } on DatabaseException {
+      // A statement table that cannot be read must not hide the SMS ledger.
+      transactions = smsLedger;
+    }
 
     final cardRows = await db.query('cards', orderBy: 'created_at ASC');
     final cards = cardRows.map(_cardFromRow).toList(growable: false);
@@ -374,7 +393,7 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
   /// Stored in `app_meta`; together with the schema version it decides whether
   /// the stored ledger has to be re-derived. Bump this on every rule change
   /// that alters what a message becomes.
-  static const int parserVersion = 10;
+  static const int parserVersion = 11;
 
   @override
   Future<IngestResult> reparseAll() async {
@@ -677,6 +696,11 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
     required String categoryName,
     required SpendCategoryKind kind,
   }) async {
+    // A statement row's category lives with the statement.
+    if (txnKey.startsWith('stmt:')) {
+      await StatementStore(database: _db).setCategory(txnKey, categoryName, kind);
+      return;
+    }
     final db = await _db.database;
     await _assignCategoryOn(
       db,
@@ -828,6 +852,9 @@ class SqliteFinanceRepository implements FinanceRepository, InboxStore {
 
   @override
   Future<void> excludeTxn(String txnKey) async {
+    // The bank's own record is not a parsing mistake; there is nothing to
+    // un-learn (the screen does not offer this for statement rows).
+    if (txnKey.startsWith('stmt:')) return;
     final db = await _db.database;
     final rows = await db.query(
       'transactions',

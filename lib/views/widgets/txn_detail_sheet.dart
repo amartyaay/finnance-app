@@ -127,9 +127,17 @@ class _TransactionDetailSheet extends StatelessWidget {
             const SizedBox(height: T.s5),
             Divider(height: 1, color: p.outlineVariant),
             const SizedBox(height: T.s2),
-            _DetailRow(label: 'Instrument', value: txn.instrument.label),
+            if (txn.sourceType == TxnSourceType.statement)
+              const _DetailRow(label: 'Source', value: 'Bank statement')
+            else
+              _DetailRow(label: 'Instrument', value: txn.instrument.label),
             if (cardLabel.isNotEmpty)
-              _DetailRow(label: 'Card', value: cardLabel),
+              _DetailRow(
+                label: txn.sourceType == TxnSourceType.statement
+                    ? 'Account'
+                    : 'Card',
+                value: cardLabel,
+              ),
             if (txn.referenceId?.trim().isNotEmpty == true)
               _DetailRow(
                 label: 'Reference',
@@ -179,7 +187,9 @@ class _TransactionDetailSheet extends StatelessWidget {
             if (raw != null && raw.isNotEmpty) ...[
               const SizedBox(height: T.s4),
               Text(
-                'Message',
+                txn.sourceType == TxnSourceType.statement
+                    ? 'Statement narration'
+                    : 'Message',
                 style: T.label.copyWith(color: p.inkSecondary),
               ),
               const SizedBox(height: T.s2),

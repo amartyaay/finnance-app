@@ -51,6 +51,13 @@ class StatementClassifier {
     caseSensitive: false,
   );
   static final _neft = RegExp(r'NEFT\*([A-Z]{4}0[A-Z0-9]{6})\*([A-Z0-9 ]+)\*([^*]+)', caseSensitive: false);
+
+  /// The 2026 OnlineSBI PDF spaces the stars and runs the remitter on after
+  /// the UTR: `NEFT * CITI0000006 * CITIN26661516108 DELOITTE CONSUL 0099…`.
+  static final _neftSpaced = RegExp(
+    r'NEFT\s*\*\s*([A-Z]{4}0[A-Z0-9]{6})\s*\*\s*([A-Z0-9]+(?:\s*\*\s*[A-Z0-9]+)?)\s+([A-Z][A-Z .&]*?)(?=\s+\d{6,}|\s+AT\s+\d{4,5}|$)',
+    caseSensitive: false,
+  );
   static final _personalHandle = RegExp(
     r'@ok(?:sbi|hdfcbank|icici|axis)|@ibl|@axl|@upi|^\d{10}@|@apl|@yapl',
     caseSensitive: false,
@@ -73,7 +80,7 @@ class StatementClassifier {
     final debit = row.isDebit;
 
     final upi = _upi.firstMatch(spaced);
-    final neft = _neft.firstMatch(spaced);
+    final neft = _neft.firstMatch(spaced) ?? _neftSpaced.firstMatch(spaced);
     final counterparty = _counterparty(spaced, upi, neft);
     final vpa = upi?.group(5)?.trim() ?? '';
     final note = upi?.group(6)?.trim() ?? '';

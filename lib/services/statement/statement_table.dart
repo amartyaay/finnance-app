@@ -190,6 +190,37 @@ class StatementTableBuilder {
     int? broughtForward;
     int? lastYear = meta.periodFrom?.year;
 
+    // Some exports (the 2026 OnlineSBI "Account Statement" PDF) draw the
+    // column labels as vector art, leaving only "Balance" in the text. With
+    // no readable header anywhere, the columns are measured from the rows.
+    final inferred = _anyHeader(lines) ? null : _inferModel(lines);
+    if (inferred != null) {
+      model = inferred;
+      warnings.add('No column labels in the text; columns were measured from '
+          'the rows and checked against the running balance.');
+    }
+    // Those exports also centre the narration on the dated line, so a row's
+    // first narration line ("WDL TFR") prints above its date.
+    final centred = inferred != null;
+    var currentTop = 0.0;
+    final pending = <_Line>[];
+    // The branch name printed under every row ("… AT 21092" then
+    // "JAWAHARNAGAR ( Bits)") is page furniture, not narration: a digit-free
+    // line that keeps following a branch-code line.
+    final furniture = <String>{};
+    if (centred) {
+      final counts = <String, int>{};
+      for (var k = 1; k < lines.length; k++) {
+        final text = lines[k].text;
+        if (RegExp(r'\d').hasMatch(text)) continue;
+        if (!RegExp(r'\bAT \d{4,5}$').hasMatch(lines[k - 1].text)) continue;
+        counts.update(text, (v) => v + 1, ifAbsent: () => 1);
+      }
+      counts.forEach((text, n) {
+        if (n >= 5) furniture.add(text);
+      });
+    }
+
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];
       final next = i + 1 < lines.length ? lines[i + 1] : null;
@@ -220,7 +251,17 @@ class StatementTableBuilder {
       if (!inTable) {
         // A continuation page without its own header reuses the last model,
         // but only once a dated row shows up.
-        if (_rowDate(line, model, lastYear) == null) continue;
+        if (_rowDate(line, model, lastYear) == null) {
+          if (centred &&
+              line.words.first.x0 >= model.descX0 - 2 &&
+              line.words.last.x1 < model.amountZone &&
+              line.words.every((w) => toPaise(w.text) == null)) {
+            pending.add(line);
+          } else {
+            pending.clear();
+          }
+          continue;
+        }
         inTable = true;
       }
 
@@ -235,12 +276,37 @@ class StatementTableBuilder {
         continue;
       }
 
+      if (furniture.contains(line.text)) continue;
       final date = _rowDate(line, model, lastYear);
+      if (date == null && centred) {
+        // Closer to the next dated line on this page than to the current
+        // one: it is the next row's opening narration.
+        _Line? nextDated;
+        for (var j = i + 1; j < lines.length && j < i + 8; j++) {
+          if (lines[j].page != line.page) break;
+          if (_rowDate(lines[j], model, lastYear) != null) {
+            nextDated = lines[j];
+            break;
+          }
+        }
+        final toCurrent = current == null || lines[current.firstLine].page != line.page
+            ? double.infinity
+            : line.top - currentTop;
+        if (nextDated != null && nextDated.top - line.top < toCurrent) {
+          pending.add(line);
+          continue;
+        }
+      }
       if (date != null) {
         current = RawStatementRow(date: date.date, firstLine: i)
           ..yearPending = date.yearPending;
+        currentTop = line.top;
         rows.add(current);
         if (!date.yearPending) lastYear = date.date.year;
+        for (final early in pending) {
+          _collectCells(early, model, current);
+        }
+        pending.clear();
       } else if (current == null) {
         continue;
       } else {
@@ -316,6 +382,92 @@ class StatementTableBuilder {
   }
 
   // ---- Header ---------------------------------------------------------------
+
+  bool _anyHeader(List<_Line> lines) {
+    for (var i = 0; i < lines.length; i++) {
+      if (_header(lines[i].words) != null) return true;
+      final next = i + 1 < lines.length ? lines[i + 1] : null;
+      if (next != null &&
+          next.page == lines[i].page &&
+          _looksLikeHeader(lines[i].lower) &&
+          _header([...lines[i].words, ...next.words]) != null) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Columns from the rows themselves: lines that start with a date and end
+  /// with an amount (the balance). The narration starts after the last
+  /// leading date; amounts left of the balance are the movements, and their
+  /// right edges cluster into Debit then Credit. Which is which only seeds
+  /// the guess: the running balance decides every row's direction.
+  _ColumnModel? _inferModel(List<_Line> lines) {
+    final dateX0 = <double>[];
+    final descX0 = <double>[];
+    final balanceX1 = <double>[];
+    final moveX1 = <double>[];
+    final dashX = <double>[];
+    bool dateish(String t) => _slashDate.hasMatch(t) || _dashDate.hasMatch(t);
+    for (final line in lines) {
+      final w = line.words;
+      if (w.length < 4 || !dateish(w.first.text)) continue;
+      if (toPaise(w.last.text) == null) continue;
+      var k = 1;
+      while (k < w.length && dateish(w[k].text)) {
+        k++;
+      }
+      if (k >= w.length - 1) continue;
+      dateX0.add(w.first.x0);
+      descX0.add(w[k].x0);
+      balanceX1.add(w.last.x1);
+      for (var j = k + 1; j < w.length - 1; j++) {
+        if (toPaise(w[j].text) != null) moveX1.add(w[j].x1);
+        if (w[j].text == '-') dashX.add((w[j].x0 + w[j].x1) / 2);
+      }
+    }
+    if (balanceX1.length < 3 || moveX1.isEmpty) return null;
+    double median(List<double> v) => (v..sort())[v.length ~/ 2];
+    final balance = median(balanceX1);
+    final desc = median(descX0);
+    // Split the movement edges at their widest gap.
+    moveX1.sort();
+    var split = -1;
+    var widest = 0.0;
+    for (var i = 1; i < moveX1.length; i++) {
+      final gap = moveX1[i] - moveX1[i - 1];
+      if (gap > widest) {
+        widest = gap;
+        split = i;
+      }
+    }
+    double debit;
+    double credit;
+    if (split > 0 && widest > 30) {
+      debit = median(moveX1.sublist(0, split));
+      credit = median(moveX1.sublist(split));
+    } else {
+      // One column seen: the other sits between it and the balance (or
+      // before it), and the balance check fixes any row that guessed wrong.
+      final only = median(moveX1);
+      final rightDash = dashX.where((x) => x > only).toList();
+      if (rightDash.isNotEmpty) {
+        debit = only;
+        credit = (median(rightDash) + balance) / 2 - 10;
+      } else {
+        credit = only;
+        debit = only - (balance - only) / 2;
+      }
+    }
+    return _ColumnModel(
+      dateX0: median(dateX0),
+      descX0: desc,
+      refX0: null,
+      debitX1: debit,
+      creditX1: credit,
+      balanceX1: balance,
+    );
+  }
 
   static final RegExp _descLabel = RegExp(
     r'^(?:description|details|narration|particulars|remarks|transaction)',
@@ -637,6 +789,14 @@ class StatementTableBuilder {
         caseSensitive: false,
       ).firstMatch(line.trim());
       if (holder == null && name != null) holder = name.group(1)!.trim();
+      // The 2026 OnlineSBI PDF prints no "Name :" field, only a greeting:
+      // "Welcome:" then the date, then "Mr. FIRST LAST" on its own line.
+      final salutation = RegExp(
+        r'^(?:[Mm]rs?|[Mm]s|Miss|Smt)\.?\s*([A-Z][A-Z .]{1,60})$',
+      ).firstMatch(line.trim());
+      if (holder == null && salutation != null) {
+        holder = salutation.group(1)!.trim();
+      }
       final period = RegExp(
         r'(?:statement\s+from|account statement from|for the period)\s*:?\s*'
         r'(.+?)\s+to\s+(\S+(?:\s+[A-Za-z]{3}\s+\d{4})?)',
@@ -676,7 +836,11 @@ class StatementTableBuilder {
 
   /// `01/09/2026`, `01/09/26`, `1 Sep 2026`, `01-Sep-26`.
   static DateTime? parseLooseDate(String text) {
-    final t = text.trim();
+    var t = text.trim();
+    // "01-04-2026" (the 2026 OnlineSBI header) reads like "01/04/2026".
+    if (RegExp(r'^\d{1,2}-\d{1,2}-\d{2,4}$').hasMatch(t)) {
+      t = t.replaceAll('-', '/');
+    }
     final slash = _slashDate.firstMatch(t);
     if (slash != null) {
       var y = int.parse(slash.group(3)!);
