@@ -23,6 +23,11 @@ class SmsGuards {
     caseSensitive: false,
   );
 
+  static final RegExp _creditedBack = RegExp(
+    r'\b(?:has been |is |was )?credited\b(?! (?:within|in \d))',
+    caseSensitive: false,
+  );
+
   /// A failure stated without "has": "… at MYNTRA failed.", "could not be
   /// processed", "was unsuccessful". A reversal of a failed payment ("Rs 650
   /// reversed for your failed UPI txn") did move money back and is exempt.
@@ -54,7 +59,12 @@ class SmsGuards {
   /// that was only set up (I07).
   static bool notMovedYet(String lower) {
     if (_stopped.hasMatch(lower)) return true;
-    if (_bareFailure.hasMatch(lower) && !isReversal(lower)) return true;
+    // "Rs 500 credited … as reversal of failed UPI txn" did move money back.
+    if (_bareFailure.hasMatch(lower) &&
+        !isReversal(lower) &&
+        !_creditedBack.hasMatch(lower)) {
+      return true;
+    }
     return _future.hasMatch(lower) && !_completed.hasMatch(lower);
   }
 

@@ -495,12 +495,9 @@ class SmsClassifier {
       cls = SmsClass.informational;
     } else if (promo >= 4) {
       cls = SmsClass.promo;
-    } else if (tx >= 4 &&
-        hasAmount &&
-        moved &&
-        sender.trust != SenderTrust.suspicious) {
-      // Same rule as the main path: a phone-number sender never posts money,
-      // in either direction ("Rs 10,000 credited to your account by mistake").
+    } else if (tx >= 4 && hasAmount && moved) {
+      // A phone-number sender may still *assert* a transaction (class), but
+      // the ledger refuses it — see TxnGuards (fixture fraud-16, H6).
       cls = SmsClass.transaction;
     } else {
       cls = SmsClass.unknown;

@@ -1,4 +1,5 @@
 import '../domain/transaction.dart';
+import '../domain/enums.dart';
 import '../services/sms/sender_registry.dart';
 import '../services/sms/sms_guards.dart';
 
@@ -18,6 +19,13 @@ class TxnGuards {
     if (body == null || body.trim().isEmpty) return true;
 
     final lower = body.toLowerCase();
+    // A phone-number or look-alike header never posts money, in either
+    // direction: "Rs 15,000 credited to your a/c … Bal …" from a 10-digit
+    // number is the seller scam (H6), however flawless the template.
+    if (txn.sender != null &&
+        registry.resolve(txn.sender!).trust == SenderTrust.suspicious) {
+      return false;
+    }
     if (SmsGuards.notMovedYet(lower)) return false;
     // A biller's receipt has no money verb ("Recharge successful"); it was
     // admitted by `SmsGuards.paidReceipt`, and the dedupe engine drops it
