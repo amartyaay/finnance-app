@@ -27,6 +27,7 @@ iteration. Working branch: `main` (single-developer repo).
 | 14 | Classifier: "super accurate", budget **≤ $2–3 / year**, cheapest best, on-device (S24 FE) preferred; network allowed only for classification. | Decided (`docs/research/08-classifier-budget.md`): **$0/year** on-device logistic regression as a second opinion over the rules; disagreements go to review. Paid APIs end up ~$5/yr (prepaid minimums); Gemini free tier trains on inputs; Gemini Nano absent on S24 FE. Model not trained yet. |
 | 15 | **A subagent whose whole job is checking accuracy**: classification accuracy, spam counted, double counts. | `tool/audit_accuracy.dart` (gold set, P1/P2/card-bill legs/recall/precision/kind/amount/phishing) + an auditor agent each round. |
 | 16 | No Google sign-in, no account, no network (except optional classification). | Holds: no INTERNET use at runtime. |
+| 17 | "Improve UI, make it modern and fancy." | Visual pass `338a543`: bundled Inter, mesh-gradient heroes (`HeroSurface`), soft-shadow cards, floating frosted dock, frosted hero tiles, column charts, per-category hues, calm notice cards. Verified by host renders (`docs/shots/render-*.png`); not yet on the phone. |
 
 ## Decisions to keep (with evidence)
 
@@ -122,6 +123,7 @@ flutter build apk --debug                    # the only supported build
 & "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" -s RZCY10WA89M install -r build\app\outputs\flutter-apk\app-debug.apk
 
 powershell -File tool/device_shots.ps1       # four tabs + settings -> docs/shots/device-*.png
+flutter test test_visual/render_screens_test.dart  # every screen, real fonts, light+dark -> docs/shots/render-*.png (no phone needed)
 python tool/export_inbox.py <db> inbox.json  # raw messages out of a pulled DB
 dart run tool/replay_inbox.dart inbox.json   # re-parse offline, print the metrics
 python tool/measure_inbox.py <db>            # P1/P2 checks against a stored DB
