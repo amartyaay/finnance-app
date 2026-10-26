@@ -47,7 +47,10 @@ class ThemeViewModel extends ChangeNotifier {
 
   bool get isInitialized => _isInitialized;
 
-  ThemeMode get themeMode {
+  /// Aurora Glass is a dark design: always dark, whatever was saved before.
+  ThemeMode get themeMode => ThemeMode.dark;
+
+  ThemeMode get preferredMode {
     switch (_preference) {
       case AppThemePreference.system:
         return ThemeMode.system;

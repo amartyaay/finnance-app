@@ -80,7 +80,11 @@ class _InsightsScreenState extends State<InsightsScreen> {
       // days" on the evening of the 25th. Count calendar days here so Home,
       // Cards and Insights all give the same countdown (one implementation,
       // owned by `InsightTile`).
-      final insights = withCalendarDueDates(data.insights, data.cards);
+      final insights = withCalendarDueDates(
+        data.insights,
+        data.cards,
+        now: viewNow(context),
+      );
       final attention = insights
           .where(
             (insight) =>
@@ -191,8 +195,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                 child: Column(
                   children: [
                     for (var i = 0; i < data.recurring.length; i++) ...[
-                      if (i > 0)
-                        Divider(height: 1, color: p.outlineVariant),
+                      if (i > 0) Divider(height: 1, color: p.outlineVariant),
                       RecurringRow(series: data.recurring[i]),
                     ],
                   ],
@@ -220,8 +223,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                 child: Column(
                   children: [
                     for (var i = 0; i < categories.length; i++) ...[
-                      if (i > 0)
-                        Divider(height: 1, color: p.outlineVariant),
+                      if (i > 0) Divider(height: 1, color: p.outlineVariant),
                       CategoryBreakdownRow(total: categories[i], index: i),
                     ],
                   ],
@@ -303,10 +305,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                   style: T.bodySmall.copyWith(color: p.inkMuted),
                 ),
                 const SizedBox(height: T.s3),
-                Text(
-                  alert.preview,
-                  style: T.body.copyWith(color: p.ink),
-                ),
+                Text(alert.preview, style: T.body.copyWith(color: p.ink)),
                 const SizedBox(height: T.s4),
                 Text(
                   'Why we flagged it',
@@ -332,7 +331,8 @@ class _InsightsScreenState extends State<InsightsScreen> {
   }
 }
 
-class _FraudCard extends StatelessWidget {  const _FraudCard({required this.alerts, required this.onOpen});
+class _FraudCard extends StatelessWidget {
+  const _FraudCard({required this.alerts, required this.onOpen});
 
   final List<PhishingAlert> alerts;
   final ValueChanged<PhishingAlert> onOpen;
@@ -344,9 +344,8 @@ class _FraudCard extends StatelessWidget {  const _FraudCard({required this.aler
     return Container(
       padding: const EdgeInsets.all(T.s4),
       decoration: BoxDecoration(
-        color: p.surface,
-        border: p.isDark ? Border.all(color: p.outlineVariant) : null,
-        boxShadow: p.isDark ? null : p.shadowSoft,
+        gradient: T.glassFill,
+        border: Border.all(color: T.glassEdge),
         borderRadius: BorderRadius.circular(T.r4),
       ),
       child: Column(
@@ -354,7 +353,11 @@ class _FraudCard extends StatelessWidget {  const _FraudCard({required this.aler
         children: [
           Row(
             children: [
-              IconDisc(icon: Icons.gpp_maybe_rounded, color: p.danger, size: 40),
+              IconDisc(
+                icon: Icons.gpp_maybe_rounded,
+                color: p.danger,
+                size: 40,
+              ),
               const SizedBox(width: T.s3),
               Expanded(
                 child: Column(
@@ -379,8 +382,7 @@ class _FraudCard extends StatelessWidget {  const _FraudCard({required this.aler
           ),
           const SizedBox(height: T.s2),
           for (var i = 0; i < shown.length; i++) ...[
-            if (i > 0)
-              Divider(height: 1, color: p.outlineVariant),
+            if (i > 0) Divider(height: 1, color: p.outlineVariant),
             Semantics(
               button: true,
               label:

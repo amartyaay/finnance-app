@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -42,12 +43,14 @@ class _AppCardState extends State<AppCard> {
   @override
   Widget build(BuildContext context) {
     final p = T.of(context);
-    final edge = widget.border && widget.color == null;
+    // Glass by default; an explicit colour keeps a solid tinted surface.
+    final glass = widget.color == null;
     final decoration = BoxDecoration(
-      color: widget.color ?? p.surface,
+      color: widget.color,
+      gradient: glass ? T.glassFill : null,
       borderRadius: BorderRadius.circular(widget.radius),
-      border: edge && p.isDark ? Border.all(color: p.outlineVariant) : null,
-      boxShadow: widget.shadow || (edge && !p.isDark) ? p.shadowSoft : null,
+      border: glass && widget.border ? Border.all(color: T.glassEdge) : null,
+      boxShadow: widget.shadow ? p.shadowSoft : null,
     );
     final padded = Padding(padding: widget.padding, child: widget.child);
 
@@ -96,15 +99,9 @@ class SoftSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = T.of(context);
     return Container(
       padding: padding,
-      decoration: BoxDecoration(
-        gradient: p.tintGradient,
-        borderRadius: BorderRadius.circular(radius),
-        border: p.isDark ? Border.all(color: p.outlineVariant) : null,
-        boxShadow: p.isDark ? null : p.shadowSoft,
-      ),
+      decoration: T.glass(radius: radius),
       child: child,
     );
   }
@@ -901,133 +898,85 @@ class HeroSurface extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final double radius;
 
-  /// Defaults to the palette's hero gradient.
+  /// Unused by the glass hero; kept so callers need not change.
   final Gradient? gradient;
 
   @override
   Widget build(BuildContext context) {
-    final p = T.of(context);
-    final shape = BorderRadius.circular(radius);
     return DecoratedBox(
-      decoration: BoxDecoration(borderRadius: shape, boxShadow: p.shadowCard),
-      child: ClipRRect(
-        borderRadius: shape,
-        child: DecoratedBox(
-          decoration: BoxDecoration(gradient: gradient ?? p.heroGradient),
-          child: CustomPaint(
-            painter: _BloomPainter(dark: p.isDark),
-            child: Padding(padding: padding, child: child),
-          ),
+      decoration: T.glass(radius: radius, strong: true),
+      child: Padding(padding: padding, child: child),
+    );
+  }
+}
+
+/// Text painted with the aurora gradient (headline money, the brand word).
+class GradientText extends StatelessWidget {
+  const GradientText({
+    super.key,
+    required this.child,
+    this.gradient = T.auroraGradient,
+  });
+
+  final Widget child;
+  final Gradient gradient;
+
+  @override
+  Widget build(BuildContext context) => ShaderMask(
+    blendMode: BlendMode.srcIn,
+    shaderCallback: (bounds) => gradient.createShader(bounds),
+    child: child,
+  );
+}
+
+/// The app-wide backdrop: deep navy with three soft aurora lights, blurred.
+/// Painted once under every route (MaterialApp.builder); every screen is
+/// transparent over it, so the light is continuous across navigation.
+class AuroraBackdrop extends StatelessWidget {
+  const AuroraBackdrop({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    Widget blob(Color c, double d, double alpha) => Container(
+      width: d,
+      height: d,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: c.withValues(alpha: alpha),
+      ),
+    );
+    return IgnorePointer(
+      child: RepaintBoundary(
+        child: Stack(
+          children: [
+            const Positioned.fill(child: ColoredBox(color: Color(0xFF060A14))),
+            Positioned(
+              top: -size.width * 0.35,
+              left: -size.width * 0.25,
+              child: blob(T.teal, size.width * 0.85, 0.34),
+            ),
+            Positioned(
+              top: size.height * 0.02,
+              right: -size.width * 0.4,
+              child: blob(T.violet, size.width * 0.9, 0.30),
+            ),
+            Positioned(
+              top: size.height * 0.55,
+              left: -size.width * 0.35,
+              child: blob(T.blue, size.width * 0.8, 0.22),
+            ),
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
+                child: const SizedBox.expand(),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
-}
-
-/// The page's ambient light: a soft violet glow from the top left and a
-/// cyan one from the top right, fading into the canvas. Painted once behind
-/// all four tabs by the shell.
-class AmbientBackdrop extends StatelessWidget {
-  const AmbientBackdrop({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = T.of(context);
-    return IgnorePointer(
-      child: RepaintBoundary(
-        child: CustomPaint(painter: _AmbientPainter(p.primary, dark: p.isDark)),
-      ),
-    );
-  }
-}
-
-class _AmbientPainter extends CustomPainter {
-  const _AmbientPainter(this.primary, {required this.dark});
-
-  final Color primary;
-  final bool dark;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    void glow(Offset centre, double radius, Color color) {
-      final rect = Rect.fromCircle(center: centre, radius: radius);
-      canvas.drawRect(
-        Offset.zero & size,
-        Paint()
-          ..shader = RadialGradient(
-            colors: [color, color.withValues(alpha: 0)],
-          ).createShader(rect),
-      );
-    }
-
-    final w = size.width;
-    glow(
-      Offset(w * 0.1, -w * 0.15),
-      w * 1.0,
-      primary.withValues(alpha: dark ? 0.22 : 0.10),
-    );
-    glow(
-      Offset(w * 1.05, w * 0.05),
-      w * 0.75,
-      T.mintGlow.withValues(alpha: dark ? 0.10 : 0.07),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_AmbientPainter oldDelegate) =>
-      oldDelegate.primary != primary || oldDelegate.dark != dark;
-}
-
-class _BloomPainter extends CustomPainter {
-  const _BloomPainter({required this.dark});
-
-  final bool dark;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    void bloom(Offset centre, double radius, Color color) {
-      final rect = Rect.fromCircle(center: centre, radius: radius);
-      canvas.drawCircle(
-        centre,
-        radius,
-        Paint()
-          ..shader = RadialGradient(
-            colors: [color, color.withValues(alpha: 0)],
-          ).createShader(rect),
-      );
-    }
-
-    final w = size.width;
-    final h = size.height;
-    // Magenta light from the top right, a cyan pool bottom left.
-    bloom(
-      Offset(w * 0.92, h * 0.02),
-      w * 0.62,
-      T.magentaGlow.withValues(alpha: dark ? 0.30 : 0.34),
-    );
-    bloom(
-      Offset(w * 0.05, h * 1.05),
-      w * 0.70,
-      T.mintGlow.withValues(alpha: dark ? 0.22 : 0.26),
-    );
-    // A faint diagonal sheen across the face.
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withValues(alpha: 0.07),
-            Colors.white.withValues(alpha: 0),
-          ],
-          stops: const [0, 0.6],
-        ).createShader(Offset.zero & size),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_BloomPainter oldDelegate) => oldDelegate.dark != dark;
 }
 
 /// A thin horizontal bar used in category and utilisation breakdowns.

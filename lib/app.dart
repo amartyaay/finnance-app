@@ -2,6 +2,7 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:provider/provider.dart';
 
 import 'app/design_tokens.dart';
@@ -89,6 +90,13 @@ class _FinanceAppState extends State<FinanceApp> {
           theme: buildAppTheme(),
           darkTheme: buildAppTheme(brightness: Brightness.dark),
           themeMode: theme.themeMode,
+          // The aurora is painted once, under every route.
+          builder: (context, child) => Stack(
+            children: [
+              const Positioned.fill(child: AuroraBackdrop()),
+              ?child,
+            ],
+          ),
           home: const AppShell(),
         ),
       ),
@@ -147,23 +155,23 @@ class _AppShellState extends State<AppShell> {
 
   static const _destinations = [
     NavigationDestination(
-      icon: Icon(Icons.home_outlined),
-      selectedIcon: Icon(Icons.home_rounded),
+      icon: Icon(PhosphorIconsRegular.house),
+      selectedIcon: Icon(PhosphorIconsFill.house),
       label: 'Home',
     ),
     NavigationDestination(
-      icon: Icon(Icons.receipt_long_outlined),
-      selectedIcon: Icon(Icons.receipt_long_rounded),
+      icon: Icon(PhosphorIconsRegular.listBullets),
+      selectedIcon: Icon(PhosphorIconsBold.listBullets),
       label: 'Activity',
     ),
     NavigationDestination(
-      icon: Icon(Icons.credit_card_outlined),
-      selectedIcon: Icon(Icons.credit_card_rounded),
+      icon: Icon(PhosphorIconsRegular.creditCard),
+      selectedIcon: Icon(PhosphorIconsFill.creditCard),
       label: 'Cards',
     ),
     NavigationDestination(
-      icon: Icon(Icons.insights_outlined),
-      selectedIcon: Icon(Icons.insights_rounded),
+      icon: Icon(PhosphorIconsRegular.sparkle),
+      selectedIcon: Icon(PhosphorIconsFill.sparkle),
       label: 'Insights',
     ),
   ];
@@ -193,9 +201,9 @@ class _AppShellState extends State<AppShell> {
     }
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          const Positioned.fill(child: AmbientBackdrop()),
           IndexedStack(
             index: _index,
             children: [
@@ -229,9 +237,9 @@ class _AppShellState extends State<AppShell> {
               filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: T.of(context).surface.withValues(alpha: 0.9),
+                  color: const Color(0xFF0F1626).withValues(alpha: 0.62),
                   borderRadius: BorderRadius.circular(T.r5),
-                  border: Border.all(color: T.of(context).outlineVariant),
+                  border: Border.all(color: T.glassEdge),
                 ),
                 child: NavigationBar(
                   selectedIndex: _index,

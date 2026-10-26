@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:provider/provider.dart';
 
 import '../../app/design_tokens.dart';
 import '../../domain/enums.dart';
 import '../../domain/transaction.dart';
+import '../../state/app_state.dart';
 
 /// One colour and icon per spend category, so a category looks the same on
 /// Activity, Cards and Insights without each screen re-picking a hue. Keyed by
@@ -18,41 +21,41 @@ Color categoryColor(BuildContext context, SpendCategoryKind kind) {
 /// (light theme, dark theme) — the dark variants are lifted for contrast on
 /// near-black surfaces.
 const Map<SpendCategoryKind, (Color, Color)> _categoryHues = {
-  SpendCategoryKind.food: (Color(0xFFE0712C), Color(0xFFF59A5F)),
-  SpendCategoryKind.groceries: (Color(0xFF2E9A55), Color(0xFF63CF8A)),
-  SpendCategoryKind.transport: (Color(0xFF2F74C8), Color(0xFF6FA7EE)),
-  SpendCategoryKind.shopping: (Color(0xFFD0457A), Color(0xFFF07EA9)),
-  SpendCategoryKind.bills: (Color(0xFF5B57D6), Color(0xFF9592F2)),
-  SpendCategoryKind.rent: (Color(0xFF9A6A3F), Color(0xFFD1A47A)),
-  SpendCategoryKind.entertainment: (Color(0xFF8E4FD0), Color(0xFFBE8DF0)),
-  SpendCategoryKind.health: (Color(0xFFD64545), Color(0xFFF08080)),
-  SpendCategoryKind.education: (Color(0xFF1E8C8C), Color(0xFF5CC6C6)),
-  SpendCategoryKind.travel: (Color(0xFF1C93B8), Color(0xFF63C7E6)),
-  SpendCategoryKind.fuel: (Color(0xFFC28A12), Color(0xFFE8B84E)),
-  SpendCategoryKind.investments: (Color(0xFF0E7C60), Color(0xFF5FD3AC)),
-  SpendCategoryKind.transfers: (Color(0xFF5F6E7A), Color(0xFF9AAAB7)),
-  SpendCategoryKind.income: (Color(0xFF16754A), Color(0xFF62D6A3)),
-  SpendCategoryKind.cash: (Color(0xFF6E7B3A), Color(0xFFB4C26E)),
-  SpendCategoryKind.other: (Color(0xFF7A7F87), Color(0xFFA9AEB6)),
+  SpendCategoryKind.food: (Color(0xFFE0712C), Color(0xFFFB923C)),
+  SpendCategoryKind.groceries: (Color(0xFF2E9A55), Color(0xFF34D399)),
+  SpendCategoryKind.transport: (Color(0xFF2F74C8), Color(0xFF60A5FA)),
+  SpendCategoryKind.shopping: (Color(0xFFD0457A), Color(0xFF2DD4BF)),
+  SpendCategoryKind.bills: (Color(0xFF5B57D6), Color(0xFFA78BFA)),
+  SpendCategoryKind.rent: (Color(0xFF9A6A3F), Color(0xFF818CF8)),
+  SpendCategoryKind.entertainment: (Color(0xFF8E4FD0), Color(0xFFF472B6)),
+  SpendCategoryKind.health: (Color(0xFFD64545), Color(0xFFFB7185)),
+  SpendCategoryKind.education: (Color(0xFF1E8C8C), Color(0xFF22D3EE)),
+  SpendCategoryKind.travel: (Color(0xFF1C93B8), Color(0xFFC084FC)),
+  SpendCategoryKind.fuel: (Color(0xFFC28A12), Color(0xFFFCD34D)),
+  SpendCategoryKind.investments: (Color(0xFF0E7C60), Color(0xFF4ADE80)),
+  SpendCategoryKind.transfers: (Color(0xFF5F6E7A), Color(0xFF94A3B8)),
+  SpendCategoryKind.income: (Color(0xFF16754A), Color(0xFF34D399)),
+  SpendCategoryKind.cash: (Color(0xFF6E7B3A), Color(0xFFA3E635)),
+  SpendCategoryKind.other: (Color(0xFF7A7F87), Color(0xFF94A3B8)),
 };
 
 IconData categoryIcon(SpendCategoryKind kind) => switch (kind) {
-  SpendCategoryKind.food => Icons.restaurant_rounded,
-  SpendCategoryKind.groceries => Icons.local_grocery_store_rounded,
-  SpendCategoryKind.transport => Icons.directions_bus_rounded,
-  SpendCategoryKind.shopping => Icons.shopping_bag_rounded,
-  SpendCategoryKind.bills => Icons.receipt_long_rounded,
-  SpendCategoryKind.rent => Icons.home_work_rounded,
-  SpendCategoryKind.entertainment => Icons.movie_rounded,
-  SpendCategoryKind.health => Icons.medical_services_rounded,
-  SpendCategoryKind.education => Icons.school_rounded,
-  SpendCategoryKind.travel => Icons.flight_takeoff_rounded,
-  SpendCategoryKind.fuel => Icons.local_gas_station_rounded,
-  SpendCategoryKind.investments => Icons.trending_up_rounded,
-  SpendCategoryKind.transfers => Icons.swap_horiz_rounded,
-  SpendCategoryKind.income => Icons.south_west_rounded,
-  SpendCategoryKind.cash => Icons.local_atm_rounded,
-  SpendCategoryKind.other => Icons.category_rounded,
+  SpendCategoryKind.food => PhosphorIconsFill.forkKnife,
+  SpendCategoryKind.groceries => PhosphorIconsFill.shoppingCart,
+  SpendCategoryKind.transport => PhosphorIconsFill.car,
+  SpendCategoryKind.shopping => PhosphorIconsFill.bag,
+  SpendCategoryKind.bills => PhosphorIconsFill.receipt,
+  SpendCategoryKind.rent => PhosphorIconsFill.house,
+  SpendCategoryKind.entertainment => PhosphorIconsFill.filmSlate,
+  SpendCategoryKind.health => PhosphorIconsFill.heartbeat,
+  SpendCategoryKind.education => PhosphorIconsFill.graduationCap,
+  SpendCategoryKind.travel => PhosphorIconsFill.airplaneTilt,
+  SpendCategoryKind.fuel => PhosphorIconsFill.gasPump,
+  SpendCategoryKind.investments => PhosphorIconsFill.trendUp,
+  SpendCategoryKind.transfers => PhosphorIconsFill.arrowsLeftRight,
+  SpendCategoryKind.income => PhosphorIconsFill.arrowDownLeft,
+  SpendCategoryKind.cash => PhosphorIconsFill.money,
+  SpendCategoryKind.other => PhosphorIconsFill.circlesFour,
 };
 
 String categoryKindLabel(SpendCategoryKind kind) => switch (kind) {
@@ -156,8 +159,7 @@ String monthYearLabel(DateTime date) =>
 
 String shortDate(DateTime date) => '${date.day} ${_months[date.month - 1]}';
 
-String shortDateWithYear(DateTime date) =>
-    '${shortDate(date)} ${date.year}';
+String shortDateWithYear(DateTime date) => '${shortDate(date)} ${date.year}';
 
 String clockTime(DateTime time) {
   final hour = time.hour % 12 == 0 ? 12 : time.hour % 12;
@@ -181,6 +183,17 @@ String daysUntilLabel(int days) {
   if (days == 0) return 'due today';
   if (days == 1) return 'due tomorrow';
   return 'in $days days';
+}
+
+/// The app's clock: [AppState.now] when one is in the tree (a fixed date in
+/// the demo and the renders), the wall clock otherwise. Views ask this instead
+/// of `DateTime.now()`, so a countdown and the month it sits in agree.
+DateTime viewNow(BuildContext context) {
+  try {
+    return Provider.of<AppState>(context, listen: false).now;
+  } on ProviderNotFoundException {
+    return DateTime.now();
+  }
 }
 
 /// Whole **calendar** days until [due].

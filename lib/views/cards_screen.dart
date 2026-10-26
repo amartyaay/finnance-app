@@ -274,7 +274,9 @@ class _BillRow extends StatelessWidget {
     final due = metrics.dueDate;
     final hasBill = metrics.totalDuePaise > 0;
     // Calendar days, not elapsed hours: a bill due tomorrow is never "today".
-    final days = hasBill && due != null ? daysUntilDate(due) : metrics.daysToDue;
+    final days = hasBill && due != null
+        ? daysUntilDate(due, now: viewNow(context))
+        : metrics.daysToDue;
     final tone = days != null && days < 0 && hasBill
         ? p.danger
         : metrics.dueSoon
@@ -324,10 +326,7 @@ class _BillRow extends StatelessWidget {
               const SizedBox(height: 1),
               Text(
                 hasBill ? 'total due' : 'this cycle',
-                style: T.bodySmall.copyWith(
-                  color: p.inkMuted,
-                  fontSize: 12,
-                ),
+                style: T.bodySmall.copyWith(color: p.inkMuted, fontSize: 12),
               ),
             ],
           ),

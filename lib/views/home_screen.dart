@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/semantics.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -13,17 +15,12 @@ import '../domain/money.dart';
 import '../domain/sms_inbox.dart';
 import '../domain/transaction.dart';
 import '../engine/card_metrics.dart';
-import '../engine/insights_engine.dart';
 import '../engine/monthly_summary.dart';
 import '../state/app_state.dart';
-import 'insight_actions.dart';
 import 'sms_inbox_screen.dart';
 import 'transactions_screen.dart';
 import '../state/statements_controller.dart';
 import 'statements_screen.dart';
-import 'widgets/card_face.dart';
-import 'widgets/charts.dart';
-import 'widgets/insight_tile.dart';
 import 'widgets/money_in_breakdown.dart';
 import 'widgets/txn_common.dart';
 import 'widgets/txn_detail_sheet.dart';
@@ -107,23 +104,10 @@ class HomeScreen extends StatelessWidget {
               // Round surface buttons: the header reads as part of the page
               // rather than as bare system icons.
               IconButton(
-                tooltip: 'Scan SMS',
-                style: _headerButton(context),
-                onPressed: state.isScanning ? null : state.scanInbox,
-                icon: state.isScanning
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.sync_rounded, size: 20),
-              ),
-              const SizedBox(width: T.s2),
-              IconButton(
                 tooltip: 'Settings',
                 style: _headerButton(context),
                 onPressed: onOpenSettings,
-                icon: const Icon(Icons.person_rounded, size: 20),
+                icon: const Icon(PhosphorIconsRegular.gearSix, size: 20),
               ),
               const SizedBox(width: T.s4),
             ],
@@ -140,50 +124,22 @@ class HomeScreen extends StatelessWidget {
                   const SizedBox(height: T.s3),
                   Entrance(
                     index: 1,
-                    child: _Attention(data: data, onNavigate: onNavigate),
+                    child: _AttentionRow(data: data, onNavigate: onNavigate),
                   ),
                 ],
-                const SizedBox(height: T.s4),
-                Entrance(index: 2, child: _PaceSection(summary: summary)),
                 if (summary.byCategory.isNotEmpty) ...[
-                  const SizedBox(height: T.s4),
+                  const SizedBox(height: T.s5),
                   Entrance(
-                    index: 3,
+                    index: 2,
                     child: _CategoryCard(
                       summary: summary,
                       onSeeAll: () => onNavigate?.call(3),
                     ),
                   ),
                 ],
-                if (data.cards.isNotEmpty) ...[
-                  const SizedBox(height: T.s5),
-                  Entrance(
-                    index: 4,
-                    child: _CardStrip(
-                      cards: data.cards,
-                      onOpen: () => onNavigate?.call(2),
-                    ),
-                  ),
-                ],
-                if (data.insights.isNotEmpty) ...[
-                  const SizedBox(height: T.s5),
-                  Entrance(
-                    index: 5,
-                    child: _InsightSection(
-                      // One countdown for the whole app: the calendar-day
-                      // rewrite and the "in 1 days" grammar fix live in
-                      // `InsightTile`, together with the chip and the tone.
-                      insights: withCalendarDueDates(data.insights, data.cards),
-                      transactions: data.transactions,
-                      onSeeAll: () => onNavigate?.call(3),
-                      onTab: onNavigate,
-                      onOpenActivity: onOpenActivity,
-                    ),
-                  ),
-                ],
                 const SizedBox(height: T.s5),
                 Entrance(
-                  index: 6,
+                  index: 3,
                   child: _RecentList(
                     transactions: data.transactions,
                     onSeeAll: () => onNavigate?.call(1),
@@ -205,10 +161,10 @@ class HomeScreen extends StatelessWidget {
   static ButtonStyle _headerButton(BuildContext context) {
     final p = T.of(context);
     return IconButton.styleFrom(
-      backgroundColor: p.surface,
+      backgroundColor: Colors.white.withValues(alpha: 0.06),
       foregroundColor: p.ink,
       fixedSize: const Size(44, 44),
-      side: BorderSide(color: p.outlineVariant),
+      side: const BorderSide(color: T.glassEdge),
     );
   }
 
@@ -334,10 +290,93 @@ class _HeroCard extends StatelessWidget {
       if (moneyIn.isNotEmpty) 'Money in, not income: ${moneyInLine(moneyIn)}',
     ].join('. ');
 
+    // Everything that used to crowd the hero, one tap away.
+    void showDetails() {
+      final lines = [
+        ?includedLine,
+        moneyInText,
+        provenance,
+      ].where((t) => t.trim().isNotEmpty).toList();
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (sheet) => SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(T.s5, 0, T.s5, T.s6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'How this is counted',
+                style: T.title.copyWith(color: p.ink),
+              ),
+              const SizedBox(height: T.s2),
+              Text(
+                'Spent is what you paid merchants this month. Card-bill '
+                'payments, money moved between your own accounts, investments '
+                'and refunds are kept out of it.',
+                style: T.body.copyWith(color: p.inkSecondary),
+              ),
+              const SizedBox(height: T.s3),
+              for (final line in lines)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: T.s2),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 7, right: T.s2),
+                        child: Container(
+                          width: 5,
+                          height: 5,
+                          decoration: const BoxDecoration(
+                            color: T.teal,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          line,
+                          style: T.bodySmall.copyWith(color: p.inkSecondary),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: T.s2),
+              if (otherTransfers > 0 && onOpenActivity != null)
+                _SheetLink(
+                  icon: PhosphorIconsRegular.arrowsLeftRight,
+                  text: '${money(Paise(otherTransfers))} transfers not counted',
+                  onTap: () {
+                    Navigator.pop(sheet);
+                    onOpenActivity!(const ActivityRequest(transfersOnly: true));
+                  },
+                ),
+              if (!hasIncome)
+                _SheetLink(
+                  icon: PhosphorIconsRegular.bank,
+                  text:
+                      statementLine ??
+                      'No salary in your SMS. Import an SBI statement to see '
+                          'each month salary to salary',
+                  onTap: () {
+                    Navigator.pop(sheet);
+                    StatementsScreen.open(context);
+                  },
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+
     // The hero is read as one sentence (children excluded, so no number is
     // read twice); its links stay reachable as custom actions, which TalkBack
     // lists under "Actions".
     final actions = <CustomSemanticsAction, VoidCallback>{
+      const CustomSemanticsAction(label: 'How this is counted'): showDetails,
       if (otherTransfers > 0 && onOpenActivity != null)
         const CustomSemanticsAction(
           label: 'Show the transfers not counted',
@@ -357,176 +396,115 @@ class _HeroCard extends StatelessWidget {
       label: spoken,
       excludeSemantics: true,
       customSemanticsActions: actions.isEmpty ? null : actions,
-      child: HeroSurface(
-        padding: const EdgeInsets.fromLTRB(T.s5, T.s5, T.s5, T.s4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: T.s2,
-              runSpacing: T.s2,
-              crossAxisAlignment: WrapCrossAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          HeroSurface(
+            padding: const EdgeInsets.fromLTRB(T.s5, T.s3, T.s2, T.s4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Spent this month',
-                  maxLines: 1,
-                  style: T.label.copyWith(
-                    color: p.heroMuted,
-                    letterSpacing: 0.4,
-                    fontSize: 12,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Spent this month',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: T.body.copyWith(
+                          color: p.heroMuted,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'How this is counted',
+                      onPressed: showDetails,
+                      icon: Icon(
+                        PhosphorIconsRegular.info,
+                        color: p.heroMuted,
+                        size: 20,
+                      ),
+                    ),
+                  ],
                 ),
-                if (showPace)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: T.s2,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.16),
-                      borderRadius: BorderRadius.circular(T.r5),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.speed_rounded,
-                          size: 14,
+                Padding(
+                  padding: const EdgeInsets.only(right: T.s3),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: GradientText(
+                      child: MoneyText(
+                        summary.spend,
+                        animate: true,
+                        style: T.heroNumber.copyWith(
+                          fontSize: 50,
                           color: Colors.white,
                         ),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            paceLabel,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: T.label.copyWith(
-                              color: Colors.white,
-                              letterSpacing: 0,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-              ],
-            ),
-            const SizedBox(height: T.s3),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: MoneyText(
-                summary.spend,
-                animate: true,
-                style: T.heroNumber.copyWith(fontSize: 46),
-              ),
-            ),
-            const SizedBox(height: T.s3),
-            Row(
-              children: [
-                Expanded(
-                  child: _MonthProgress(
-                    fraction: summary.daysInMonth == 0
-                        ? 0
-                        : summary.daysElapsed / summary.daysInMonth,
-                  ),
                 ),
-                const SizedBox(width: T.s3),
+                const SizedBox(height: T.s2),
                 Text(
-                  'Day ${summary.daysElapsed} of ${summary.daysInMonth}',
-                  maxLines: 1,
-                  style: T.bodySmall.copyWith(
-                    color: p.heroMuted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  showPace
+                      ? '$paceLabel · Day ${summary.daysElapsed} of ${summary.daysInMonth}'
+                      : 'Day ${summary.daysElapsed} of ${summary.daysInMonth}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: T.body.copyWith(color: p.heroMuted, fontSize: 13.5),
+                ),
+                const SizedBox(height: T.s4),
+                Padding(
+                  padding: const EdgeInsets.only(right: T.s3),
+                  child: _DailyBars(summary: summary),
                 ),
               ],
             ),
-            const SizedBox(height: T.s5),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
-                // Three money columns only fit side by side at body
-                // size. Once text grows, reflow to two columns so
-                // values are not elided into unreadable stubs.
-                final twoColumns = constraints.maxWidth < 260 || scale >= 1.2;
-                if (!twoColumns) {
-                  return Row(
-                    children: [
-                      for (var i = 0; i < stats.length; i++) ...[
-                        if (i > 0) const SizedBox(width: T.s2),
-                        Expanded(
-                          child: _HeroStat(
-                            label: stats[i].label,
-                            value: stats[i].value,
-                          ),
-                        ),
-                      ],
-                    ],
-                  );
-                }
-                final cellWidth = (constraints.maxWidth - T.s2) / 2;
-                return Wrap(
-                  spacing: T.s2,
-                  runSpacing: T.s2,
+          ),
+          const SizedBox(height: T.s3),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+              // Three tiles side by side at body size; two columns once the
+              // text grows, so values are never elided into stubs.
+              final twoColumns = constraints.maxWidth < 300 || scale >= 1.2;
+              const dots = [T.teal, T.blue, T.violet];
+              if (!twoColumns) {
+                return Row(
                   children: [
-                    for (final stat in stats)
-                      SizedBox(
-                        width: cellWidth,
-                        child: _HeroStat(label: stat.label, value: stat.value),
+                    for (var i = 0; i < stats.length; i++) ...[
+                      if (i > 0) const SizedBox(width: T.s2),
+                      Expanded(
+                        child: _HeroStat(
+                          label: stats[i].label,
+                          value: stats[i].value,
+                          dot: dots[i % dots.length],
+                        ),
                       ),
+                    ],
                   ],
                 );
-              },
-            ),
-            if (otherTransfers > 0 || !hasIncome) const SizedBox(height: T.s2),
-            if (otherTransfers > 0)
-              _HeroLink(
-                text: '${money(Paise(otherTransfers))} transfers not counted',
-                semanticsLabel:
-                    '${money(Paise(otherTransfers))} moved as transfers and not counted as spending. Show the transfers.',
-                onTap: onOpenActivity == null
-                    ? null
-                    : () => onOpenActivity!(
-                        const ActivityRequest(transfersOnly: true),
+              }
+              final cellWidth = (constraints.maxWidth - T.s2) / 2;
+              return Wrap(
+                spacing: T.s2,
+                runSpacing: T.s2,
+                children: [
+                  for (var i = 0; i < stats.length; i++)
+                    SizedBox(
+                      width: cellWidth,
+                      child: _HeroStat(
+                        label: stats[i].label,
+                        value: stats[i].value,
+                        dot: dots[i % dots.length],
                       ),
-              ),
-            if (!hasIncome)
-              // SBI rarely sends a salary SMS; its statement shows it.
-              _HeroLink(
-                icon: Icons.account_balance_rounded,
-                text:
-                    statementLine ??
-                    'No salary in your SMS. Import an SBI statement to see '
-                        'each month salary to salary',
-                semanticsLabel:
-                    statementLine ??
-                    'No salary was found in your messages. Import an SBI '
-                        'statement to see spending salary to salary.',
-                onTap: () => StatementsScreen.open(context),
-              ),
-            const SizedBox(height: T.s2),
-            Divider(color: Colors.white.withValues(alpha: 0.12), height: 1),
-            const SizedBox(height: T.s3),
-            // One footnote instead of three loose lines.
-            Text(
-              [
-                ?includedLine,
-                moneyInText,
-                provenance,
-              ].where((t) => t.trim().isNotEmpty).join(' · '),
-              maxLines: 4,
-              overflow: TextOverflow.ellipsis,
-              style: T.bodySmall.copyWith(
-                color: p.heroMuted,
-                fontSize: 11.5,
-                height: 1.45,
-              ),
-            ),
-          ],
-        ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -545,92 +523,33 @@ class _HeroCard extends StatelessWidget {
   }
 }
 
-/// A tappable line in the hero's receipt. It keeps a 48 dp target even though
-/// the type is small, because this is the door into the transfers ledger.
-class _HeroLink extends StatelessWidget {
-  const _HeroLink({
-    required this.text,
-    required this.semanticsLabel,
-    this.onTap,
-    this.icon = Icons.swap_horiz_rounded,
+class _HeroStat extends StatelessWidget {
+  const _HeroStat({
+    required this.label,
+    required this.value,
+    required this.dot,
   });
 
-  final IconData icon;
-  final String text;
-  final String semanticsLabel;
-  final VoidCallback? onTap;
+  final String label;
+  final String value;
+  final Color dot;
 
   @override
   Widget build(BuildContext context) {
     final p = T.of(context);
-    return Semantics(
-      button: onTap != null,
-      label: semanticsLabel,
-      excludeSemantics: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48),
-          child: Row(
-            children: [
-              Icon(icon, size: 15, color: p.heroMuted),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  text,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: T.bodySmall.copyWith(
-                    color: p.heroInk,
-                    fontSize: 12,
-                    height: 1.35,
-                    fontWeight: FontWeight.w600,
-                    decoration: TextDecoration.underline,
-                    decorationColor: p.heroMuted,
-                  ),
-                ),
-              ),
-              Icon(Icons.chevron_right_rounded, size: 16, color: p.heroMuted),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HeroStat extends StatelessWidget {
-  const _HeroStat({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    // A frosted tile: light glass over the hero gradient.
     return Container(
-      padding: const EdgeInsets.fromLTRB(T.s3, T.s2 + 2, T.s2, T.s2 + 2),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(T.r3),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-      ),
+      padding: const EdgeInsets.fromLTRB(T.s3, T.s3, T.s2, T.s3),
+      decoration: T.glass(radius: T.r4),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: T.label.copyWith(
-              color: T.of(context).heroMuted,
-              fontSize: 11.5,
-              letterSpacing: 0.1,
-            ),
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: T.s2),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
@@ -639,12 +558,19 @@ class _HeroStat extends StatelessWidget {
               maxLines: 1,
               softWrap: false,
               style: T.money.copyWith(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.3,
+                color: p.ink,
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.4,
               ),
             ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: T.bodySmall.copyWith(color: p.inkMuted, fontSize: 12),
           ),
         ],
       ),
@@ -652,37 +578,95 @@ class _HeroStat extends StatelessWidget {
   }
 }
 
-/// How far through the month we are: a slim mint line under the number.
-class _MonthProgress extends StatelessWidget {
-  const _MonthProgress({required this.fraction});
+/// A row in a sheet that leads somewhere: icon, text, chevron, 48 dp.
+class _SheetLink extends StatelessWidget {
+  const _SheetLink({
+    required this.icon,
+    required this.text,
+    required this.onTap,
+  });
 
-  final double fraction;
+  final IconData icon;
+  final String text;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final p = T.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(T.r3),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 52),
+        child: Row(
+          children: [
+            Icon(icon, color: T.teal, size: 20),
+            const SizedBox(width: T.s3),
+            Expanded(
+              child: Text(text, style: T.body.copyWith(color: p.ink)),
+            ),
+            Icon(PhosphorIconsRegular.caretRight, color: p.inkMuted, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The month in bars: one gradient column per day so far (a hairline for a
+/// day with no spend), faint stubs for the days still to come.
+class _DailyBars extends StatelessWidget {
+  const _DailyBars({required this.summary});
+
+  final MonthlySummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final daily = summary.dailySpend;
+    final peak = daily.isEmpty ? 0 : daily.reduce(math.max);
+    final top = peak <= 0 ? 1.0 : peak / 100.0;
+    final floor = top * 0.025;
     return ExcludeSemantics(
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(99),
-        child: SizedBox(
-          height: 4,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: ColoredBox(color: Colors.white.withValues(alpha: 0.14)),
-              ),
-              FractionallySizedBox(
-                widthFactor: fraction.clamp(0.0, 1.0),
-                child: const DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFFE0E7FF), T.mintGlow],
+      child: SizedBox(
+        height: 64,
+        child: BarChart(
+          BarChartData(
+            minY: 0,
+            maxY: top,
+            alignment: BarChartAlignment.spaceBetween,
+            gridData: const FlGridData(show: false),
+            titlesData: const FlTitlesData(show: false),
+            borderData: FlBorderData(show: false),
+            barTouchData: BarTouchData(enabled: false),
+            barGroups: [
+              for (var i = 0; i < summary.daysInMonth; i++)
+                BarChartGroupData(
+                  x: i,
+                  barRods: [
+                    BarChartRodData(
+                      toY: i < daily.length && daily[i] > 0
+                          ? math.max(daily[i] / 100.0, floor * 2)
+                          : floor,
+                      width: 5,
+                      borderRadius: BorderRadius.circular(3),
+                      gradient: i < daily.length && daily[i] > 0
+                          ? const LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                              colors: [T.teal, T.blue],
+                            )
+                          : null,
+                      color: i < daily.length && daily[i] > 0
+                          ? null
+                          : Colors.white.withValues(
+                              alpha: i < daily.length ? 0.18 : 0.07,
+                            ),
                     ),
-                  ),
-                  child: SizedBox.expand(),
+                  ],
                 ),
-              ),
             ],
           ),
+          duration: Duration.zero,
         ),
       ),
     );
@@ -842,7 +826,9 @@ class _AttentionState extends State<_Attention> {
           if (card.billDuePaise > 0) only = card;
         }
       }
-      final days = only?.dueDate == null ? null : daysUntilDate(only!.dueDate!);
+      final days = only?.dueDate == null
+          ? null
+          : daysUntilDate(only!.dueDate!, now: viewNow(context));
       final dueText = days == null ? 'unpaid' : billDuePhrase(days);
       final minimum = only?.minimumDue;
       widgets.add(
@@ -969,76 +955,6 @@ class _AttentionState extends State<_Attention> {
   }
 }
 
-class _PaceSection extends StatelessWidget {
-  const _PaceSection({required this.summary});
-
-  final MonthlySummary summary;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = T.of(context);
-    final dayCount = math
-        .max(summary.daysElapsed, summary.dailySpend.length)
-        .clamp(1, summary.daysInMonth);
-    final daily = List<int>.generate(
-      dayCount,
-      (i) => i < summary.dailySpend.length ? summary.dailySpend[i] : 0,
-    );
-    final previous = summary.previousSpend;
-
-    return SoftSection(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  "This month's pace",
-                  style: T.sectionTitle.copyWith(color: p.ink, fontSize: 16),
-                ),
-              ),
-              const SizedBox(width: T.s2),
-              Pill(
-                '${summary.daysElapsed} of ${summary.daysInMonth} days',
-                tone: PillTone.brand,
-                dense: true,
-              ),
-            ],
-          ),
-          const SizedBox(height: T.s3),
-          DailyBars(
-            values: daily,
-            month: summary.monthStart,
-            todayIndex: (summary.daysElapsed - 1).clamp(0, daily.length - 1),
-            height: 82,
-          ),
-          const SizedBox(height: T.s3),
-          Divider(height: 1, color: p.primary.withValues(alpha: 0.14)),
-          const SizedBox(height: T.s3),
-          PaceBars(
-            spend: summary.spend,
-            projected: summary.projectedSpend,
-            previous: previous,
-          ),
-          if (summary.daysElapsed < summary.daysInMonth) ...[
-            const SizedBox(height: T.s3),
-            Text(
-              'Projection assumes the rest of the month spends like the first '
-              '${summary.daysElapsed} days.',
-              style: T.bodySmall.copyWith(
-                color: p.inkMuted,
-                fontSize: 12,
-                height: 1.35,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _CategoryCard extends StatelessWidget {
   const _CategoryCard({required this.summary, this.onSeeAll});
 
@@ -1047,58 +963,120 @@ class _CategoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SectionHeader(
-            title: 'Where it went',
-            action: 'Insights',
-            onAction: onSeeAll,
-            padding: EdgeInsets.zero,
-          ),
-          const SizedBox(height: T.s2),
-          CategoryDonut(categories: summary.byCategory, total: summary.spend),
-        ],
-      ),
-    );
-  }
-}
-
-class _CardStrip extends StatelessWidget {
-  const _CardStrip({required this.cards, this.onOpen});
-
-  final List<CardMetrics> cards;
-  final VoidCallback? onOpen;
-
-  @override
-  Widget build(BuildContext context) {
+    final p = T.of(context);
+    final top = summary.byCategory.take(5).toList();
+    final peak = top.isEmpty ? 1 : top.map((c) => c.paise).reduce(math.max);
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SectionHeader(
-          title: 'Cards',
-          action: 'Manage',
-          onAction: onOpen,
-          padding: const EdgeInsets.only(bottom: T.s2, left: T.s1),
+          title: 'Where it went',
+          action: 'Insights',
+          onAction: onSeeAll,
+          padding: EdgeInsets.zero,
         ),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          clipBehavior: Clip.none,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        const SizedBox(height: T.s2),
+        Container(
+          padding: const EdgeInsets.fromLTRB(T.s4, T.s2, T.s4, T.s2),
+          decoration: T.glass(),
+          child: Column(
             children: [
-              for (var i = 0; i < cards.length; i++) ...[
-                if (i > 0) const SizedBox(width: T.s3),
-                SizedBox(
-                  width: cards.length == 1 ? null : 238,
-                  child: CardFace(
-                    metrics: cards[i],
-                    compact: true,
-                    onTap: onOpen,
+              for (final c in top)
+                Semantics(
+                  label:
+                      '${c.name}, ${moneySpoken(Paise(c.paise))}, '
+                      '${(c.share * 100).round()} percent',
+                  excludeSemantics: true,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: T.s2),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: categoryColor(
+                              context,
+                              c.kind,
+                            ).withValues(alpha: 0.16),
+                            borderRadius: BorderRadius.circular(T.r3),
+                          ),
+                          child: Icon(
+                            categoryIcon(c.kind),
+                            size: 19,
+                            color: categoryColor(context, c.kind),
+                          ),
+                        ),
+                        const SizedBox(width: T.s3),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      c.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: T.body.copyWith(
+                                        color: p.ink,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: T.s2),
+                                  Text(
+                                    money(Paise(c.paise)),
+                                    style: T.money.copyWith(
+                                      color: p.ink,
+                                      fontSize: 14.5,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 7),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(3),
+                                child: Stack(
+                                  children: [
+                                    Container(
+                                      height: 5,
+                                      color: Colors.white.withValues(
+                                        alpha: 0.07,
+                                      ),
+                                    ),
+                                    FractionallySizedBox(
+                                      widthFactor: (c.paise / peak).clamp(
+                                        0.02,
+                                        1.0,
+                                      ),
+                                      child: Container(
+                                        height: 5,
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              categoryColor(context, c.kind),
+                                              categoryColor(
+                                                context,
+                                                c.kind,
+                                              ).withValues(alpha: 0.55),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ],
             ],
           ),
         ),
@@ -1107,57 +1085,117 @@ class _CardStrip extends StatelessWidget {
   }
 }
 
-/// "Worth knowing": the two highest-ranked insights, rendered with the **same**
-/// tile the Insights screen uses.
-///
-/// This replaces `_InsightPreview`, a second, degraded copy of `InsightTile` that
-/// dropped the chip, the tone border, the "in 1 days" grammar fix and the
-/// calendar-day bill countdown. That copy is exactly why the same phone could say
-/// "American Express bill due in 2 days" in the banner and "Bill due in 1 days"
-/// three sections below it.
-class _InsightSection extends StatelessWidget {
-  const _InsightSection({
-    required this.insights,
-    required this.transactions,
-    this.onSeeAll,
-    this.onTab,
-    this.onOpenActivity,
-  });
+/// Everything that needs the owner, folded into one glass row. Tapping it
+/// opens the full notices (fraud first, then bills, then the review queue).
+class _AttentionRow extends StatelessWidget {
+  const _AttentionRow({required this.data, this.onNavigate});
 
-  final List<Insight> insights;
-  final List<Txn> transactions;
-  final VoidCallback? onSeeAll;
-  final ValueChanged<int>? onTab;
-  final ValueChanged<ActivityRequest>? onOpenActivity;
+  final HomeData data;
+  final ValueChanged<int>? onNavigate;
 
   @override
   Widget build(BuildContext context) {
-    final state = context.read<AppState>();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(
-          title: 'Worth knowing',
-          action: 'All insights',
-          onAction: onSeeAll,
-          padding: const EdgeInsets.only(bottom: T.s3, left: T.s1),
-        ),
-        for (final insight in insights.take(2))
-          Padding(
-            padding: const EdgeInsets.only(bottom: T.s3),
-            child: InsightTile(
-              insight: insight,
-              onAction: insightActionHandler(
-                insight,
-                openActivity: onOpenActivity,
-                openTab: onTab,
-                transactions: transactions,
-                onRecurring: onTab == null ? null : () => onTab!(3),
-              ),
-              onDismiss: () => state.dismissInsight(insight.id),
+    final p = T.of(context);
+    final parts = <String>[
+      if (data.phishingAlerts.isNotEmpty)
+        data.phishingAlerts.length == 1
+            ? '1 possible fraud message'
+            : '${data.phishingAlerts.length} possible fraud messages',
+      if (data.unpaidBillCount > 0)
+        data.unpaidBillCount == 1
+            ? '1 card bill unpaid'
+            : '${data.unpaidBillCount} card bills unpaid',
+      if (data.needsReviewCount > 0) '${data.needsReviewCount} to confirm',
+    ];
+    final count =
+        (data.phishingAlerts.isNotEmpty ? 1 : 0) +
+        (data.unpaidBillCount > 0 ? 1 : 0) +
+        (data.needsReviewCount > 0 ? 1 : 0);
+    final fraud = data.phishingAlerts.isNotEmpty;
+    final accent = fraud
+        ? T.rose
+        : data.unpaidBillCount > 0
+        ? p.caution
+        : T.teal;
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(T.r4),
+        onTap: () => showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          builder: (sheet) => SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(T.s5, 0, T.s5, T.s5),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Needs you', style: T.title.copyWith(color: p.ink)),
+                const SizedBox(height: T.s4),
+                _Attention(
+                  data: data,
+                  onNavigate: (tab) {
+                    Navigator.pop(sheet);
+                    onNavigate?.call(tab);
+                  },
+                ),
+              ],
             ),
           ),
-      ],
+        ),
+        child: Ink(
+          padding: const EdgeInsets.fromLTRB(T.s4, T.s3, T.s3, T.s3),
+          decoration: T.glass(),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(T.r3),
+                ),
+                child: Icon(
+                  fraud
+                      ? PhosphorIconsFill.shieldWarning
+                      : PhosphorIconsFill.bellRinging,
+                  color: accent,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: T.s3),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      count == 1
+                          ? '1 thing needs you'
+                          : '$count things need you',
+                      style: T.body.copyWith(
+                        color: p.ink,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      parts.join(' · '),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: T.bodySmall.copyWith(color: p.inkMuted),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                PhosphorIconsRegular.caretRight,
+                color: p.inkMuted,
+                size: 18,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1176,30 +1214,32 @@ class _RecentList extends StatelessWidget {
     final recent = [...transactions]
       ..sort((a, b) => b.occurredAtMs.compareTo(a.occurredAtMs));
     final top = recent.take(5).toList(growable: false);
-    return AppCard(
-      padding: const EdgeInsets.fromLTRB(T.s2, T.s3, T.s2, T.s1),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: T.s2),
-            child: SectionHeader(
-              title: 'Recent',
-              action: 'See all',
-              onAction: onSeeAll,
-              padding: EdgeInsets.zero,
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionHeader(
+          title: 'Recent',
+          action: 'See all',
+          onAction: onSeeAll,
+          padding: EdgeInsets.zero,
+        ),
+        const SizedBox(height: T.s2),
+        AppCard(
+          padding: const EdgeInsets.symmetric(horizontal: T.s2, vertical: T.s1),
+          child: Column(
+            children: [
+              for (var i = 0; i < top.length; i++) ...[
+                TxnRow(
+                  txn: top[i],
+                  onTap: () => showTransactionDetail(context, top[i]),
+                ),
+                if (i != top.length - 1)
+                  Divider(height: 1, indent: 64, color: p.outlineVariant),
+              ],
+            ],
           ),
-          const SizedBox(height: T.s1),
-          for (var i = 0; i < top.length; i++) ...[
-            TxnRow(
-              txn: top[i],
-              onTap: () => showTransactionDetail(context, top[i]),
-            ),
-            if (i != top.length - 1)
-              Divider(height: 1, indent: 64, color: p.outlineVariant),
-          ],
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

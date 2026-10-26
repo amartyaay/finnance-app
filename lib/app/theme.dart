@@ -58,7 +58,8 @@ ThemeData buildAppTheme({Brightness brightness = Brightness.light}) {
     fontFamily: T.fontFamily,
     brightness: brightness,
     colorScheme: scheme,
-    scaffoldBackgroundColor: p.bg,
+    // Transparent: the aurora backdrop shows through every screen.
+    scaffoldBackgroundColor: Colors.transparent,
     canvasColor: p.bg,
     splashFactory: InkSparkle.splashFactory,
   );
@@ -193,9 +194,9 @@ ThemeData buildAppTheme({Brightness brightness = Brightness.light}) {
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: p.surface,
       surfaceTintColor: Colors.transparent,
-      indicatorColor: p.primarySoft,
+      indicatorColor: T.teal.withValues(alpha: 0.16),
       indicatorShape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(T.r2),
+        borderRadius: BorderRadius.circular(T.r5),
       ),
       elevation: 0,
       height: 72,

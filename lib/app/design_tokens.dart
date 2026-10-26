@@ -102,136 +102,79 @@ class FinanceColors {
   Color strongTint(Color strong) =>
       strong.withValues(alpha: isDark ? 0.26 : 0.16);
 
-  static const light = FinanceColors(
-    brightness: Brightness.light,
-    bg: Color(0xFFF5F5FA),
-    surface: Color(0xFFFFFFFF),
-    surfaceMuted: Color(0xFFEFEFF6),
-    surfaceSunken: Color(0xFFE7E7F0),
-    ink: Color(0xFF0E0E18),
-    inkSecondary: Color(0xFF4B4B63),
-    inkMuted: Color(0xFF666680),
-    inkOnPrimary: Color(0xFFFFFFFF),
-    heroInk: Color(0xFFFFFFFF),
-    heroMuted: Color(0xFFDCD6FF),
-    primary: Color(0xFF5B45F0),
-    primaryPressed: Color(0xFF4A35D6),
-    primarySoft: Color(0xFFECE9FF),
-    accent: Color(0xFF0891B2),
-    accentSoft: Color(0xFFDDF4F9),
-    positive: Color(0xFF047857),
-    positiveSoft: Color(0xFFDDF5EC),
-    caution: Color(0xFFB45309),
-    cautionSoft: Color(0xFFFEF0D9),
-    danger: Color(0xFFE11D48),
-    dangerSoft: Color(0xFFFDE4EA),
-    info: Color(0xFF2563EB),
-    infoSoft: Color(0xFFE3ECFE),
-    outline: Color(0xFFDCDCE8),
-    outlineVariant: Color(0xFFEAEAF2),
-    chart: [
-      Color(0xFF5B45F0),
-      Color(0xFF0891B2),
-      Color(0xFFE11D48),
-      Color(0xFFD97706),
-      Color(0xFF059669),
-      Color(0xFFDB2777),
-      Color(0xFF65A30D),
-      Color(0xFF64748B),
-    ],
-    ramp: [
-      Color(0xFF3B2BB0),
-      Color(0xFF4A35D6),
-      Color(0xFF5B45F0),
-      Color(0xFF7A68F5),
-      Color(0xFF9A8CF8),
-      Color(0xFFBDB3FB),
-      Color(0xFFDCD6FD),
-    ],
-    heroGradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [Color(0xFF6A4CFF), Color(0xFF4338CA), Color(0xFF1E3A8A)],
-      stops: [0.0, 0.55, 1.0],
-    ),
-    tintGradient: LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [Color(0xFFFFFFFF), Color(0xFFF4F3FF)],
-    ),
-    shadowSoft: [
-      BoxShadow(color: Color(0x0A12102E), blurRadius: 2, offset: Offset(0, 1)),
-      BoxShadow(color: Color(0x1412102E), blurRadius: 28, offset: Offset(0, 10)),
-    ],
-    shadowCard: [
-      BoxShadow(color: Color(0x1A3B2BB0), blurRadius: 6, offset: Offset(0, 3)),
-      BoxShadow(color: Color(0x404338CA), blurRadius: 44, offset: Offset(0, 20)),
-    ],
-  );
+  // Aurora Glass is a dark design: both entries are the same palette, so a
+  // light system setting can never produce a half-themed screen.
+  static const light = dark;
 
   static const dark = FinanceColors(
     brightness: Brightness.dark,
-    bg: Color(0xFF09090F),
-    surface: Color(0xFF13131C),
-    surfaceMuted: Color(0xFF191925),
-    surfaceSunken: Color(0xFF20202E),
-    ink: Color(0xFFF4F4FA),
-    inkSecondary: Color(0xFFB4B4C8),
-    inkMuted: Color(0xFF8E8EA6),
-    inkOnPrimary: Color(0xFF0B0820),
+    bg: Color(0xFF060A14),
+    surface: Color(0xFF0F1626),
+    surfaceMuted: Color(0xFF151D30),
+    surfaceSunken: Color(0xFF1B2438),
+    ink: Color(0xFFF2F6FF),
+    inkSecondary: Color(0xFFB8C2DA),
+    inkMuted: Color(0xFF8C98B5),
+    inkOnPrimary: Color(0xFF04211E),
     heroInk: Color(0xFFFFFFFF),
-    heroMuted: Color(0xFFD3CCFF),
-    primary: Color(0xFF8B7CFF),
-    primaryPressed: Color(0xFFA79BFF),
-    primarySoft: Color(0xFF231F4A),
-    accent: Color(0xFF4CC9F0),
-    accentSoft: Color(0xFF0F2E3A),
+    heroMuted: Color(0xFFB8C2DA),
+    primary: Color(0xFF2DD4BF),
+    primaryPressed: Color(0xFF5EEAD4),
+    primarySoft: Color(0xFF0F3330),
+    accent: Color(0xFF60A5FA),
+    accentSoft: Color(0xFF11264A),
     positive: Color(0xFF34D399),
-    positiveSoft: Color(0xFF0E2E24),
-    caution: Color(0xFFFBBF24),
-    cautionSoft: Color(0xFF33280C),
+    positiveSoft: Color(0xFF0E2E26),
+    caution: Color(0xFFFCD34D),
+    cautionSoft: Color(0xFF33290F),
     danger: Color(0xFFFB7185),
-    dangerSoft: Color(0xFF3A1520),
+    dangerSoft: Color(0xFF3A1424),
     info: Color(0xFF60A5FA),
-    infoSoft: Color(0xFF132544),
-    outline: Color(0xFF2A2A3D),
-    outlineVariant: Color(0xFF20202F),
+    infoSoft: Color(0xFF11264A),
+    outline: Color(0xFF263048),
+    outlineVariant: Color(0xFF1C2539),
     chart: [
-      Color(0xFF8B7CFF),
-      Color(0xFF4CC9F0),
+      Color(0xFF2DD4BF),
+      Color(0xFF60A5FA),
+      Color(0xFFA78BFA),
       Color(0xFFFB7185),
-      Color(0xFFFBBF24),
+      Color(0xFFFCD34D),
       Color(0xFF34D399),
-      Color(0xFFF472B6),
-      Color(0xFFA3E635),
+      Color(0xFF38BDF8),
       Color(0xFF94A3B8),
     ],
     ramp: [
-      Color(0xFFC4B5FD),
-      Color(0xFFA78BFA),
-      Color(0xFF8B7CFF),
-      Color(0xFF7C6CF0),
-      Color(0xFF6D5DE0),
-      Color(0xFF5B4BC8),
-      Color(0xFF4A3DA8),
+      Color(0xFF99F6E4),
+      Color(0xFF5EEAD4),
+      Color(0xFF2DD4BF),
+      Color(0xFF14B8A6),
+      Color(0xFF0D9488),
+      Color(0xFF0F766E),
+      Color(0xFF115E59),
     ],
     heroGradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [Color(0xFF6A4CFF), Color(0xFF4338CA), Color(0xFF1E3A8A)],
-      stops: [0.0, 0.55, 1.0],
+      begin: Alignment.centerLeft,
+      end: Alignment.centerRight,
+      colors: [Color(0xFF2DD4BF), Color(0xFF60A5FA), Color(0xFFA78BFA)],
     ),
     tintGradient: LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [Color(0xFF16161F), Color(0xFF12121A)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [Color(0x17FFFFFF), Color(0x0AFFFFFF)],
     ),
     shadowSoft: [
-      BoxShadow(color: Color(0x66000000), blurRadius: 24, offset: Offset(0, 10)),
+      BoxShadow(
+        color: Color(0x33000000),
+        blurRadius: 24,
+        offset: Offset(0, 10),
+      ),
     ],
     shadowCard: [
-      BoxShadow(color: Color(0x554338CA), blurRadius: 48, offset: Offset(0, 18)),
-      BoxShadow(color: Color(0x80000000), blurRadius: 20, offset: Offset(0, 10)),
+      BoxShadow(
+        color: Color(0x4D000000),
+        blurRadius: 40,
+        offset: Offset(0, 18),
+      ),
     ],
   );
 }
@@ -318,6 +261,42 @@ class T {
     Color(0xFF65A30D),
     Color(0xFF64748B),
   ];
+
+  // ---- Aurora Glass -------------------------------------------------------
+  static const teal = Color(0xFF2DD4BF);
+  static const blue = Color(0xFF60A5FA);
+  static const violet = Color(0xFFA78BFA);
+  static const rose = Color(0xFFFB7185);
+
+  /// Teal -> blue -> violet: headline numbers and the brand mark.
+  static const auroraGradient = LinearGradient(colors: [teal, blue, violet]);
+
+  /// A glass pane: faint white fill with a brighter top-left, hairline edge.
+  /// No live blur per card — the backdrop is already blurred, so blurring it
+  /// again looks identical and costs frames in long lists.
+  static const glassFill = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0x17FFFFFF), Color(0x09FFFFFF)],
+  );
+  static const glassEdge = Color(0x1FFFFFFF);
+
+  static BoxDecoration glass({double radius = r4, bool strong = false}) =>
+      BoxDecoration(
+        gradient: strong
+            ? const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0x262DD4BF),
+                  Color(0x1460A5FA),
+                  Color(0x22A78BFA),
+                ],
+              )
+            : glassFill,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: strong ? const Color(0x2EFFFFFF) : glassEdge),
+      );
 
   // ---- Spacing scale (4pt) -----------------------------------------------
   /// The app's typeface: Inter 4.1, bundled under assets/fonts.
@@ -472,34 +451,41 @@ class T {
     mutedInk: _faceMuted,
   );
 
-  static final CardFaceStyle _hdfcFace = _face(
-    const [Color(0xFF243B8F), Color(0xFF15215A), Color(0xFF0A0F2C)],
-    const Color(0xFF93B4FF),
-  );
-  static final CardFaceStyle _iciciFace = _face(
-    const [Color(0xFF7A2638), Color(0xFF4A1522), Color(0xFF220A10)],
-    const Color(0xFFFFA3B8),
-  );
-  static final CardFaceStyle _amexFace = _face(
-    const [Color(0xFF5A606C), Color(0xFF30343D), Color(0xFF15171C)],
-    const Color(0xFFE5E7EB),
-  );
-  static final CardFaceStyle _sbiFace = _face(
-    const [Color(0xFF1366B3), Color(0xFF0B3F75), Color(0xFF071E3A)],
-    const Color(0xFF7DD3FC),
-  );
-  static final CardFaceStyle _axisFace = _face(
-    const [Color(0xFF8A2350), Color(0xFF52142F), Color(0xFF250915)],
-    const Color(0xFFF9A8D4),
-  );
-  static final CardFaceStyle _kotakFace = _face(
-    const [Color(0xFF9B2C2C), Color(0xFF5C1717), Color(0xFF2A0A0A)],
-    const Color(0xFFFCA5A5),
-  );
-  static final CardFaceStyle _defaultFace = _face(
-    const [Color(0xFF4C3BC4), Color(0xFF2A2170), Color(0xFF120E30)],
-    const Color(0xFFC4B5FD),
-  );
+  static final CardFaceStyle _hdfcFace = _face(const [
+    Color(0xFF243B8F),
+    Color(0xFF15215A),
+    Color(0xFF0A0F2C),
+  ], const Color(0xFF93B4FF));
+  static final CardFaceStyle _iciciFace = _face(const [
+    Color(0xFF7A2638),
+    Color(0xFF4A1522),
+    Color(0xFF220A10),
+  ], const Color(0xFFFFA3B8));
+  static final CardFaceStyle _amexFace = _face(const [
+    Color(0xFF5A606C),
+    Color(0xFF30343D),
+    Color(0xFF15171C),
+  ], const Color(0xFFE5E7EB));
+  static final CardFaceStyle _sbiFace = _face(const [
+    Color(0xFF1366B3),
+    Color(0xFF0B3F75),
+    Color(0xFF071E3A),
+  ], const Color(0xFF7DD3FC));
+  static final CardFaceStyle _axisFace = _face(const [
+    Color(0xFF8A2350),
+    Color(0xFF52142F),
+    Color(0xFF250915),
+  ], const Color(0xFFF9A8D4));
+  static final CardFaceStyle _kotakFace = _face(const [
+    Color(0xFF9B2C2C),
+    Color(0xFF5C1717),
+    Color(0xFF2A0A0A),
+  ], const Color(0xFFFCA5A5));
+  static final CardFaceStyle _defaultFace = _face(const [
+    Color(0xFF4C3BC4),
+    Color(0xFF2A2170),
+    Color(0xFF120E30),
+  ], const Color(0xFFC4B5FD));
 
   /// Tonal identity per issuer. Unknown issuers get the house violet.
   static CardFaceStyle faceFor(String issuer) {

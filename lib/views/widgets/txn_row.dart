@@ -60,7 +60,11 @@ class TxnRow extends StatelessWidget {
     final semantics = [
       txn.title,
       details,
-      '${prefix == '+' ? 'plus ' : prefix == '−' ? 'minus ' : ''}${money(txn.amount)}',
+      '${prefix == '+'
+          ? 'plus '
+          : prefix == '−'
+          ? 'minus '
+          : ''}${money(txn.amount)}',
       if (merged) 'Merged duplicate',
       if (!merged && txn.needsReview) 'Needs review',
     ].join('. ');
@@ -120,10 +124,7 @@ class TxnRow extends StatelessWidget {
                         style: T.money.copyWith(fontSize: 14),
                         color: amountColor,
                       ),
-                      if (pill != null) ...[
-                        const SizedBox(height: T.s1),
-                        pill,
-                      ],
+                      if (pill != null) ...[const SizedBox(height: T.s1), pill],
                     ],
                   ),
                 ],
@@ -165,7 +166,7 @@ class TxnDayHeader extends StatelessWidget {
         children: [
           Expanded(
             child: Text(
-              dayHeading(day, DateTime.now()),
+              dayHeading(day, viewNow(context)),
               style: T.cardTitle.copyWith(
                 color: p.ink,
                 fontWeight: FontWeight.w700,

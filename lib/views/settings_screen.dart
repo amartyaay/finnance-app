@@ -5,7 +5,6 @@ import '../app/design_tokens.dart';
 import '../app/widgets/kit.dart';
 import '../domain/merchant_rule.dart';
 import '../state/app_state.dart';
-import '../viewmodels/theme_view_model.dart';
 import 'sms_inbox_screen.dart';
 import '../state/statements_controller.dart';
 import 'statements_screen.dart';
@@ -24,11 +23,7 @@ class SettingsScreen extends StatelessWidget {
     final state = context.watch<AppState>();
     final p = T.of(context);
     final data = state.data;
-    final themeController = _themeController(context);
-    final chevron = Icon(
-      Icons.chevron_right_rounded,
-      color: p.inkMuted,
-    );
+    final chevron = Icon(Icons.chevron_right_rounded, color: p.inkMuted);
 
     return Scaffold(
       appBar: AppBar(
@@ -109,7 +104,8 @@ class SettingsScreen extends StatelessWidget {
                 SettingsTile(
                   icon: Icons.account_balance_rounded,
                   title: 'Salary & statements',
-                  subtitle: 'Import an SBI statement PDF; see each month salary to salary.',
+                  subtitle:
+                      'Import an SBI statement PDF; see each month salary to salary.',
                   trailing: chevron,
                   onTap: () => StatementsScreen.open(context),
                 ),
@@ -137,7 +133,8 @@ class SettingsScreen extends StatelessWidget {
                 SettingsTile(
                   icon: Icons.delete_rounded,
                   title: 'Clear all data',
-                  subtitle: 'Removes parsed alerts, statements and card settings',
+                  subtitle:
+                      'Removes parsed alerts, statements and card settings',
                   danger: true,
                   trailing: chevron,
                   onTap: () => _confirmClear(context),
@@ -197,55 +194,6 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ],
             ),
-            // The shell owns theming. If a redesign swaps that controller out,
-            // settings loses the control instead of crashing the screen.
-            if (themeController != null) ...[
-              const SizedBox(height: T.s5),
-              const SectionHeader(
-                title: 'Appearance',
-                padding: EdgeInsets.only(bottom: T.s2, left: T.s1),
-              ),
-              AppCard(
-                padding: const EdgeInsets.all(T.s4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Theme',
-                      style: T.cardTitle.copyWith(color: p.ink),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'System follows your phone. Light and dark are both '
-                      'designed for this app.',
-                      style: T.bodySmall.copyWith(color: p.inkMuted),
-                    ),
-                    const SizedBox(height: T.s3),
-                    SegmentedButton<AppThemePreference>(
-                      segments: const [
-                        ButtonSegment<AppThemePreference>(
-                          value: AppThemePreference.system,
-                          label: Text('System'),
-                        ),
-                        ButtonSegment<AppThemePreference>(
-                          value: AppThemePreference.light,
-                          label: Text('Light'),
-                        ),
-                        ButtonSegment<AppThemePreference>(
-                          value: AppThemePreference.dark,
-                          label: Text('Dark'),
-                        ),
-                      ],
-                      selected: {themeController.preference},
-                      showSelectedIcon: false,
-                      expandedInsets: EdgeInsets.zero,
-                      onSelectionChanged: (selection) =>
-                          themeController.setPreference(selection.first),
-                    ),
-                  ],
-                ),
-              ),
-            ],
             const SizedBox(height: T.s5),
             const SectionHeader(
               title: 'About',
@@ -257,10 +205,7 @@ class SettingsScreen extends StatelessWidget {
                   icon: Icons.tag_rounded,
                   title: 'Version',
                   subtitle: 'Offline by design',
-                  trailing: Text(
-                    '1.0.0',
-                    style: T.body.copyWith(color: p.ink),
-                  ),
+                  trailing: Text('1.0.0', style: T.body.copyWith(color: p.ink)),
                 ),
                 SettingsTile(
                   icon: Icons.code_rounded,
@@ -320,20 +265,13 @@ class SettingsScreen extends StatelessWidget {
     if (!context.mounted) return;
     await context.read<StatementsController>().load();
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Local data cleared.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Local data cleared.')));
   }
 
   /// The shell may expose theming through [ThemeViewModel]. Reading it usually
   /// works, but a redesign that drops the provider should not break Settings.
-  ThemeViewModel? _themeController(BuildContext context) {
-    try {
-      return context.watch<ThemeViewModel>();
-    } on ProviderNotFoundException {
-      return null;
-    }
-  }
 }
 
 String _lastScanLabel(DateTime? lastScanAt) {
@@ -373,9 +311,7 @@ class _LearnedCategoriesState extends State<_LearnedCategories> {
       future: _rules,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const AppCard(
-            child: SkeletonBox(height: 52, radius: T.r2),
-          );
+          return const AppCard(child: SkeletonBox(height: 52, radius: T.r2));
         }
         final rules = snapshot.data ?? const <MerchantRule>[];
         if (rules.isEmpty) {
@@ -417,11 +353,7 @@ class _LearnedCategoriesState extends State<_LearnedCategories> {
                   children: [
                     for (var i = 0; i < shown.length; i++) ...[
                       if (i > 0)
-                        Divider(
-                          height: 1,
-                          indent: 64,
-                          color: p.outlineVariant,
-                        ),
+                        Divider(height: 1, indent: 64, color: p.outlineVariant),
                       _RuleRow(
                         rule: shown[i],
                         onForget: () => _forget(shown[i]),
@@ -436,10 +368,7 @@ class _LearnedCategoriesState extends State<_LearnedCategories> {
                 padding: const EdgeInsets.only(top: T.s2, left: T.s1),
                 child: Text(
                   '${rules.length - shown.length} more learned rules not shown',
-                  style: T.bodySmall.copyWith(
-                    color: p.inkMuted,
-                    fontSize: 12,
-                  ),
+                  style: T.bodySmall.copyWith(color: p.inkMuted, fontSize: 12),
                 ),
               ),
           ],
@@ -480,9 +409,9 @@ class _LearnedCategoriesState extends State<_LearnedCategories> {
     if (confirmed != true) return;
     await state.forgetMerchantRule(rule.signature);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Forgot the rule for $label.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Forgot the rule for $label.')));
   }
 }
 
@@ -549,4 +478,3 @@ String _merchantLabel(MerchantRule rule) {
   if (merchant != null && merchant.isNotEmpty) return merchant;
   return rule.signature;
 }
-

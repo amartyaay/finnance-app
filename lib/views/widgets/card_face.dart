@@ -43,7 +43,7 @@ class CardFace extends StatelessWidget {
     final due = metrics.dueDate;
     // Calendar days, not elapsed hours: a bill due tomorrow is never "today".
     final days = hasBill && due != null
-        ? daysUntilDate(due)
+        ? daysUntilDate(due, now: viewNow(context))
         : metrics.daysToDue;
     final height = cardFaceHeight(context, compact: compact);
 

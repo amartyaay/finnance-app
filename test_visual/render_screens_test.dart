@@ -80,6 +80,10 @@ Future<void> _loadFonts() async {
     inter.addFont(_bytes('assets/fonts/Inter-$w.ttf'));
   }
   await inter.load();
+  final pub = '${Platform.environment['LOCALAPPDATA']}/Pub/Cache/hosted/pub.dev/phosphor_flutter-2.1.0/lib/fonts';
+  for (final (style, file) in [('Regular', 'Phosphor'), ('Fill', 'Phosphor-Fill'), ('Bold', 'Phosphor-Bold'), ('Duotone', 'Phosphor-Duotone')]) {
+    await (FontLoader('packages/phosphor_flutter/Phosphor$style')..addFont(_bytes('$pub/$file.ttf'))).load();
+  }
   final root = Platform.environment['FLUTTER_ROOT']!;
   final icons = FontLoader('MaterialIcons')
     ..addFont(

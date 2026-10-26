@@ -67,10 +67,11 @@ String _tidyTitle(String title) {
 /// beside "Bill due in 1 days" on the same phone.
 List<Insight> withCalendarDueDates(
   List<Insight> insights,
-  List<CardMetrics> cards,
-) => [for (final insight in insights) _calendarDue(insight, cards)];
+  List<CardMetrics> cards, {
+  DateTime? now,
+}) => [for (final insight in insights) _calendarDue(insight, cards, now)];
 
-Insight _calendarDue(Insight insight, List<CardMetrics> cards) {
+Insight _calendarDue(Insight insight, List<CardMetrics> cards, DateTime? now) {
   if (!insight.id.startsWith('due:')) return insight;
   final key = insight.id.substring('due:'.length);
   for (final card in cards) {
@@ -79,7 +80,7 @@ Insight _calendarDue(Insight insight, List<CardMetrics> cards) {
     if (due == null) return insight;
     return Insight(
       id: insight.id,
-      title: 'Bill ${billDuePhrase(daysUntilDate(due))}',
+      title: 'Bill ${billDuePhrase(daysUntilDate(due, now: now))}',
       body: insight.body,
       tone: insight.tone,
       chip: insight.chip,
@@ -144,9 +145,8 @@ class InsightTile extends StatelessWidget {
       child: Container(
         // Flat surface, soft shadow: the tone lives in the icon disc.
         decoration: BoxDecoration(
-          color: p.surface,
-          border: p.isDark ? Border.all(color: p.outlineVariant) : null,
-          boxShadow: p.isDark ? null : p.shadowSoft,
+          gradient: T.glassFill,
+          border: Border.all(color: T.glassEdge),
           borderRadius: BorderRadius.circular(T.r4),
         ),
         padding: const EdgeInsets.all(T.s4),
@@ -202,10 +202,7 @@ class InsightTile extends StatelessWidget {
             const SizedBox(height: T.s1),
             Text(
               insight.body,
-              style: T.bodySmall.copyWith(
-                color: p.inkSecondary,
-                height: 1.42,
-              ),
+              style: T.bodySmall.copyWith(color: p.inkSecondary, height: 1.42),
             ),
             if (hasAction || onDismiss != null) ...[
               const SizedBox(height: T.s1),

@@ -1,9 +1,8 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app/design_tokens.dart';
+import '../app/widgets/kit.dart';
 import '../state/app_state.dart';
 
 /// First-run screen. Its only job: explain the deal in one screen, then get out
@@ -18,27 +17,10 @@ class OnboardingScreen extends StatelessWidget {
     final cream = T.inkOnPrimary;
 
     return Scaffold(
-      backgroundColor: T.brandDeep,
+      // The aurora is painted by the app shell behind every route.
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          const Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(gradient: T.onboardingGradient),
-            ),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: RepaintBoundary(
-                child: CustomPaint(
-                  painter: _OnboardingPatternPainter(
-                    ring: Colors.white.withValues(alpha: 0.055),
-                    dot: Colors.white.withValues(alpha: 0.16),
-                    glow: T.mintGlow.withValues(alpha: 0.12),
-                  ),
-                ),
-              ),
-            ),
-          ),
           SafeArea(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(T.s6, T.s5, T.s6, T.s6),
@@ -78,11 +60,21 @@ class OnboardingScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: T.s3),
                 Text(
-                  'Your money,\nkept honest.',
+                  'Your money,',
                   style: T.display.copyWith(
                     color: cream,
                     fontSize: 38,
-                    height: 1.03,
+                    height: 1.08,
+                  ),
+                ),
+                GradientText(
+                  child: Text(
+                    'kept honest.',
+                    style: T.display.copyWith(
+                      color: Colors.white,
+                      fontSize: 38,
+                      height: 1.08,
+                    ),
                   ),
                 ),
                 const SizedBox(height: T.s4),
@@ -120,8 +112,8 @@ class OnboardingScreen extends StatelessWidget {
                   child: FilledButton.icon(
                     onPressed: state.requestPermission,
                     style: FilledButton.styleFrom(
-                      backgroundColor: cream,
-                      foregroundColor: T.brandDeep,
+                      backgroundColor: T.teal,
+                      foregroundColor: const Color(0xFF04201C),
                       minimumSize: const Size(0, 54),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(T.r3),
@@ -213,70 +205,4 @@ class _ProofChip extends StatelessWidget {
       ),
     );
   }
-}
-
-class _OnboardingPatternPainter extends CustomPainter {
-  const _OnboardingPatternPainter({
-    required this.ring,
-    required this.dot,
-    required this.glow,
-  });
-
-  final Color ring;
-  final Color dot;
-  final Color glow;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width * 1.02, size.height * 0.12);
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..color = ring;
-    for (var i = 1; i <= 6; i++) {
-      canvas.drawCircle(center, size.width * 0.15 * i, paint);
-    }
-
-    final dotPaint = Paint()..color = dot;
-    for (var row = 0; row < 9; row++) {
-      for (var col = 0; col < 5; col++) {
-        final x = size.width * 0.06 + col * 18;
-        final y = size.height * 0.52 + row * 18;
-        if ((row + col) % 3 == 0) continue;
-        canvas.drawCircle(Offset(x, y), 1.2, dotPaint);
-      }
-    }
-
-    final glowPaint = Paint()
-      ..shader = RadialGradient(colors: [glow, glow.withValues(alpha: 0)])
-          .createShader(
-            Rect.fromCircle(
-              center: Offset(size.width * 0.15, size.height * 0.9),
-              radius: size.width * 0.8,
-            ),
-          );
-    canvas.drawRect(Offset.zero & size, glowPaint);
-
-    // A fine arc that echoes the card faces.
-    final arcPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4
-      ..color = ring;
-    canvas.drawArc(
-      Rect.fromCircle(
-        center: Offset(size.width * 0.9, size.height * 0.8),
-        radius: size.width * 0.32,
-      ),
-      math.pi * 0.9,
-      math.pi * 0.6,
-      false,
-      arcPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_OnboardingPatternPainter oldDelegate) =>
-      oldDelegate.ring != ring ||
-      oldDelegate.dot != dot ||
-      oldDelegate.glow != glow;
 }

@@ -51,10 +51,7 @@ class ActivityRequest {
 /// Activity: the month's ledger, grouped by day, with search and one-tap
 /// filtering. Amounts are never coloured red — spending is normal, not an error.
 class TransactionsScreen extends StatefulWidget {
-  const TransactionsScreen({
-    super.key,
-    this.request = const ActivityRequest(),
-  });
+  const TransactionsScreen({super.key, this.request = const ActivityRequest()});
 
   /// Applied on arrival and again when [AppShell] sends a new one.
   final ActivityRequest request;
@@ -136,7 +133,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       );
       final query = _search.text.trim().toLowerCase();
       final visible = monthTransactions.where((txn) {
-        if (_kindFilter != null && txn.categoryKind != _kindFilter) return false;
+        if (_kindFilter != null && txn.categoryKind != _kindFilter) {
+          return false;
+        }
         if (_transfersOnly && txn.kind != TxnKind.transfer) return false;
         if (_needsReviewOnly && !txn.needsReview) return false;
         if (query.isEmpty) return true;
@@ -214,10 +213,14 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   const SizedBox(height: 2),
                   FittedBox(
                     fit: BoxFit.scaleDown,
-                    child: MoneyText(
-                      summary.spend,
-                      animate: true,
-                      style: T.moneyLarge(p.ink).copyWith(fontSize: 30),
+                    child: GradientText(
+                      child: MoneyText(
+                        summary.spend,
+                        animate: true,
+                        style: T
+                            .moneyLarge(Colors.white)
+                            .copyWith(fontSize: 34),
+                      ),
                     ),
                   ),
                   const SizedBox(height: T.s3),
@@ -241,9 +244,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                         ),
                         Expanded(
                           child: _ActivityStat(
-                            label: summary.txnCount == 1
-                                ? 'Entry'
-                                : 'Entries',
+                            label: summary.txnCount == 1 ? 'Entry' : 'Entries',
                             value: '${summary.txnCount}',
                           ),
                         ),
@@ -367,11 +368,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 padding: const EdgeInsets.only(top: T.s7),
                 child: Column(
                   children: [
-                    Icon(
-                      Icons.search_off_rounded,
-                      size: 36,
-                      color: p.inkMuted,
-                    ),
+                    Icon(Icons.search_off_rounded, size: 36, color: p.inkMuted),
                     const SizedBox(height: T.s2),
                     Text(
                       monthTransactions.isEmpty
@@ -406,10 +403,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                             ),
                           TxnRow(
                             txn: entry.value[i],
-                            onTap: () => showTransactionDetail(
-                              context,
-                              entry.value[i],
-                            ),
+                            onTap: () =>
+                                showTransactionDetail(context, entry.value[i]),
                           ),
                         ],
                       ],
@@ -497,8 +492,7 @@ class _ActivityCaption extends StatelessWidget {
       if (summary.cashPaise > 0) '${money(Paise(summary.cashPaise))} cash',
     ];
     final lines = <String?>[
-      if (included.isNotEmpty)
-        '$periodLabel includes ${included.join(' · ')}',
+      if (included.isNotEmpty) '$periodLabel includes ${included.join(' · ')}',
       moneyIn.isEmpty
           ? (summary.hasTrueIncome
                 ? null

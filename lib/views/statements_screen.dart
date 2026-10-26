@@ -58,15 +58,19 @@ class _StatementsScreenState extends State<StatementsScreen> {
       String? error;
       while (preview == null) {
         try {
-          preview = await controller.preview(picked.path, picked.name, password: password);
+          preview = await controller.preview(
+            picked.path,
+            picked.name,
+            password: password,
+          );
         } on PdfNeedsPassword {
           error = null;
         } on PdfWrongPassword {
           error = 'That password did not open the file. Check the hints below.';
         } on PdfUnreadable {
-          messenger.showSnackBar(const SnackBar(
-            content: Text('This file is not a readable PDF.'),
-          ));
+          messenger.showSnackBar(
+            const SnackBar(content: Text('This file is not a readable PDF.')),
+          );
           return;
         }
         if (preview != null) break;
@@ -102,16 +106,18 @@ class _StatementsScreenState extends State<StatementsScreen> {
       final confirmed = await showStatementReviewSheet(context, preview);
       if (confirmed != true || !mounted) return;
       final result = await controller.commit(preview);
-      messenger.showSnackBar(SnackBar(
-        content: Text(
-          result.sameFile
-              ? 'This statement was already imported.'
-              : result.alreadyKnown > 0
-              ? '${result.added} new transactions added '
-                    '(${result.alreadyKnown} were already there).'
-              : '${result.added} transactions imported.',
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            result.sameFile
+                ? 'This statement was already imported.'
+                : result.alreadyKnown > 0
+                ? '${result.added} new transactions added '
+                      '(${result.alreadyKnown} were already there).'
+                : '${result.added} transactions imported.',
+          ),
         ),
-      ));
+      );
     } finally {
       await controller.discardPickedFiles();
       if (mounted) setState(() => _importing = false);
@@ -203,7 +209,8 @@ class _EmptyImport extends StatelessWidget {
         EmptyState(
           icon: Icons.account_balance_rounded,
           title: 'See every month, salary to salary',
-          body: 'Import an SBI account statement (PDF). We find your salary, then '
+          body:
+              'Import an SBI account statement (PDF). We find your salary, then '
               'show where the money went between one payday and the next. '
               'Statements catch what SMS miss: most SBI debits never send an alert.',
           actionLabel: 'Choose statement PDF',
@@ -214,7 +221,10 @@ class _EmptyImport extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Where to get it', style: T.cardTitle.copyWith(color: p.ink)),
+              Text(
+                'Where to get it',
+                style: T.cardTitle.copyWith(color: p.ink),
+              ),
               const SizedBox(height: T.s2),
               for (final line in const [
                 'YONO › Accounts › Statement › Download PDF',
@@ -228,7 +238,10 @@ class _EmptyImport extends StatelessWidget {
                     children: [
                       Text('•  ', style: T.body.copyWith(color: p.inkMuted)),
                       Expanded(
-                        child: Text(line, style: T.body.copyWith(color: p.inkSecondary)),
+                        child: Text(
+                          line,
+                          style: T.body.copyWith(color: p.inkSecondary),
+                        ),
                       ),
                     ],
                   ),
@@ -305,7 +318,9 @@ class _AccountHeader extends StatelessWidget {
                           ? 'All balances check out'
                           : '${a.verified} of ${a.rows} balances check out',
                       tone: allVerified ? PillTone.positive : PillTone.caution,
-                      icon: allVerified ? Icons.verified_rounded : Icons.error_outline_rounded,
+                      icon: allVerified
+                          ? Icons.verified_rounded
+                          : Icons.error_outline_rounded,
                       dense: true,
                     ),
                   ],
@@ -340,7 +355,10 @@ class _AccountHeader extends StatelessWidget {
               if (ok == true) await controller.deleteAccount(a.accountKey);
             },
             itemBuilder: (_) => const [
-              PopupMenuItem(value: 'delete', child: Text('Remove imported statements')),
+              PopupMenuItem(
+                value: 'delete',
+                child: Text('Remove imported statements'),
+              ),
             ],
           ),
         ],
@@ -361,7 +379,8 @@ class _SalaryCard extends StatelessWidget {
     if (!verdict.found) {
       return NoticeBanner(
         title: 'No salary found yet',
-        body: 'Open a cycle and tap a credit to mark it as your salary. '
+        body:
+            'Open a cycle and tap a credit to mark it as your salary. '
             'Cycles will then run from payday to payday.',
         icon: Icons.payments_rounded,
       );
@@ -386,9 +405,11 @@ class _SalaryCard extends StatelessWidget {
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: MoneyText(
-              Paise(verdict.typicalPaise),
-              style: T.heroNumber.copyWith(fontSize: 40),
+            child: GradientText(
+              child: MoneyText(
+                Paise(verdict.typicalPaise),
+                style: T.heroNumber.copyWith(fontSize: 40, color: Colors.white),
+              ),
             ),
           ),
           if (verdict.payer != null) ...[
@@ -397,7 +418,10 @@ class _SalaryCard extends StatelessWidget {
               'from ${verdict.payer}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: T.body.copyWith(color: p.heroInk, fontWeight: FontWeight.w600),
+              style: T.body.copyWith(
+                color: p.heroInk,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
           const SizedBox(height: T.s3),
@@ -463,7 +487,10 @@ class _PasswordSheetState extends State<_PasswordSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('This statement is locked', style: T.title.copyWith(color: p.ink)),
+            Text(
+              'This statement is locked',
+              style: T.title.copyWith(color: p.ink),
+            ),
             const SizedBox(height: T.s1),
             Text(
               widget.fileName,
@@ -488,7 +515,11 @@ class _PasswordSheetState extends State<_PasswordSheet> {
                 errorMaxLines: 2,
                 suffixIcon: IconButton(
                   tooltip: _obscure ? 'Show password' : 'Hide password',
-                  icon: Icon(_obscure ? Icons.visibility_rounded : Icons.visibility_off_rounded),
+                  icon: Icon(
+                    _obscure
+                        ? Icons.visibility_rounded
+                        : Icons.visibility_off_rounded,
+                  ),
                   onPressed: () => setState(() => _obscure = !_obscure),
                 ),
               ),
@@ -500,7 +531,9 @@ class _PasswordSheetState extends State<_PasswordSheet> {
             ),
             const SizedBox(height: T.s3),
             Theme(
-              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              data: Theme.of(
+                context,
+              ).copyWith(dividerColor: Colors.transparent),
               child: ExpansionTile(
                 tilePadding: EdgeInsets.zero,
                 childrenPadding: const EdgeInsets.only(bottom: T.s2),
@@ -511,10 +544,22 @@ class _PasswordSheetState extends State<_PasswordSheet> {
                 expandedCrossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   for (final (where, rule) in const [
-                    ('SBI e-statement email', 'Last 5 digits of your registered mobile + date of birth as DDMMYY. Example: 98765150890'),
-                    ('YONO download', 'Usually your date of birth as DDMMYYYY. Example: 15081990'),
-                    ('OnlineSBI download', 'Usually your account number (try without leading zeros too)'),
-                    ('Statement by SMS (ESTMT)', 'The 4-digit code you chose when you asked for it'),
+                    (
+                      'SBI e-statement email',
+                      'Last 5 digits of your registered mobile + date of birth as DDMMYY. Example: 98765150890',
+                    ),
+                    (
+                      'YONO download',
+                      'Usually your date of birth as DDMMYYYY. Example: 15081990',
+                    ),
+                    (
+                      'OnlineSBI download',
+                      'Usually your account number (try without leading zeros too)',
+                    ),
+                    (
+                      'Statement by SMS (ESTMT)',
+                      'The 4-digit code you chose when you asked for it',
+                    ),
                   ])
                     Padding(
                       padding: const EdgeInsets.only(bottom: T.s2),
@@ -522,7 +567,10 @@ class _PasswordSheetState extends State<_PasswordSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(where, style: T.label.copyWith(color: p.ink)),
-                          Text(rule, style: T.bodySmall.copyWith(color: p.inkSecondary)),
+                          Text(
+                            rule,
+                            style: T.bodySmall.copyWith(color: p.inkSecondary),
+                          ),
                         ],
                       ),
                     ),
@@ -559,7 +607,10 @@ class _PasswordSheetState extends State<_PasswordSheet> {
 }
 
 /// Shows what was read and asks to import. Returns true on "Import".
-Future<bool?> showStatementReviewSheet(BuildContext context, StatementPreview preview) {
+Future<bool?> showStatementReviewSheet(
+  BuildContext context,
+  StatementPreview preview,
+) {
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
@@ -586,7 +637,9 @@ class _ReviewSheet extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: T.s1),
       child: Row(
         children: [
-          Expanded(child: Text(label, style: T.body.copyWith(color: p.inkSecondary))),
+          Expanded(
+            child: Text(label, style: T.body.copyWith(color: p.inkSecondary)),
+          ),
           const SizedBox(width: T.s3),
           Flexible(
             child: Text(
@@ -620,7 +673,9 @@ class _ReviewSheet extends StatelessWidget {
                 ? 'Every row was checked against the running balance the bank printed.'
                 : "Some rows don't add up with the bank's running balance, usually a "
                       'page the PDF did not lay out cleanly. They are imported but marked.',
-            icon: allVerified ? Icons.verified_rounded : Icons.error_outline_rounded,
+            icon: allVerified
+                ? Icons.verified_rounded
+                : Icons.error_outline_rounded,
             tone: allVerified ? PillTone.positive : PillTone.caution,
           ),
           const SizedBox(height: T.s3),
@@ -639,7 +694,9 @@ class _ReviewSheet extends StatelessWidget {
                 : 'No salary found in this file. You can mark one after importing.',
             style: T.body.copyWith(color: p.inkSecondary),
           ),
-          for (final w in s.warnings.where((w) => !w.contains('did not reconcile'))) ...[
+          for (final w in s.warnings.where(
+            (w) => !w.contains('did not reconcile'),
+          )) ...[
             const SizedBox(height: T.s2),
             Text(w, style: T.bodySmall.copyWith(color: p.inkMuted)),
           ],
