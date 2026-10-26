@@ -69,6 +69,7 @@ flutter:
 
   assets:
     - assets/models/sms_lr.json
+    - assets/brand/
 
   # Inter 4.1 (SIL Open Font License, assets/fonts/Inter-LICENSE.txt):
   # bundled so the app looks the same on every phone and never fetches fonts.

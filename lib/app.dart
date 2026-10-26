@@ -84,7 +84,7 @@ class _FinanceAppState extends State<FinanceApp> {
       ],
       child: Consumer<ThemeViewModel>(
         builder: (context, theme, _) => MaterialApp(
-          title: 'Finance SMS',
+          title: 'Hisaab',
           debugShowCheckedModeBanner: false,
           theme: buildAppTheme(),
           darkTheme: buildAppTheme(brightness: Brightness.dark),

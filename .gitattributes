@@ -2,3 +2,4 @@
 *.png binary
 *.db binary
 assets/fonts/*.ttf binary
+android/app/src/main/res/**/*.png binary

@@ -45,25 +45,20 @@ class OnboardingScreen extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(T.r3),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.14),
-                        ),
-                      ),
-                      child: Icon(
-                        Icons.account_balance_wallet_rounded,
-                        color: cream,
-                        size: 22,
+                    // The app's own logo (tool/make_logo.py), not a stock icon.
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(T.r3),
+                      child: Image.asset(
+                        'assets/brand/logo.png',
+                        width: 44,
+                        height: 44,
+                        filterQuality: FilterQuality.medium,
+                        semanticLabel: 'Hisaab logo',
                       ),
                     ),
                     const SizedBox(width: T.s3),
                     Text(
-                      'Finance SMS',
+                      'Hisaab',
                       style: T.cardTitle.copyWith(
                         color: cream,
                         fontSize: 16,
@@ -83,7 +78,7 @@ class OnboardingScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: T.s3),
                 Text(
-                  'Your money,\nwithout the paperwork.',
+                  'Your money,\nkept honest.',
                   style: T.display.copyWith(
                     color: cream,
                     fontSize: 38,
@@ -92,7 +87,7 @@ class OnboardingScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: T.s4),
                 Text(
-                  'Finance SMS reads the bank and UPI alerts already on your '
+                  'Hisaab reads the bank and UPI alerts already on your '
                   'phone and turns them into a clear spending picture.',
                   style: T.body.copyWith(
                     color: cream.withValues(alpha: 0.80),

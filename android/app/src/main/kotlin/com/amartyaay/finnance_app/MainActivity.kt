@@ -218,7 +218,7 @@ class MainActivity : FlutterActivity() {
                 put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
                 put(
                     MediaStore.MediaColumns.RELATIVE_PATH,
-                    Environment.DIRECTORY_DOWNLOADS + "/Finance SMS"
+                    Environment.DIRECTORY_DOWNLOADS + "/Hisaab"
                 )
             }
             val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)

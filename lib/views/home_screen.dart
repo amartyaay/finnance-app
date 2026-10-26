@@ -1253,7 +1253,7 @@ class _EmptyHome extends StatelessWidget {
                   state.errorMessage ??
                   (state.hasSmsPermission
                       ? 'Your inbox has no bank alerts we could read. Tap scan after a payment, or explore the app with demo data.'
-                      : 'Allow SMS access so Finance SMS can read bank and UPI alerts, or look around with generated demo data first.'),
+                      : 'Allow SMS access so Hisaab can read bank and UPI alerts, or look around with generated demo data first.'),
               actionLabel: state.hasSmsPermission
                   ? 'Scan inbox'
                   : 'Allow SMS access',

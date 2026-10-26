@@ -1,4 +1,4 @@
-# Finance SMS
+# Hisaab
 
 **An offline spending companion for India, built on the transaction alerts already sitting in your SMS inbox.**
 
