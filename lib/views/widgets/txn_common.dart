@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../app/design_tokens.dart';
 import '../../domain/enums.dart';
 import '../../domain/transaction.dart';
+import '../../engine/monthly_summary.dart';
 import '../../state/app_state.dart';
 
 /// One colour and icon per spend category, so a category looks the same on
@@ -219,4 +220,135 @@ String billDuePhrase(int days) {
   if (days == 0) return 'due today';
   if (days == 1) return 'due tomorrow';
   return 'due in $days days';
+}
+
+const _monthsShort = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+/// "20 – 26 Oct", or "29 Sep – 5 Oct" across a month boundary.
+String weekRange(DateTime start) {
+  final end = DateTime(start.year, start.month, start.day + 6);
+  return start.month == end.month
+      ? '${start.day} – ${end.day} ${_monthsShort[end.month - 1]}'
+      : '${start.day} ${_monthsShort[start.month - 1]} – '
+            '${end.day} ${_monthsShort[end.month - 1]}';
+}
+
+/// The period's name as a title: "Today", "Yesterday", "Mon 20 Oct";
+/// "This week", "Last week", "6 – 12 Oct"; "October 2026".
+String periodTitle(SpendPeriod period, DateTime start, int offset) =>
+    switch (period) {
+      SpendPeriod.day =>
+        offset == 0
+            ? 'Today'
+            : offset == -1
+            ? 'Yesterday'
+            : '${_weekdays[start.weekday - 1]} ${start.day} '
+                  '${_monthsShort[start.month - 1]}',
+      SpendPeriod.week =>
+        offset == 0
+            ? 'This week'
+            : offset == -1
+            ? 'Last week'
+            : weekRange(start),
+      SpendPeriod.month => monthYearLabel(start),
+    };
+
+/// The line above the title: the dates the title stands for.
+String periodSubtitle(SpendPeriod period, DateTime start) => switch (period) {
+  SpendPeriod.day =>
+    '${start.day} ${_monthsShort[start.month - 1]} ${start.year}',
+  SpendPeriod.week => weekRange(start),
+  SpendPeriod.month => '${start.year}',
+};
+
+/// For sentences: "today", "this week", "on 24 Oct", "in 6 – 12 Oct".
+String periodPhrase(SpendPeriod period, DateTime start, int offset) =>
+    switch (period) {
+      SpendPeriod.day =>
+        offset == 0
+            ? 'today'
+            : offset == -1
+            ? 'yesterday'
+            : 'on ${start.day} ${_monthsShort[start.month - 1]}',
+      SpendPeriod.week =>
+        offset == 0
+            ? 'this week'
+            : offset == -1
+            ? 'last week'
+            : 'in ${weekRange(start)}',
+      SpendPeriod.month =>
+        offset == 0 ? 'this month' : 'in ${monthYearLabel(start)}',
+    };
+
+const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/// Day · Week · Month, as one glass track with a sliding teal pill.
+class PeriodTabs extends StatelessWidget {
+  const PeriodTabs({super.key, required this.value, required this.onChanged});
+
+  final SpendPeriod value;
+  final ValueChanged<SpendPeriod> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = T.of(context);
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.all(3),
+      decoration: T.glass(radius: T.r5),
+      child: Row(
+        children: [
+          for (final period in SpendPeriod.values)
+            Expanded(
+              child: Semantics(
+                button: true,
+                selected: period == value,
+                label: '${period.label} view',
+                excludeSemantics: true,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onChanged(period),
+                  child: AnimatedContainer(
+                    duration: T.fast,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: period == value
+                          ? T.teal.withValues(alpha: 0.18)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(T.r5),
+                      border: Border.all(
+                        color: period == value
+                            ? T.teal.withValues(alpha: 0.45)
+                            : Colors.transparent,
+                      ),
+                    ),
+                    child: Text(
+                      period.label,
+                      style: T.body.copyWith(
+                        color: period == value ? T.teal : p.inkSecondary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }

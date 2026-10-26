@@ -484,15 +484,19 @@ class _FaceGauge extends StatelessWidget {
                   ),
                 ),
               ),
-              Text(
-                percent == null ? '—' : '$percent%',
-                maxLines: 1,
-                style: T.money.copyWith(
-                  color: ink,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
+              // No limit known: a dash drawn as an icon.
+              if (percent == null)
+                Icon(Icons.remove_rounded, color: mutedInk, size: 20)
+              else
+                Text(
+                  '$percent%',
+                  maxLines: 1,
+                  style: T.money.copyWith(
+                    color: ink,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
             ],
           ),
         ),

@@ -9,6 +9,7 @@ import '../domain/inbox_store.dart';
 import '../domain/merchant_rule.dart';
 import '../domain/transaction.dart';
 import '../engine/card_metrics.dart';
+import '../engine/monthly_summary.dart';
 import '../services/sms_reader.dart';
 
 /// Single source of truth for the UI.
@@ -38,21 +39,39 @@ class AppState extends ChangeNotifier {
   String? _errorMessage;
   bool _hasSmsPermission = false;
   bool _demoMode = false;
-  int _monthOffset = 0;
+  SpendPeriod _period = SpendPeriod.month;
+  int _periodOffset = 0;
 
   HomeData get data => _data;
 
-  /// The month Home shows: 0 is this month, -1 last month, and so on back to
-  /// the oldest transaction.
-  int get monthOffset => _monthOffset;
+  /// Day, week or month: the span Home and Activity show.
+  SpendPeriod get period => _period;
 
-  /// How far back [monthOffset] may go.
-  int get monthsOfHistory => _data.monthsOfHistory(_now());
+  /// Which one: 0 is the current day/week/month, -1 the one before, and so
+  /// on back to the oldest transaction.
+  int get periodOffset => _periodOffset;
 
-  void setMonthOffset(int offset) {
-    final next = offset.clamp(-monthsOfHistory, 0);
-    if (next == _monthOffset) return;
-    _monthOffset = next;
+  /// How far back [periodOffset] may go for the current [period].
+  int get periodsOfHistory => _data.periodsOfHistory(_now(), _period);
+
+  /// First instant of the period on screen, and the first instant after it.
+  DateTime get periodStart => _period.start(_now(), _periodOffset);
+  DateTime get periodEnd => _period.end(periodStart);
+
+  /// Switching span keeps the moment in view: a past month becomes the
+  /// first week (or day) of that month, so the user does not jump to today.
+  void setPeriod(SpendPeriod next) {
+    if (next == _period) return;
+    final anchor = _periodOffset == 0 ? _now() : periodStart;
+    _period = next;
+    _periodOffset = -next.stepsBetween(anchor, _now());
+    notifyListeners();
+  }
+
+  void setPeriodOffset(int offset) {
+    final next = offset.clamp(-periodsOfHistory, 0);
+    if (next == _periodOffset) return;
+    _periodOffset = next;
     notifyListeners();
   }
 

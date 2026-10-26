@@ -84,7 +84,7 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: T.s5),
             const SectionHeader(
               title: 'Data',
-              padding: EdgeInsets.only(bottom: T.s2, left: T.s1),
+              padding: EdgeInsets.only(bottom: T.s2),
             ),
             SettingsCard(
               children: [
@@ -145,13 +145,13 @@ class SettingsScreen extends StatelessWidget {
             const SectionHeader(
               title: 'Learned categories',
               subtitle: 'Rules you taught by fixing a category',
-              padding: EdgeInsets.only(bottom: T.s2, left: T.s1),
+              padding: EdgeInsets.only(bottom: T.s2),
             ),
             const _LearnedCategories(),
             const SizedBox(height: T.s5),
             const SectionHeader(
               title: 'Demo',
-              padding: EdgeInsets.only(bottom: T.s2, left: T.s1),
+              padding: EdgeInsets.only(bottom: T.s2),
             ),
             SettingsCard(
               children: [
@@ -176,7 +176,7 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: T.s5),
             const SectionHeader(
               title: 'Privacy',
-              padding: EdgeInsets.only(bottom: T.s2, left: T.s1),
+              padding: EdgeInsets.only(bottom: T.s2),
             ),
             const SettingsCard(
               children: [
@@ -197,7 +197,7 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: T.s5),
             const SectionHeader(
               title: 'About',
-              padding: EdgeInsets.only(bottom: T.s2, left: T.s1),
+              padding: EdgeInsets.only(bottom: T.s2),
             ),
             SettingsCard(
               children: [
@@ -365,7 +365,7 @@ class _LearnedCategoriesState extends State<_LearnedCategories> {
             ),
             if (rules.length > shown.length)
               Padding(
-                padding: const EdgeInsets.only(top: T.s2, left: T.s1),
+                padding: const EdgeInsets.only(top: T.s2),
                 child: Text(
                   '${rules.length - shown.length} more learned rules not shown',
                   style: T.bodySmall.copyWith(color: p.inkMuted, fontSize: 12),

@@ -111,11 +111,11 @@ class _InsightsScreenState extends State<InsightsScreen> {
             const SizedBox(height: T.s5),
             const SectionHeader(
               title: 'Needs attention',
-              padding: EdgeInsets.only(bottom: T.s3, left: T.s1),
+              padding: EdgeInsets.only(bottom: T.s3),
             ),
             if (data.phishingAlerts.isEmpty && attention.isEmpty)
               Padding(
-                padding: const EdgeInsets.only(left: T.s1),
+                padding: EdgeInsets.zero,
                 child: Row(
                   children: [
                     Icon(
@@ -150,7 +150,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
               const SizedBox(height: T.s4),
               const SectionHeader(
                 title: 'Worth a look',
-                padding: EdgeInsets.only(bottom: T.s3, left: T.s1),
+                padding: EdgeInsets.only(bottom: T.s3),
               ),
               for (final insight in other)
                 Padding(
@@ -160,7 +160,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
             ],
             if (attention.isEmpty && other.isEmpty)
               Padding(
-                padding: const EdgeInsets.only(top: T.s2, left: T.s1),
+                padding: const EdgeInsets.only(top: T.s2),
                 child: Text(
                   'No insights yet — a few more messages will give this screen '
                   'something to work with.',
@@ -171,11 +171,11 @@ class _InsightsScreenState extends State<InsightsScreen> {
             SectionHeader(
               key: _recurringKey,
               title: 'Recurring payments',
-              padding: const EdgeInsets.only(bottom: T.s2, left: T.s1),
+              padding: const EdgeInsets.only(bottom: T.s2),
             ),
             if (data.recurring.isEmpty)
               Padding(
-                padding: const EdgeInsets.only(left: T.s1),
+                padding: EdgeInsets.zero,
                 child: Row(
                   children: [
                     Icon(Icons.autorenew_rounded, size: 18, color: p.inkMuted),
@@ -195,7 +195,12 @@ class _InsightsScreenState extends State<InsightsScreen> {
                 child: Column(
                   children: [
                     for (var i = 0; i < data.recurring.length; i++) ...[
-                      if (i > 0) Divider(height: 1, color: p.outlineVariant),
+                      if (i > 0)
+              Divider(
+                height: 1,
+                indent: 40 + T.s3,
+                color: p.outlineVariant,
+              ),
                       RecurringRow(series: data.recurring[i]),
                     ],
                   ],
@@ -207,11 +212,11 @@ class _InsightsScreenState extends State<InsightsScreen> {
               subtitle:
                   '${money(data.summary.spend)} across ${categories.length} '
                   '${categories.length == 1 ? 'category' : 'categories'}',
-              padding: const EdgeInsets.only(bottom: T.s2, left: T.s1),
+              padding: const EdgeInsets.only(bottom: T.s2),
             ),
             if (categories.isEmpty)
               Padding(
-                padding: const EdgeInsets.only(left: T.s1),
+                padding: EdgeInsets.zero,
                 child: Text(
                   'No spending recorded this month yet.',
                   style: T.bodySmall.copyWith(color: p.inkMuted),
@@ -399,12 +404,17 @@ class _FraudCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: T.s2),
                       child: Row(
                         children: [
-                          Icon(
-                            Icons.warning_amber_rounded,
-                            size: 16,
-                            color: p.danger,
+                          // Same column as the 40 dp disc above, so the
+                          // sender lines up with the card's title.
+                          SizedBox(
+                            width: 40,
+                            child: Icon(
+                              Icons.warning_amber_rounded,
+                              size: 16,
+                              color: p.danger,
+                            ),
                           ),
-                          const SizedBox(width: T.s2),
+                          const SizedBox(width: T.s3),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,

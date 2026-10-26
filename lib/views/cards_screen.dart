@@ -23,7 +23,7 @@ class CardsScreen extends StatefulWidget {
 }
 
 class _CardsScreenState extends State<CardsScreen> {
-  final PageController _pager = PageController(viewportFraction: 0.92);
+  final PageController _pager = PageController();
   int _page = 0;
 
   @override
@@ -134,7 +134,7 @@ class _CardsScreenState extends State<CardsScreen> {
                     SectionHeader(
                       title: 'Bills',
                       subtitle: 'The dates that decide when money moves',
-                      padding: const EdgeInsets.only(bottom: T.s2, left: T.s1),
+                      padding: const EdgeInsets.only(bottom: T.s2),
                     ),
                     AppCard(
                       padding: const EdgeInsets.symmetric(
@@ -156,7 +156,7 @@ class _CardsScreenState extends State<CardsScreen> {
                   SectionHeader(
                     title: 'Limits & dates',
                     subtitle: 'Only you can supply these two facts',
-                    padding: const EdgeInsets.only(bottom: T.s2, left: T.s1),
+                    padding: const EdgeInsets.only(bottom: T.s2),
                   ),
                   CardLimitsCard(cards: cards),
                   const SizedBox(height: T.s4),

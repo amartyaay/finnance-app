@@ -8,7 +8,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('no mojibake in lib/', () {
-    final bad = RegExp('[ÃÂ][\u0080-¿]|â€|Ã¢');
+    // Plus any C1 control character: a stray U+009D after an em dash drew a
+    // missing-glyph box in the card ring on the device.
+    final bad = RegExp('[ÃÂ][\u0080-¿]|â€|Ã¢|[\u0080-\u009f]');
     final offenders = <String>[];
     for (final file in Directory('lib').listSync(recursive: true).whereType<File>()) {
       if (!file.path.endsWith('.dart')) continue;

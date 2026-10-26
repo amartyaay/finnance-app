@@ -8,6 +8,10 @@ import '../../domain/money.dart';
 import '../../domain/transaction.dart';
 import 'txn_common.dart';
 
+/// Where a [TxnRow]'s text starts (padding + icon + gap): dividers between
+/// rows start here so they line up with the text, not the icon.
+const double txnRowTextInset = T.s4 + 40 + T.s3;
+
 /// One line in the Activity list. Dense on purpose: the list is for scanning,
 /// the bottom sheet is for reading.
 class TxnRow extends StatelessWidget {
@@ -81,7 +85,7 @@ class TxnRow extends StatelessWidget {
             constraints: const BoxConstraints(minHeight: 60),
             child: Padding(
               padding: const EdgeInsets.symmetric(
-                horizontal: T.s3,
+                horizontal: T.s4,
                 vertical: T.s2 + 2,
               ),
               child: Row(
@@ -161,7 +165,7 @@ class TxnDayHeader extends StatelessWidget {
         ? '+${money(inflow)}'
         : null;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(T.s2, T.s5, T.s2, T.s2),
+      padding: const EdgeInsets.fromLTRB(0, T.s5, 0, T.s2),
       child: Row(
         children: [
           Expanded(

@@ -91,16 +91,15 @@ class HomeData {
         needsReviewCount: _needsReviewCount,
       );
 
-  /// Months back from the current one to the oldest transaction (0 when all
-  /// data is from this month).
-  int monthsOfHistory(DateTime now) {
+  /// Periods back from the current one to the oldest transaction (0 when
+  /// all data is in the current period).
+  int periodsOfHistory(DateTime now, SpendPeriod period) {
     if (transactions.isEmpty) return 0;
     var oldest = transactions.first.occurredAt;
     for (final txn in transactions) {
       if (txn.occurredAt.isBefore(oldest)) oldest = txn.occurredAt;
     }
-    final months = (now.year - oldest.year) * 12 + now.month - oldest.month;
-    return months < 0 ? 0 : months;
+    return period.stepsBetween(oldest, now);
   }
 
   /// Money that actually left the accounts this month (spend + cash + card

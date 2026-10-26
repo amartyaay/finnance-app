@@ -193,6 +193,13 @@ Future<void> _render(
   await _shot(tester, 'months-$t');
   Navigator.of(tester.element(find.text('Month by month'))).pop();
   await tester.pumpAndSettle();
+  for (final view in ['Week', 'Day']) {
+    await tester.tap(find.text(view).first);
+    await tester.pumpAndSettle();
+    await _shot(tester, 'home-${view.toLowerCase()}-$t');
+  }
+  await tester.tap(find.text('Month').first);
+  await tester.pumpAndSettle();
   for (final tab in ['Activity', 'Cards', 'Insights']) {
     await _tab(tester, tab);
     await _shot(tester, '${tab.toLowerCase()}-$t');

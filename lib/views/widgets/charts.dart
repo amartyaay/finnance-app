@@ -381,7 +381,9 @@ class _DailyBarsState extends State<DailyBars>
     final maxDay = DateTime(
       widget.month.year,
       widget.month.month,
-      maxIndex + 1,
+      // [month] is the first bar's day: the 1st for a month, a Monday for a
+      // week.
+      widget.month.day + maxIndex,
     );
 
     final semantics =
@@ -431,7 +433,7 @@ class _DailyBarsState extends State<DailyBars>
                             DateTime(
                               widget.month.year,
                               widget.month.month,
-                              values.length,
+                              widget.month.day + values.length - 1,
                             ),
                           )
                         : 'Today · ${money(Paise(todayValue ?? 0))}',

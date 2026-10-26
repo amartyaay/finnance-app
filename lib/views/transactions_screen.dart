@@ -102,18 +102,25 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     final state = context.watch<AppState>();
     final p = T.of(context);
     final now = state.now;
-    // One month for the whole app: Home and Activity step through it together.
-    final monthOffset = state.monthOffset;
-    final monthStart = DateTime(now.year, now.month + monthOffset);
-    final monthEnd = DateTime(now.year, now.month + monthOffset + 1);
+    // One period for the whole app: Home and Activity step through the same
+    // day, week or month together.
+    final period = state.period;
+    final monthOffset = state.periodOffset;
+    final monthStart = state.periodStart;
+    final monthEnd = state.periodEnd;
     final transactions = state.data.transactions;
-    // One summary for the displayed month, so the header's "out", "income" and
-    // entry count are the *same* definitions Home prints.
-    final summary = const SummaryCalculator().forMonth(
+    // One summary for the displayed period, so the header's "out", "income"
+    // and entry count are the *same* definitions Home prints.
+    final summary = const SummaryCalculator().forPeriod(
       transactions,
       now,
-      monthOffset: monthOffset,
+      period,
+      offset: monthOffset,
     );
+    final when = periodPhrase(period, monthStart, monthOffset);
+    final outLabel = period == SpendPeriod.month && monthOffset != 0
+        ? 'Out in ${_monthName(monthStart)}'
+        : 'Out $when';
     final monthTransactions = transactions
         .where((txn) {
           final at = txn.occurredAt;
@@ -151,12 +158,12 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         groups.putIfAbsent(day, () => []).add(txn);
       }
 
-      final daysInMonth = monthEnd.difference(monthStart).inDays;
+      final daysInMonth = summary.daysInMonth;
       final daily = _dailySpend(
         monthTransactions,
+        monthStart,
         daysInMonth,
-        now,
-        monthOffset,
+        monthOffset == 0 ? summary.daysElapsed : daysInMonth,
       );
       final isCurrentMonth = monthOffset == 0;
 
@@ -166,6 +173,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(T.s5, T.s2, T.s5, 96),
           children: [
+            PeriodTabs(value: period, onChanged: state.setPeriod),
+            const SizedBox(height: T.s3),
             AppCard(
               shadow: true,
               padding: const EdgeInsets.fromLTRB(T.s2, T.s2, T.s2, T.s4),
@@ -174,16 +183,16 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   Row(
                     children: [
                       IconButton(
-                        tooltip: 'Previous month',
-                        onPressed: monthOffset > -state.monthsOfHistory
-                            ? () => state.setMonthOffset(monthOffset - 1)
+                        tooltip: 'Previous ${period.label.toLowerCase()}',
+                        onPressed: monthOffset > -state.periodsOfHistory
+                            ? () => state.setPeriodOffset(monthOffset - 1)
                             : null,
                         icon: const Icon(Icons.chevron_left_rounded),
                         color: p.inkSecondary,
                       ),
                       Expanded(
                         child: Text(
-                          monthYearLabel(monthStart),
+                          periodTitle(period, monthStart, monthOffset),
                           textAlign: TextAlign.center,
                           style: T.cardTitle.copyWith(
                             color: p.ink,
@@ -192,10 +201,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Next month',
+                        tooltip: 'Next ${period.label.toLowerCase()}',
                         onPressed: monthOffset >= 0
                             ? null
-                            : () => state.setMonthOffset(monthOffset + 1),
+                            : () => state.setPeriodOffset(monthOffset + 1),
                         icon: const Icon(Icons.chevron_right_rounded),
                         color: p.inkSecondary,
                       ),
@@ -229,9 +238,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       children: [
                         Expanded(
                           child: _ActivityStat(
-                            label: isCurrentMonth
-                                ? 'Out this month'
-                                : 'Out in ${_monthName(monthStart)}',
+                            label: outLabel,
                             value: money(summary.moneyOut),
                           ),
                         ),
@@ -252,9 +259,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   ),
                   const SizedBox(height: T.s3),
                   _ActivityCaption(
-                    periodLabel: isCurrentMonth
-                        ? 'Out this month'
-                        : 'Out in ${_monthName(monthStart)}',
+                    periodLabel: outLabel,
                     summary: summary,
                     moneyIn: moneyInGroups(
                       transactions,
@@ -262,18 +267,24 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       monthEnd: monthEnd,
                     ),
                   ),
-                  const SizedBox(height: T.s2),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: T.s3),
-                    child: DailyBars(
-                      values: daily,
-                      month: monthStart,
-                      todayIndex: isCurrentMonth
-                          ? (now.day - 1).clamp(0, daily.length - 1)
-                          : null,
-                      height: 62,
+                  // A single day has no day-by-day bars.
+                  if (period != SpendPeriod.day) ...[
+                    const SizedBox(height: T.s2),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: T.s3),
+                      child: DailyBars(
+                        values: daily,
+                        month: monthStart,
+                        todayIndex: isCurrentMonth
+                            ? (summary.daysElapsed - 1).clamp(
+                                0,
+                                daily.length - 1,
+                              )
+                            : null,
+                        height: 62,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -397,7 +408,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                           if (i > 0)
                             Divider(
                               height: 1,
-                              indent: 64,
+                              indent: txnRowTextInset,
+                              endIndent: T.s4,
                               color: p.outlineVariant,
                             ),
                           TxnRow(
@@ -620,17 +632,20 @@ Map<SpendCategoryKind, String> _categoriesInMonth(List<Txn> transactions) {
 
 List<int> _dailySpend(
   List<Txn> transactions,
-  int daysInMonth,
-  DateTime now,
-  int monthOffset,
+  DateTime start,
+  int days,
+  int elapsed,
 ) {
-  final length = monthOffset == 0
-      ? now.day.clamp(1, daysInMonth).toInt()
-      : daysInMonth;
+  final length = elapsed.clamp(1, days).toInt();
   final values = List<int>.filled(length, 0);
   for (final txn in transactions) {
     if (txn.kind != TxnKind.spend) continue;
-    final index = txn.occurredAt.day - 1;
+    final at = txn.occurredAt;
+    final index = DateTime.utc(
+      at.year,
+      at.month,
+      at.day,
+    ).difference(DateTime.utc(start.year, start.month, start.day)).inDays;
     if (index < 0 || index >= length) continue;
     values[index] += txn.amountPaise;
   }

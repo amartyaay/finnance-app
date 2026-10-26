@@ -149,7 +149,10 @@ class InsightTile extends StatelessWidget {
           border: Border.all(color: T.glassEdge),
           borderRadius: BorderRadius.circular(T.r4),
         ),
-        padding: const EdgeInsets.all(T.s4),
+        // The action row's 44 dp buttons carry their own air at the bottom.
+        padding: hasAction || onDismiss != null
+            ? const EdgeInsets.fromLTRB(T.s4, T.s4, T.s4, T.s1)
+            : const EdgeInsets.all(T.s4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -223,9 +226,10 @@ class InsightTile extends StatelessWidget {
                           style: TextButton.styleFrom(
                             foregroundColor: toneColor,
                             minimumSize: const Size(48, 44),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: T.s2,
-                            ),
+                            // Flush with the text above it.
+                            padding: EdgeInsets.zero,
+                            alignment: Alignment.centerLeft,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             textStyle: T.bodySmall.copyWith(
                               color: toneColor,
                               fontWeight: FontWeight.w700,
@@ -256,20 +260,25 @@ class InsightTile extends StatelessWidget {
                   else if (onDismiss != null)
                     const Spacer(),
                   if (onDismiss != null)
-                    IconButton(
-                      tooltip: 'Dismiss insight',
-                      onPressed: () {
-                        HapticFeedback.selectionClick();
-                        onDismiss!();
-                      },
-                      icon: Icon(
-                        Icons.close_rounded,
-                        size: 18,
-                        color: p.inkMuted,
-                      ),
-                      style: IconButton.styleFrom(
-                        minimumSize: const Size(48, 44),
-                        padding: EdgeInsets.zero,
+                    // The glyph's right edge lines up with the amount above;
+                    // the 48 dp target extends into the card's padding.
+                    Transform.translate(
+                      offset: const Offset(15, 0),
+                      child: IconButton(
+                        tooltip: 'Dismiss insight',
+                        onPressed: () {
+                          HapticFeedback.selectionClick();
+                          onDismiss!();
+                        },
+                        icon: Icon(
+                          Icons.close_rounded,
+                          size: 18,
+                          color: p.inkMuted,
+                        ),
+                        style: IconButton.styleFrom(
+                          minimumSize: const Size(48, 44),
+                          padding: EdgeInsets.zero,
+                        ),
                       ),
                     ),
                 ],

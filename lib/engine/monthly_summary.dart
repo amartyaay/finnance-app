@@ -2,6 +2,51 @@ import '../domain/enums.dart';
 import '../domain/money.dart';
 import '../domain/transaction.dart';
 
+/// The span a summary covers: Home and Activity switch between them.
+enum SpendPeriod {
+  day,
+  week,
+  month;
+
+  String get label => switch (this) {
+    day => 'Day',
+    week => 'Week',
+    month => 'Month',
+  };
+
+  /// Start of the period [offset] steps from the one containing [now].
+  /// Weeks run Monday to Sunday.
+  DateTime start(DateTime now, int offset) => switch (this) {
+    day => DateTime(now.year, now.month, now.day + offset),
+    week => DateTime(
+      now.year,
+      now.month,
+      now.day - (now.weekday - 1) + 7 * offset,
+    ),
+    month => DateTime(now.year, now.month + offset),
+  };
+
+  DateTime end(DateTime start) => switch (this) {
+    day => DateTime(start.year, start.month, start.day + 1),
+    week => DateTime(start.year, start.month, start.day + 7),
+    month => DateTime(start.year, start.month + 1),
+  };
+
+  /// Whole periods between the one holding [oldest] and the one holding [now].
+  int stepsBetween(DateTime oldest, DateTime now) {
+    final steps = switch (this) {
+      day => DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).difference(DateTime(oldest.year, oldest.month, oldest.day)).inDays,
+      week => start(now, 0).difference(start(oldest, 0)).inDays ~/ 7,
+      month => (now.year - oldest.year) * 12 + now.month - oldest.month,
+    };
+    return steps < 0 ? 0 : steps;
+  }
+}
+
 /// Everything the dashboard needs, computed once per data change.
 class MonthlySummary {
   const MonthlySummary({
@@ -21,7 +66,11 @@ class MonthlySummary {
     this.cashbackPaise = 0,
     this.cardBillPaymentPaise = 0,
     this.otherInflowPaise = 0,
+    this.period = SpendPeriod.month,
   });
+
+  /// Which span this is; [monthStart] is its first instant whatever the span.
+  final SpendPeriod period;
 
   final DateTime monthStart;
   final int spendPaise;
@@ -35,7 +84,8 @@ class MonthlySummary {
   final int txnCount;
   final List<CategoryTotal> byCategory;
 
-  /// One entry per day of the month so far (index 0 = day 1).
+  /// One bar per bucket so far: a day of the month or week (index 0 = the
+  /// first day), or an hour of a single day.
   final List<int> dailySpend;
 
   /// Linear projection to month-end, weighted by the days actually elapsed.
@@ -170,13 +220,23 @@ class SummaryCalculator {
     List<Txn> transactions,
     DateTime now, {
     int monthOffset = 0,
+  }) => forPeriod(transactions, now, SpendPeriod.month, offset: monthOffset);
+
+  /// A day (24 hourly bars), a Monday-to-Sunday week (7 bars) or a month (a
+  /// bar per day), [offset] periods from the one holding [now]; "previous"
+  /// is the period just before it.
+  MonthlySummary forPeriod(
+    List<Txn> transactions,
+    DateTime now,
+    SpendPeriod period, {
+    int offset = 0,
   }) {
-    final monthStart = DateTime(
-      now.year,
-      now.month + monthOffset,
-    );
-    final monthEnd = DateTime(now.year, now.month + monthOffset + 1);
-    final prevStart = DateTime(monthStart.year, monthStart.month - 1);
+    final monthStart = period.start(now, offset);
+    final monthEnd = period.end(monthStart);
+    final prevStart = period.start(now, offset - 1);
+    int bucketOf(DateTime at) => period == SpendPeriod.day
+        ? at.hour
+        : DateTime(at.year, at.month, at.day).difference(monthStart).inDays;
 
     var spend = 0;
     var income = 0;
@@ -216,7 +276,7 @@ class SummaryCalculator {
           );
           acc.paise += txn.amountPaise;
           acc.count++;
-          final dayIdx = at.day - 1;
+          final dayIdx = bucketOf(at);
           while (daily.length <= dayIdx) {
             daily.add(0);
           }
@@ -249,10 +309,26 @@ class SummaryCalculator {
       }
     }
 
-    final daysInMonth = monthEnd.difference(monthStart).inDays;
-    final daysElapsed = now.isAfter(monthEnd)
+    // Calendar days, so a DST-free count: a month is 28–31, a week 7, a day 1.
+    final daysInMonth =
+        DateTime.utc(monthEnd.year, monthEnd.month, monthEnd.day)
+            .difference(
+              DateTime.utc(monthStart.year, monthStart.month, monthStart.day),
+            )
+            .inDays;
+    final daysElapsed = !now.isBefore(monthEnd)
         ? daysInMonth
-        : (now.day).clamp(1, daysInMonth);
+        : (DateTime.utc(now.year, now.month, now.day)
+                      .difference(
+                        DateTime.utc(
+                          monthStart.year,
+                          monthStart.month,
+                          monthStart.day,
+                        ),
+                      )
+                      .inDays +
+                  1)
+              .clamp(1, daysInMonth);
     final projected = daysElapsed == 0
         ? 0
         : (spend / daysElapsed * daysInMonth).round();
@@ -271,19 +347,20 @@ class SummaryCalculator {
       );
     }
 
-    final categories = byKind.entries
-        .map(
-          (e) => CategoryTotal(
-            name: e.value.label,
-            kind: e.key,
-            paise: e.value.paise,
-            txnCount: e.value.count,
-            share: spend == 0 ? 0 : e.value.paise / spend,
-            previousPaise: prevByKind[e.key] ?? 0,
-          ),
-        )
-        .toList()
-      ..sort((a, b) => b.paise.compareTo(a.paise));
+    final categories =
+        byKind.entries
+            .map(
+              (e) => CategoryTotal(
+                name: e.value.label,
+                kind: e.key,
+                paise: e.value.paise,
+                txnCount: e.value.count,
+                share: spend == 0 ? 0 : e.value.paise / spend,
+                previousPaise: prevByKind[e.key] ?? 0,
+              ),
+            )
+            .toList()
+          ..sort((a, b) => b.paise.compareTo(a.paise));
 
     return MonthlySummary(
       monthStart: monthStart,
@@ -302,6 +379,7 @@ class SummaryCalculator {
       cashbackPaise: cashback,
       cardBillPaymentPaise: cardBills,
       otherInflowPaise: otherInflow,
+      period: period,
     );
   }
 }
