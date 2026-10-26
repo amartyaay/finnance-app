@@ -5,14 +5,36 @@ import '../../domain/enums.dart';
 import '../../domain/transaction.dart';
 
 /// One colour and icon per spend category, so a category looks the same on
-/// Activity, Cards and Insights without each screen re-picking a hue. This is a
-/// single-hue ramp keyed by kind (never by rank), so a category keeps its shade
-/// as the month reorders, and a red-green colour-blind reader still sees
-/// luminance steps. Every chart also prints names and amounts.
+/// Activity, Cards and Insights without each screen re-picking a hue. Keyed by
+/// kind (never by rank), so a category keeps its colour as the month reorders.
+/// Colour is never the only signal: every use pairs it with the category's
+/// icon and name, and every chart prints names and amounts.
 Color categoryColor(BuildContext context, SpendCategoryKind kind) {
-  final palette = T.of(context).ramp;
-  return palette[kind.index % palette.length];
+  final dark = T.of(context).isDark;
+  final (light, night) = _categoryHues[kind]!;
+  return dark ? night : light;
 }
+
+/// (light theme, dark theme) — the dark variants are lifted for contrast on
+/// near-black surfaces.
+const Map<SpendCategoryKind, (Color, Color)> _categoryHues = {
+  SpendCategoryKind.food: (Color(0xFFE0712C), Color(0xFFF59A5F)),
+  SpendCategoryKind.groceries: (Color(0xFF2E9A55), Color(0xFF63CF8A)),
+  SpendCategoryKind.transport: (Color(0xFF2F74C8), Color(0xFF6FA7EE)),
+  SpendCategoryKind.shopping: (Color(0xFFD0457A), Color(0xFFF07EA9)),
+  SpendCategoryKind.bills: (Color(0xFF5B57D6), Color(0xFF9592F2)),
+  SpendCategoryKind.rent: (Color(0xFF9A6A3F), Color(0xFFD1A47A)),
+  SpendCategoryKind.entertainment: (Color(0xFF8E4FD0), Color(0xFFBE8DF0)),
+  SpendCategoryKind.health: (Color(0xFFD64545), Color(0xFFF08080)),
+  SpendCategoryKind.education: (Color(0xFF1E8C8C), Color(0xFF5CC6C6)),
+  SpendCategoryKind.travel: (Color(0xFF1C93B8), Color(0xFF63C7E6)),
+  SpendCategoryKind.fuel: (Color(0xFFC28A12), Color(0xFFE8B84E)),
+  SpendCategoryKind.investments: (Color(0xFF0E7C60), Color(0xFF5FD3AC)),
+  SpendCategoryKind.transfers: (Color(0xFF5F6E7A), Color(0xFF9AAAB7)),
+  SpendCategoryKind.income: (Color(0xFF16754A), Color(0xFF62D6A3)),
+  SpendCategoryKind.cash: (Color(0xFF6E7B3A), Color(0xFFB4C26E)),
+  SpendCategoryKind.other: (Color(0xFF7A7F87), Color(0xFFA9AEB6)),
+};
 
 IconData categoryIcon(SpendCategoryKind kind) => switch (kind) {
   SpendCategoryKind.food => Icons.restaurant_rounded,

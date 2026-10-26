@@ -79,7 +79,7 @@ class HomeScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _greeting(),
+                  _greeting(context.read<AppState>().now),
                   style: T.bodySmall.copyWith(
                     color: T.of(context).inkMuted,
                     fontSize: 12,
@@ -104,13 +104,11 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-              IconButton(
-                tooltip: 'Settings',
-                onPressed: onOpenSettings,
-                icon: const Icon(Icons.account_circle_rounded),
-              ),
+              // Round surface buttons: the header reads as part of the page
+              // rather than as bare system icons.
               IconButton(
                 tooltip: 'Scan SMS',
+                style: _headerButton(context),
                 onPressed: state.isScanning ? null : state.scanInbox,
                 icon: state.isScanning
                     ? const SizedBox(
@@ -118,9 +116,16 @@ class HomeScreen extends StatelessWidget {
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.sync_rounded),
+                    : const Icon(Icons.sync_rounded, size: 20),
               ),
-              const SizedBox(width: T.s1),
+              const SizedBox(width: T.s2),
+              IconButton(
+                tooltip: 'Settings',
+                style: _headerButton(context),
+                onPressed: onOpenSettings,
+                icon: const Icon(Icons.person_rounded, size: 20),
+              ),
+              const SizedBox(width: T.s4),
             ],
           ),
           SliverPadding(
@@ -129,10 +134,7 @@ class HomeScreen extends StatelessWidget {
               children: [
                 Entrance(
                   index: 0,
-                  child: _HeroCard(
-                    data: data,
-                    onOpenActivity: onOpenActivity,
-                  ),
+                  child: _HeroCard(data: data, onOpenActivity: onOpenActivity),
                 ),
                 if (hasAttention) ...[
                   const SizedBox(height: T.s3),
@@ -142,10 +144,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: T.s4),
-                Entrance(
-                  index: 2,
-                  child: _PaceSection(summary: summary),
-                ),
+                Entrance(index: 2, child: _PaceSection(summary: summary)),
                 if (summary.byCategory.isNotEmpty) ...[
                   const SizedBox(height: T.s4),
                   Entrance(
@@ -174,10 +173,7 @@ class HomeScreen extends StatelessWidget {
                       // One countdown for the whole app: the calendar-day
                       // rewrite and the "in 1 days" grammar fix live in
                       // `InsightTile`, together with the chip and the tone.
-                      insights: withCalendarDueDates(
-                        data.insights,
-                        data.cards,
-                      ),
+                      insights: withCalendarDueDates(data.insights, data.cards),
                       transactions: data.transactions,
                       onSeeAll: () => onNavigate?.call(3),
                       onTab: onNavigate,
@@ -206,8 +202,18 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  static String _greeting() {
-    final hour = DateTime.now().hour;
+  static ButtonStyle _headerButton(BuildContext context) {
+    final p = T.of(context);
+    return IconButton.styleFrom(
+      backgroundColor: p.surface,
+      foregroundColor: p.ink,
+      fixedSize: const Size(44, 44),
+      side: BorderSide(color: p.outlineVariant),
+    );
+  }
+
+  static String _greeting(DateTime now) {
+    final hour = now.hour;
     if (hour < 5) return 'Late night';
     if (hour < 12) return 'Good morning';
     if (hour < 17) return 'Good afternoon';
@@ -333,14 +339,17 @@ class _HeroCard extends StatelessWidget {
     // lists under "Actions".
     final actions = <CustomSemanticsAction, VoidCallback>{
       if (otherTransfers > 0 && onOpenActivity != null)
-        const CustomSemanticsAction(label: 'Show the transfers not counted'):
-            () => onOpenActivity!(const ActivityRequest(transfersOnly: true)),
+        const CustomSemanticsAction(
+          label: 'Show the transfers not counted',
+        ): () =>
+            onOpenActivity!(const ActivityRequest(transfersOnly: true)),
       if (!hasIncome)
         CustomSemanticsAction(
           label: statementLine == null
               ? 'Import an SBI statement to find your salary'
               : 'Open salary to salary',
-        ): () => StatementsScreen.open(context),
+        ): () =>
+            StatementsScreen.open(context),
     };
 
     return Semantics(
@@ -348,212 +357,180 @@ class _HeroCard extends StatelessWidget {
       label: spoken,
       excludeSemantics: true,
       customSemanticsActions: actions.isEmpty ? null : actions,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: p.heroGradient,
-          borderRadius: BorderRadius.circular(T.r4),
-          boxShadow: p.shadowCard,
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(T.r4),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: RepaintBoundary(
-                  child: CustomPaint(
-                    painter: _HeroPatternPainter(
-                      ring: Colors.white.withValues(alpha: 0.055),
-                      glow: Colors.white.withValues(alpha: 0.06),
-                    ),
+      child: HeroSurface(
+        padding: const EdgeInsets.fromLTRB(T.s5, T.s5, T.s5, T.s4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: T.s2,
+              runSpacing: T.s2,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  'Spent this month',
+                  maxLines: 1,
+                  style: T.label.copyWith(
+                    color: p.heroMuted,
+                    letterSpacing: 0.4,
+                    fontSize: 12,
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(T.s5),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: T.s2,
-                      runSpacing: T.s2,
-                      crossAxisAlignment: WrapCrossAlignment.center,
+                if (showPace)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: T.s2,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(T.r5),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          'Spent this month',
-                          maxLines: 1,
-                          style: T.label.copyWith(
-                            color: p.heroMuted,
-                            letterSpacing: 0.4,
-                            fontSize: 12,
+                        const Icon(
+                          Icons.speed_rounded,
+                          size: 14,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            paceLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: T.label.copyWith(
+                              color: Colors.white,
+                              letterSpacing: 0,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
-                        if (showPace)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: T.s2,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.16),
-                              borderRadius: BorderRadius.circular(T.r5),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.speed_rounded,
-                                  size: 14,
-                                  color: Colors.white,
-                                ),
-                                const SizedBox(width: 4),
-                                Flexible(
-                                  child: Text(
-                                    paceLabel,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: T.label.copyWith(
-                                      color: Colors.white,
-                                      letterSpacing: 0,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
                       ],
                     ),
-                    const SizedBox(height: T.s3),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: MoneyText(
-                        summary.spend,
-                        animate: true,
-                        style: T.heroNumber,
-                      ),
-                    ),
-                    const SizedBox(height: T.s1),
-                    Text(
-                      '${summary.daysElapsed} of ${summary.daysInMonth} days',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: T.body.copyWith(
-                        color: p.heroInk,
-                        fontSize: 13.5,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      provenance,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: T.bodySmall.copyWith(
-                        color: p.heroMuted,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: T.s4),
-                    Divider(
-                      color: Colors.white.withValues(alpha: 0.16),
-                      height: 1,
-                    ),
-                    const SizedBox(height: T.s3),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final scale =
-                            MediaQuery.textScalerOf(context).scale(14) / 14;
-                        // Three money columns only fit side by side at body
-                        // size. Once text grows, reflow to two columns so
-                        // values are not elided into unreadable stubs.
-                        final twoColumns =
-                            constraints.maxWidth < 260 || scale >= 1.2;
-                        if (!twoColumns) {
-                          return Row(
-                            children: [
-                              for (final stat in stats)
-                                Expanded(
-                                  child: _HeroStat(
-                                    label: stat.label,
-                                    value: stat.value,
-                                  ),
-                                ),
-                            ],
-                          );
-                        }
-                        final cellWidth =
-                            (constraints.maxWidth - T.s4) / 2;
-                        return Wrap(
-                          spacing: T.s4,
-                          runSpacing: T.s3,
-                          children: [
-                            for (final stat in stats)
-                              SizedBox(
-                                width: cellWidth,
-                                child: _HeroStat(
-                                  label: stat.label,
-                                  value: stat.value,
-                                ),
-                              ),
-                          ],
-                        );
-                      },
-                    ),
-                    if (includedLine != null) ...[
-                      const SizedBox(height: T.s3),
-                      Text(
-                        includedLine,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: T.bodySmall.copyWith(
-                          color: p.heroMuted,
-                          fontSize: 12,
-                          height: 1.35,
+                  ),
+              ],
+            ),
+            const SizedBox(height: T.s3),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: MoneyText(
+                summary.spend,
+                animate: true,
+                style: T.heroNumber.copyWith(fontSize: 46),
+              ),
+            ),
+            const SizedBox(height: T.s1),
+            Text(
+              '${summary.daysElapsed} of ${summary.daysInMonth} days',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: T.body.copyWith(color: p.heroInk, fontSize: 13.5),
+            ),
+            const SizedBox(height: T.s2),
+            _MonthProgress(
+              fraction: summary.daysInMonth == 0
+                  ? 0
+                  : summary.daysElapsed / summary.daysInMonth,
+            ),
+            const SizedBox(height: T.s2),
+            Text(
+              provenance,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: T.bodySmall.copyWith(color: p.heroMuted, fontSize: 12),
+            ),
+            const SizedBox(height: T.s4),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+                // Three money columns only fit side by side at body
+                // size. Once text grows, reflow to two columns so
+                // values are not elided into unreadable stubs.
+                final twoColumns = constraints.maxWidth < 260 || scale >= 1.2;
+                if (!twoColumns) {
+                  return Row(
+                    children: [
+                      for (var i = 0; i < stats.length; i++) ...[
+                        if (i > 0) const SizedBox(width: T.s2),
+                        Expanded(
+                          child: _HeroStat(
+                            label: stats[i].label,
+                            value: stats[i].value,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
-                    if (otherTransfers > 0) ...[
-                      SizedBox(height: includedLine == null ? T.s3 : 0),
-                      _HeroLink(
-                        text:
-                            '${money(Paise(otherTransfers))} transfers not counted',
-                        semanticsLabel:
-                            '${money(Paise(otherTransfers))} moved as transfers and not counted as spending. Show the transfers.',
-                        onTap: onOpenActivity == null
-                            ? null
-                            : () => onOpenActivity!(
-                                const ActivityRequest(transfersOnly: true),
-                              ),
-                      ),
-                    ],
-                    const SizedBox(height: T.s1),
-                    Text(
-                      moneyInText,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: T.bodySmall.copyWith(
-                        color: p.heroMuted,
-                        fontSize: 12,
-                        height: 1.35,
-                      ),
-                    ),
-                    if (!hasIncome)
-                      // SBI rarely sends a salary SMS; its statement shows it.
-                      _HeroLink(
-                        icon: Icons.account_balance_rounded,
-                        text: statementLine ??
-                            'No salary in your SMS. Import an SBI statement to see '
-                                'each month salary to salary',
-                        semanticsLabel: statementLine ??
-                            'No salary was found in your messages. Import an SBI '
-                                'statement to see spending salary to salary.',
-                        onTap: () => StatementsScreen.open(context),
+                  );
+                }
+                final cellWidth = (constraints.maxWidth - T.s2) / 2;
+                return Wrap(
+                  spacing: T.s2,
+                  runSpacing: T.s2,
+                  children: [
+                    for (final stat in stats)
+                      SizedBox(
+                        width: cellWidth,
+                        child: _HeroStat(label: stat.label, value: stat.value),
                       ),
                   ],
+                );
+              },
+            ),
+            if (includedLine != null) ...[
+              const SizedBox(height: T.s3),
+              Text(
+                includedLine,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: T.bodySmall.copyWith(
+                  color: p.heroMuted,
+                  fontSize: 12,
+                  height: 1.35,
                 ),
               ),
             ],
-          ),
+            if (otherTransfers > 0) ...[
+              SizedBox(height: includedLine == null ? T.s3 : 0),
+              _HeroLink(
+                text: '${money(Paise(otherTransfers))} transfers not counted',
+                semanticsLabel:
+                    '${money(Paise(otherTransfers))} moved as transfers and not counted as spending. Show the transfers.',
+                onTap: onOpenActivity == null
+                    ? null
+                    : () => onOpenActivity!(
+                        const ActivityRequest(transfersOnly: true),
+                      ),
+              ),
+            ],
+            const SizedBox(height: T.s1),
+            Text(
+              moneyInText,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: T.bodySmall.copyWith(
+                color: p.heroMuted,
+                fontSize: 12,
+                height: 1.35,
+              ),
+            ),
+            if (!hasIncome)
+              // SBI rarely sends a salary SMS; its statement shows it.
+              _HeroLink(
+                icon: Icons.account_balance_rounded,
+                text:
+                    statementLine ??
+                    'No salary in your SMS. Import an SBI statement to see '
+                        'each month salary to salary',
+                semanticsLabel:
+                    statementLine ??
+                    'No salary was found in your messages. Import an SBI '
+                        'statement to see spending salary to salary.',
+                onTap: () => StatementsScreen.open(context),
+              ),
+          ],
         ),
       ),
     );
@@ -602,11 +579,7 @@ class _HeroLink extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 48),
           child: Row(
             children: [
-              Icon(
-                icon,
-                size: 15,
-                color: p.heroMuted,
-              ),
+              Icon(icon, size: 15, color: p.heroMuted),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -623,10 +596,95 @@ class _HeroLink extends StatelessWidget {
                   ),
                 ),
               ),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 16,
-                color: p.heroMuted,
+              Icon(Icons.chevron_right_rounded, size: 16, color: p.heroMuted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroStat extends StatelessWidget {
+  const _HeroStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    // A frosted tile: light glass over the hero gradient.
+    return Container(
+      padding: const EdgeInsets.fromLTRB(T.s3, T.s2 + 2, T.s2, T.s2 + 2),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(T.r3),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: T.label.copyWith(
+              color: T.of(context).heroMuted,
+              fontSize: 11.5,
+              letterSpacing: 0.1,
+            ),
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              softWrap: false,
+              style: T.money.copyWith(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// How far through the month we are: a slim mint line under the number.
+class _MonthProgress extends StatelessWidget {
+  const _MonthProgress({required this.fraction});
+
+  final double fraction;
+
+  @override
+  Widget build(BuildContext context) {
+    return ExcludeSemantics(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(99),
+        child: SizedBox(
+          height: 4,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: ColoredBox(color: Colors.white.withValues(alpha: 0.14)),
+              ),
+              FractionallySizedBox(
+                widthFactor: fraction.clamp(0.0, 1.0),
+                child: const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF9BF2D8), T.mintGlow],
+                    ),
+                  ),
+                  child: SizedBox.expand(),
+                ),
               ),
             ],
           ),
@@ -636,80 +694,6 @@ class _HeroLink extends StatelessWidget {
   }
 }
 
-class _HeroStat extends StatelessWidget {  const _HeroStat({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: T.label.copyWith(
-            color: T.of(context).heroMuted,
-            fontSize: 12,
-            letterSpacing: 0.3,
-          ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          value,
-          maxLines: 1,
-          softWrap: false,
-          overflow: TextOverflow.ellipsis,
-          style: T.money.copyWith(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _HeroPatternPainter extends CustomPainter {
-  const _HeroPatternPainter({required this.ring, required this.glow});
-
-  final Color ring;
-  final Color glow;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..color = ring;
-    final center = Offset(size.width * 1.02, size.height * 0.04);
-    for (var i = 1; i <= 4; i++) {
-      canvas.drawCircle(center, size.width * 0.12 * i, paint);
-    }
-    final glowPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [glow, glow.withValues(alpha: 0)],
-      ).createShader(
-        Rect.fromCircle(
-          center: Offset(size.width * 0.15, size.height * 0.95),
-          radius: size.width * 0.55,
-        ),
-      );
-    canvas.drawRect(Offset.zero & size, glowPaint);
-  }
-
-  @override
-  bool shouldRepaint(_HeroPatternPainter oldDelegate) =>
-      oldDelegate.ring != ring || oldDelegate.glow != glow;
-}
-
-/// A one-row alert: icon, title plus at most two lines of body, trailing text
-/// action. Compact enough that three of them still leave the spend chart above
-/// the fold on a 412x915 phone.
 class _CompactNotice extends StatelessWidget {
   const _CompactNotice({
     required this.tone,
@@ -734,24 +718,27 @@ class _CompactNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = T.of(context);
-    final (bg, fg) = switch (tone) {
-      PillTone.danger => (p.dangerSoft, p.danger),
-      PillTone.caution => (p.cautionSoft, p.caution),
-      PillTone.positive => (p.positiveSoft, p.positive),
-      PillTone.brand => (p.primarySoft, p.primary),
-      _ => (p.infoSoft, p.info),
+    final fg = switch (tone) {
+      PillTone.danger => p.danger,
+      PillTone.caution => p.caution,
+      PillTone.positive => p.positive,
+      PillTone.brand => p.primary,
+      _ => p.info,
     };
+    // Same language as NoticeBanner: a calm card, a tinted icon disc, ink
+    // text; the tone lives in the disc and the action pill.
     return Container(
-      padding: const EdgeInsets.fromLTRB(T.s3, T.s2, T.s1, T.s2),
+      padding: const EdgeInsets.fromLTRB(T.s3, T.s3, T.s1, T.s3),
       decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(T.r3),
-        border: Border.all(color: fg.withValues(alpha: 0.12)),
+        color: p.surface,
+        borderRadius: BorderRadius.circular(T.r4),
+        border: p.isDark ? Border.all(color: p.outlineVariant) : null,
+        boxShadow: p.isDark ? null : p.shadowSoft,
       ),
       child: Row(
         children: [
-          Icon(icon, color: fg, size: 18),
-          const SizedBox(width: T.s2),
+          IconDisc(icon: icon, color: fg, size: 38),
+          const SizedBox(width: T.s3),
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -762,33 +749,35 @@ class _CompactNotice extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: T.cardTitle.copyWith(
-                    color: fg,
+                    color: p.ink,
                     fontWeight: FontWeight.w700,
-                    fontSize: 13.5,
+                    fontSize: 14,
                   ),
                 ),
-                const SizedBox(height: 1),
+                const SizedBox(height: 2),
                 Text(
                   body,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: T.bodySmall.copyWith(
-                    color: fg.withValues(alpha: 0.92),
+                    color: p.inkSecondary,
                     fontSize: 12,
-                    height: 1.3,
+                    height: 1.35,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: T.s1),
+          const SizedBox(width: T.s2),
           TextButton(
             onPressed: onAction,
             style: TextButton.styleFrom(
               foregroundColor: fg,
-              minimumSize: const Size(48, 48),
-              padding: const EdgeInsets.symmetric(horizontal: T.s2),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              backgroundColor: fg.withValues(alpha: p.isDark ? 0.16 : 0.09),
+              minimumSize: const Size(48, 40),
+              padding: const EdgeInsets.symmetric(horizontal: T.s3),
+              shape: const StadiumBorder(),
+              tapTargetSize: MaterialTapTargetSize.padded,
               textStyle: T.bodySmall.copyWith(
                 fontWeight: FontWeight.w700,
                 fontSize: 12,
@@ -800,7 +789,7 @@ class _CompactNotice extends StatelessWidget {
             IconButton(
               onPressed: onDismiss,
               tooltip: 'Dismiss',
-              icon: Icon(Icons.close_rounded, size: 18, color: fg),
+              icon: Icon(Icons.close_rounded, size: 18, color: p.inkMuted),
               constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               padding: EdgeInsets.zero,
             ),
@@ -993,10 +982,9 @@ class _PaceSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = T.of(context);
-    final dayCount = math.max(
-      summary.daysElapsed,
-      summary.dailySpend.length,
-    ).clamp(1, summary.daysInMonth);
+    final dayCount = math
+        .max(summary.daysElapsed, summary.dailySpend.length)
+        .clamp(1, summary.daysInMonth);
     final daily = List<int>.generate(
       dayCount,
       (i) => i < summary.dailySpend.length ? summary.dailySpend[i] : 0,
@@ -1012,10 +1000,7 @@ class _PaceSection extends StatelessWidget {
               Expanded(
                 child: Text(
                   "This month's pace",
-                  style: T.sectionTitle.copyWith(
-                    color: p.ink,
-                    fontSize: 16,
-                  ),
+                  style: T.sectionTitle.copyWith(color: p.ink, fontSize: 16),
                 ),
               ),
               const SizedBox(width: T.s2),
@@ -1078,10 +1063,7 @@ class _CategoryCard extends StatelessWidget {
             padding: EdgeInsets.zero,
           ),
           const SizedBox(height: T.s2),
-          CategoryDonut(
-            categories: summary.byCategory,
-            total: summary.spend,
-          ),
+          CategoryDonut(categories: summary.byCategory, total: summary.spend),
         ],
       ),
     );

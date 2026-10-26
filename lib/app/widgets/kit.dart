@@ -18,13 +18,16 @@ class AppCard extends StatefulWidget {
     this.color,
     this.border = true,
     this.shadow = false,
-    this.radius = T.r3,
+    this.radius = T.r4,
   });
 
   final Widget child;
   final EdgeInsetsGeometry padding;
   final VoidCallback? onTap;
   final Color? color;
+
+  /// The default card edge: a soft shadow in light (no line) and a hairline
+  /// in dark, where shadows do not read. False for a flat inset surface.
   final bool border;
   final bool shadow;
   final double radius;
@@ -39,13 +42,12 @@ class _AppCardState extends State<AppCard> {
   @override
   Widget build(BuildContext context) {
     final p = T.of(context);
+    final edge = widget.border && widget.color == null;
     final decoration = BoxDecoration(
       color: widget.color ?? p.surface,
       borderRadius: BorderRadius.circular(widget.radius),
-      border: widget.border
-          ? Border.all(color: p.outlineVariant)
-          : null,
-      boxShadow: widget.shadow ? p.shadowSoft : null,
+      border: edge && p.isDark ? Border.all(color: p.outlineVariant) : null,
+      boxShadow: widget.shadow || (edge && !p.isDark) ? p.shadowSoft : null,
     );
     final padded = Padding(padding: widget.padding, child: widget.child);
 
@@ -103,7 +105,8 @@ class SoftSection extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: p.tintGradient,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: p.primary.withValues(alpha: 0.10)),
+        border: p.isDark ? Border.all(color: p.outlineVariant) : null,
+        boxShadow: p.isDark ? null : p.shadowSoft,
       ),
       child: child,
     );
@@ -772,32 +775,37 @@ class NoticeBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = T.of(context);
-    final (bg, fg) = switch (tone) {
-      PillTone.danger => (p.dangerSoft, p.danger),
-      PillTone.caution => (p.cautionSoft, p.caution),
-      PillTone.positive => (p.positiveSoft, p.positive),
-      PillTone.brand => (p.primarySoft, p.primary),
-      _ => (p.infoSoft, p.info),
+    final fg = switch (tone) {
+      PillTone.danger => p.danger,
+      PillTone.caution => p.caution,
+      PillTone.positive => p.positive,
+      PillTone.brand => p.primary,
+      _ => p.info,
     };
+    // A calm card with a tinted icon disc: the colour carries the tone, the
+    // words stay in ink so a warning reads as information, not an alarm.
     return Container(
-      padding: const EdgeInsets.fromLTRB(T.s4, T.s3, T.s3, T.s3),
+      padding: const EdgeInsets.fromLTRB(T.s4, T.s4, T.s3, T.s4),
       decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(T.r3),
+        color: p.surface,
+        borderRadius: BorderRadius.circular(T.r4),
+        border: p.isDark ? Border.all(color: p.outlineVariant) : null,
+        boxShadow: p.isDark ? null : p.shadowSoft,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: fg, size: 19),
+          IconDisc(icon: icon, color: fg),
           const SizedBox(width: T.s3),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const SizedBox(height: 1),
                 Text(
                   title,
                   style: T.cardTitle.copyWith(
-                    color: fg,
+                    color: p.ink,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -805,9 +813,9 @@ class NoticeBanner extends StatelessWidget {
                 Text(
                   body,
                   style: T.bodySmall.copyWith(
-                    color: fg.withValues(alpha: 0.92),
+                    color: p.inkSecondary,
                     fontSize: 12.5,
-                    height: 1.38,
+                    height: 1.4,
                   ),
                 ),
                 if (actionLabel != null) ...[
@@ -845,6 +853,126 @@ class NoticeBanner extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A round, softly tinted disc holding an icon — the app's one way of giving
+/// a row or a notice its colour.
+class IconDisc extends StatelessWidget {
+  const IconDisc({
+    super.key,
+    required this.icon,
+    required this.color,
+    this.size = 40,
+  });
+
+  final IconData icon;
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = T.of(context);
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: p.isDark ? 0.18 : 0.11),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, color: color, size: size * 0.5),
+    );
+  }
+}
+
+/// The brand surface: a deep gradient with two soft light blooms (the "mesh
+/// gradient" look), painted in code — no image assets, crisp at any size.
+/// Used for the one hero per screen.
+class HeroSurface extends StatelessWidget {
+  const HeroSurface({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(T.s5),
+    this.radius = T.r5,
+    this.gradient,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double radius;
+
+  /// Defaults to the palette's hero gradient.
+  final Gradient? gradient;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = T.of(context);
+    final shape = BorderRadius.circular(radius);
+    return DecoratedBox(
+      decoration: BoxDecoration(borderRadius: shape, boxShadow: p.shadowCard),
+      child: ClipRRect(
+        borderRadius: shape,
+        child: DecoratedBox(
+          decoration: BoxDecoration(gradient: gradient ?? p.heroGradient),
+          child: CustomPaint(
+            painter: _BloomPainter(dark: p.isDark),
+            child: Padding(padding: padding, child: child),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BloomPainter extends CustomPainter {
+  const _BloomPainter({required this.dark});
+
+  final bool dark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    void bloom(Offset centre, double radius, Color color) {
+      final rect = Rect.fromCircle(center: centre, radius: radius);
+      canvas.drawCircle(
+        centre,
+        radius,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [color, color.withValues(alpha: 0)],
+          ).createShader(rect),
+      );
+    }
+
+    final w = size.width;
+    final h = size.height;
+    // Mint light from the top right, a cool indigo pool bottom left.
+    bloom(
+      Offset(w * 0.92, h * 0.02),
+      w * 0.62,
+      const Color(0xFF6FE3C2).withValues(alpha: dark ? 0.20 : 0.30),
+    );
+    bloom(
+      Offset(w * 0.05, h * 1.05),
+      w * 0.70,
+      const Color(0xFF6C8CFF).withValues(alpha: dark ? 0.16 : 0.22),
+    );
+    // A faint diagonal sheen across the face.
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: 0.07),
+            Colors.white.withValues(alpha: 0),
+          ],
+          stops: const [0, 0.6],
+        ).createShader(Offset.zero & size),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_BloomPainter oldDelegate) => oldDelegate.dark != dark;
 }
 
 /// A thin horizontal bar used in category and utilisation breakdowns.

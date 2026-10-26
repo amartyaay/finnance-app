@@ -106,7 +106,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final p = T.of(context);
-    final now = DateTime.now();
+    final now = state.now;
     final monthStart = DateTime(now.year, now.month + _monthOffset);
     final monthEnd = DateTime(now.year, now.month + _monthOffset + 1);
     final transactions = state.data.transactions;

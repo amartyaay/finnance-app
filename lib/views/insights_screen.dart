@@ -342,21 +342,23 @@ class _FraudCard extends StatelessWidget {  const _FraudCard({required this.aler
     return Container(
       padding: const EdgeInsets.all(T.s4),
       decoration: BoxDecoration(
-        color: p.dangerSoft,
-        border: Border.all(color: p.danger.withValues(alpha: 0.20)),
-        borderRadius: BorderRadius.circular(T.r3),
+        color: p.surface,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [p.danger.withValues(alpha: p.isDark ? 0.07 : 0.06), p.surface],
+          stops: const [0, 0.6],
+        ),
+        border: p.isDark ? Border.all(color: p.outlineVariant) : null,
+        boxShadow: p.isDark ? null : p.shadowSoft,
+        borderRadius: BorderRadius.circular(T.r4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              IconBadge(
-                icon: Icons.gpp_maybe_rounded,
-                color: p.danger,
-                size: 38,
-                iconSize: 19,
-              ),
+              IconDisc(icon: Icons.gpp_maybe_rounded, color: p.danger, size: 40),
               const SizedBox(width: T.s3),
               Expanded(
                 child: Column(
@@ -365,16 +367,14 @@ class _FraudCard extends StatelessWidget {  const _FraudCard({required this.aler
                     Text(
                       'Possible fraud messages',
                       style: T.cardTitle.copyWith(
-                        color: p.danger,
+                        color: p.ink,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 1),
                     Text(
                       'Kept out of your totals. Nothing was opened.',
-                      style: T.bodySmall.copyWith(
-                        color: p.danger.withValues(alpha: 0.9),
-                      ),
+                      style: T.bodySmall.copyWith(color: p.inkSecondary),
                     ),
                   ],
                 ),
@@ -384,10 +384,7 @@ class _FraudCard extends StatelessWidget {  const _FraudCard({required this.aler
           const SizedBox(height: T.s2),
           for (var i = 0; i < shown.length; i++) ...[
             if (i > 0)
-              Divider(
-                height: 1,
-                color: p.danger.withValues(alpha: 0.18),
-              ),
+              Divider(height: 1, color: p.outlineVariant),
             Semantics(
               button: true,
               label:
@@ -429,7 +426,7 @@ class _FraudCard extends StatelessWidget {  const _FraudCard({required this.aler
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: T.bodySmall.copyWith(
-                                    color: p.danger.withValues(alpha: 0.9),
+                                    color: p.inkSecondary,
                                     fontSize: 12,
                                   ),
                                 ),

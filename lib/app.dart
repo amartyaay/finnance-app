@@ -1,7 +1,10 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'app/design_tokens.dart';
 import 'app/theme.dart';
 import 'state/app_state.dart';
 import 'state/statements_controller.dart';
@@ -205,10 +208,38 @@ class _AppShellState extends State<AppShell> {
           ),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: _openTab,
-        destinations: _destinations,
+      // A floating, frosted bar: it sits off the screen edge like a dock.
+      bottomNavigationBar: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(T.s3, 0, T.s3, T.s3),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(T.r5),
+            boxShadow: T.of(context).shadowCard,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(T.r5),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: T.of(context).surface.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(T.r5),
+                  border: Border.all(color: T.of(context).outlineVariant),
+                ),
+                child: NavigationBar(
+                  selectedIndex: _index,
+                  onDestinationSelected: _openTab,
+                  destinations: _destinations,
+                  backgroundColor: Colors.transparent,
+                  surfaceTintColor: Colors.transparent,
+                  elevation: 0,
+                  height: 68,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

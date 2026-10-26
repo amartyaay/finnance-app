@@ -159,7 +159,7 @@ class _StatementsScreenState extends State<StatementsScreen> {
                         ? 'Each cycle runs from one salary to the next.'
                         : 'No salary found yet, so this is the whole statement.',
                   ),
-                  for (final cycle in analysis.cycles) ...[
+                  for (final cycle in _ordered(analysis.cycles)) ...[
                     SalaryCycleCard(
                       cycle: cycle,
                       onTap: () => SalaryCycleScreen.open(context, cycle),
@@ -245,6 +245,18 @@ class _EmptyImport extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Newest first, except that a running cycle only a few days old goes after
+/// the last complete one: "1 Oct – 1 Oct, 1 day, left ₹1,12,450" is not the
+/// first thing anyone wants to read.
+List<SalaryCycle> _ordered(List<SalaryCycle> cycles) {
+  if (cycles.length < 2) return cycles;
+  final first = cycles.first;
+  if (first.isPartial && first.salaryRows.isNotEmpty && first.days < 7) {
+    return [cycles[1], first, ...cycles.skip(2)];
+  }
+  return cycles;
 }
 
 String _range(DateTime? from, DateTime? to) {
@@ -354,29 +366,44 @@ class _SalaryCard extends StatelessWidget {
         icon: Icons.payments_rounded,
       );
     }
-    return AppCard(
-      color: p.primarySoft,
-      border: false,
-      child: Row(
+    // The salary is this screen's hero: one number, who pays it, and why
+    // the app believes it.
+    return HeroSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          IconBadge(icon: Icons.payments_rounded, color: p.primary),
-          const SizedBox(width: T.s3),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Salary ${money(Paise(verdict.typicalPaise))}'
-                  '${verdict.payer == null ? '' : ' from ${verdict.payer}'}',
-                  style: T.cardTitle.copyWith(color: p.ink),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${verdict.reason} Not right? Open a cycle and tap the credit.',
-                  style: T.bodySmall.copyWith(color: p.inkSecondary),
-                ),
-              ],
+          Row(
+            children: [
+              Icon(Icons.payments_rounded, size: 16, color: p.heroMuted),
+              const SizedBox(width: T.s2),
+              Text(
+                'Your salary',
+                style: T.label.copyWith(color: p.heroMuted, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: T.s2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: MoneyText(
+              Paise(verdict.typicalPaise),
+              style: T.heroNumber.copyWith(fontSize: 40),
             ),
+          ),
+          if (verdict.payer != null) ...[
+            const SizedBox(height: T.s1),
+            Text(
+              'from ${verdict.payer}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: T.body.copyWith(color: p.heroInk, fontWeight: FontWeight.w600),
+            ),
+          ],
+          const SizedBox(height: T.s3),
+          Text(
+            '${verdict.reason} Not right? Open a cycle and tap the credit.',
+            style: T.bodySmall.copyWith(color: p.heroMuted, fontSize: 12),
           ),
         ],
       ),

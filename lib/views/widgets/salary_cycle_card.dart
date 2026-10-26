@@ -7,6 +7,8 @@ import '../../app/widgets/kit.dart';
 import '../../domain/money.dart';
 import '../../engine/salary_cycles.dart';
 
+String _days(int n) => n == 1 ? '1 day' : '$n days';
+
 /// "1 Sep – 30 Sep" for a cycle (its end is exclusive: the next payday).
 String cycleRange(SalaryCycle cycle) {
   final f = DateFormat('d MMM');
@@ -45,8 +47,8 @@ class SalaryCycleCard extends StatelessWidget {
     final status = cycle.salaryRows.isEmpty
         ? 'Before first salary'
         : cycle.isPartial
-        ? 'In progress · ${cycle.days} days'
-        : '${cycle.days} days';
+        ? 'In progress · ${_days(cycle.days)}'
+        : _days(cycle.days);
     final categories = cycle.spendByCategory.where((e) => e.value > 0).take(3).toList();
 
     return AppCard(
@@ -129,15 +131,24 @@ class SalaryCycleCard extends StatelessWidget {
             if (total > 0) ...[
               const SizedBox(height: T.s3),
               ClipRRect(
-                borderRadius: BorderRadius.circular(T.r1),
+                borderRadius: BorderRadius.circular(99),
                 child: SizedBox(
-                  height: 10,
+                  height: 12,
                   child: Row(
                     children: [
                       for (final s in segments)
                         Expanded(
                           flex: (s.paise * 1000 ~/ total).clamp(1, 1000),
-                          child: Container(color: s.color),
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 2),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: s.color,
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                              child: const SizedBox.expand(),
+                            ),
+                          ),
                         ),
                       if (left - cycle.investedPaise > 0)
                         Expanded(

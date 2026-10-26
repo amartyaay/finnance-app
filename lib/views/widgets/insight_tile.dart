@@ -144,14 +144,24 @@ class InsightTile extends StatelessWidget {
       label: semantics,
       excludeSemantics: true,
       child: Container(
+        // Depth from a soft shadow; a warning earns a faint tinted wash at the
+        // top instead of a coloured frame.
         decoration: BoxDecoration(
           color: p.surface,
-          border: Border.all(
-            color: emphasised
-                ? toneColor.withValues(alpha: 0.30)
-                : p.outlineVariant,
-          ),
-          borderRadius: BorderRadius.circular(T.r3),
+          gradient: emphasised
+              ? LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    toneColor.withValues(alpha: p.isDark ? 0.06 : 0.05),
+                    p.surface,
+                  ],
+                  stops: const [0, 0.55],
+                )
+              : null,
+          border: p.isDark ? Border.all(color: p.outlineVariant) : null,
+          boxShadow: p.isDark ? null : p.shadowSoft,
+          borderRadius: BorderRadius.circular(T.r4),
         ),
         padding: const EdgeInsets.all(T.s4),
         child: Column(
@@ -160,11 +170,10 @@ class InsightTile extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                IconBadge(
+                IconDisc(
                   icon: insightToneIcon(insight.tone),
                   color: toneColor,
-                  size: 36,
-                  iconSize: 18,
+                  size: 38,
                 ),
                 if (chip != null && chip.isNotEmpty) ...[
                   const SizedBox(width: T.s2),

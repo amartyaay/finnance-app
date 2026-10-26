@@ -495,7 +495,8 @@ class _DailyBarsPainter extends CustomPainter {
       for (var i = 0; i < n; i++) {
         final value = values[i] * progress;
         final ratio = (value / maxValue).clamp(0.0, 1.0);
-        final h = ratio * (size.height - 10);
+        // A small day is still a bar, never a dot.
+        final h = math.max(4.0, ratio * (size.height - 10));
         final left = i * (barWidth + gap);
         final isToday = todayIndex == i;
         if (values[i] == 0) {
@@ -509,11 +510,27 @@ class _DailyBarsPainter extends CustomPainter {
           continue;
         }
         final rect = Rect.fromLTWH(left, baseY - h, barWidth, h);
-        paint.color = isToday ? todayBar : bar;
+        final colour = isToday ? todayBar : bar;
+        // Columns, not pills: top corners capped at 5 px (a full round cap
+        // turned short bars into blobs), filled with a soft vertical fade.
+        final top = Radius.circular(math.min(barWidth / 2, 5));
+        const foot = Radius.circular(1.5);
+        paint.shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [colour, colour.withValues(alpha: 0.55)],
+        ).createShader(rect);
         canvas.drawRRect(
-          RRect.fromRectAndRadius(rect, Radius.circular(barWidth / 2)),
+          RRect.fromRectAndCorners(
+            rect,
+            topLeft: top,
+            topRight: top,
+            bottomLeft: foot,
+            bottomRight: foot,
+          ),
           paint,
         );
+        paint.shader = null;
       }
 
       // Average rule.

@@ -44,6 +44,8 @@ ThemeData buildAppTheme({Brightness brightness = Brightness.light}) {
 
   final base = ThemeData(
     useMaterial3: true,
+    // Bundled (assets/fonts), so every phone renders the same type.
+    fontFamily: T.fontFamily,
     brightness: brightness,
     colorScheme: scheme,
     scaffoldBackgroundColor: p.bg,

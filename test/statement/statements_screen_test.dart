@@ -104,9 +104,10 @@ void main() {
 
     testWidgets('statements with cycles fit 360dp @1.3x (${brightness.name})', (tester) async {
       await _pump(tester, const StatementsScreen(), empty: false, brightness: brightness);
-      expect(find.textContaining('Salary ₹1,12,450'), findsOneWidget);
-      // Newest cycle first: the one still running.
-      expect(find.text('Left so far'), findsOneWidget);
+      // The salary is the screen's hero.
+      expect(find.text('Your salary'), findsOneWidget);
+      // A running cycle only a day old goes after the last complete one.
+      expect(find.text('Saved this cycle'), findsOneWidget);
       await _scrollToEnd(tester);
       expect(tester.takeException(), isNull);
     });

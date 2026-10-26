@@ -104,7 +104,7 @@ class FinanceColors {
 
   static const light = FinanceColors(
     brightness: Brightness.light,
-    bg: Color(0xFFF3F6F1),
+    bg: Color(0xFFF3F5F3),
     surface: Color(0xFFFFFFFF),
     surfaceMuted: Color(0xFFEDF1E9),
     surfaceSunken: Color(0xFFE4EADF),
@@ -127,8 +127,8 @@ class FinanceColors {
     dangerSoft: Color(0xFFFBE6E3),
     info: Color(0xFF1F5F8B),
     infoSoft: Color(0xFFE4EEF6),
-    outline: Color(0xFFD7DFD3),
-    outlineVariant: Color(0xFFE6EBE1),
+    outline: Color(0xFFD9E0DA),
+    outlineVariant: Color(0xFFE9EEEA),
     chart: [
       Color(0xFF0E7A5F),
       Color(0xFF2E7FB8),
@@ -151,26 +151,30 @@ class FinanceColors {
     heroGradient: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFF0B6650), Color(0xFF085862), Color(0xFF064450)],
-      stops: [0.0, 0.52, 1.0],
+      colors: [Color(0xFF0E7C60), Color(0xFF0B5C66), Color(0xFF173F6E)],
+      stops: [0.0, 0.55, 1.0],
     ),
     tintGradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [Color(0xFFEAF4EC), Color(0xFFE1EFE9)],
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [Color(0xFFFFFFFF), Color(0xFFF1F7F3)],
     ),
+    // Two layers: a tight contact shadow and a wide, very faint ambient one —
+    // depth without a visible border.
     shadowSoft: [
-      BoxShadow(color: Color(0x0D0F1A12), blurRadius: 18, offset: Offset(0, 6)),
+      BoxShadow(color: Color(0x0A0F2018), blurRadius: 2, offset: Offset(0, 1)),
+      BoxShadow(color: Color(0x0F0F2018), blurRadius: 24, offset: Offset(0, 8)),
     ],
     shadowCard: [
-      BoxShadow(color: Color(0x1A0E2419), blurRadius: 30, offset: Offset(0, 14)),
+      BoxShadow(color: Color(0x140B2A1E), blurRadius: 4, offset: Offset(0, 2)),
+      BoxShadow(color: Color(0x290B2A3E), blurRadius: 40, offset: Offset(0, 18)),
     ],
   );
 
   static const dark = FinanceColors(
     brightness: Brightness.dark,
-    bg: Color(0xFF07110D),
-    surface: Color(0xFF0D1A14),
+    bg: Color(0xFF060C0A),
+    surface: Color(0xFF0E1814),
     surfaceMuted: Color(0xFF12241B),
     surfaceSunken: Color(0xFF183024),
     ink: Color(0xFFEDF5EF),
@@ -216,19 +220,23 @@ class FinanceColors {
     heroGradient: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFF0C5C46), Color(0xFF094C57), Color(0xFF073C4A)],
-      stops: [0.0, 0.52, 1.0],
+      colors: [Color(0xFF0C6450), Color(0xFF0A4A55), Color(0xFF14305A)],
+      stops: [0.0, 0.55, 1.0],
     ),
     tintGradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [Color(0xFF0F2119), Color(0xFF0D2A22)],
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [Color(0xFF101D18), Color(0xFF0D1915)],
     ),
     shadowSoft: [
       BoxShadow(color: Color(0x4D000000), blurRadius: 20, offset: Offset(0, 8)),
     ],
     shadowCard: [
-      BoxShadow(color: Color(0x66000000), blurRadius: 32, offset: Offset(0, 16)),
+      BoxShadow(
+        color: Color(0x66000000),
+        blurRadius: 32,
+        offset: Offset(0, 16),
+      ),
     ],
   );
 }
@@ -262,7 +270,7 @@ class T {
       : FinanceColors.light;
 
   // ---- Light aliases (used by the theme and by code that has no context) ---
-  static const bg = Color(0xFFF3F6F1);
+  static const bg = Color(0xFFF3F5F3);
   static const surface = Color(0xFFFFFFFF);
   static const ink = Color(0xFF101A14);
   static const inkSecondary = Color(0xFF4B5B51);
@@ -284,8 +292,8 @@ class T {
   static const heroGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF0B6650), Color(0xFF085862), Color(0xFF064450)],
-    stops: [0.0, 0.52, 1.0],
+    colors: [Color(0xFF0E7C60), Color(0xFF0B5C66), Color(0xFF173F6E)],
+    stops: [0.0, 0.55, 1.0],
   );
 
   /// The first-run surface is always deep brand green, in either theme.
@@ -314,6 +322,9 @@ class T {
   ];
 
   // ---- Spacing scale (4pt) -----------------------------------------------
+  /// The app's typeface: Inter 4.1, bundled under assets/fonts.
+  static const String fontFamily = 'Inter';
+
   static const s1 = 4.0;
   static const s2 = 8.0;
   static const s3 = 12.0;
@@ -342,19 +353,21 @@ class T {
 
   // ---- Elevation (very soft; flat design with one raised surface) ---------
   static const List<BoxShadow> shadowSoft = [
-    BoxShadow(color: Color(0x0D0F1A12), blurRadius: 18, offset: Offset(0, 6)),
+    BoxShadow(color: Color(0x0A0F2018), blurRadius: 2, offset: Offset(0, 1)),
+    BoxShadow(color: Color(0x0F0F2018), blurRadius: 24, offset: Offset(0, 8)),
   ];
   static const List<BoxShadow> shadowCard = [
-    BoxShadow(color: Color(0x1A0E2419), blurRadius: 30, offset: Offset(0, 14)),
+    BoxShadow(color: Color(0x140B2A1E), blurRadius: 4, offset: Offset(0, 2)),
+    BoxShadow(color: Color(0x290B2A3E), blurRadius: 40, offset: Offset(0, 18)),
   ];
 
   // ---- Type ---------------------------------------------------------------
-  // System font (Roboto on Android, SF on iOS) keeps the build free of bundled
-  // binaries while still looking native. Numerals are tabular everywhere money
-  // is displayed so digits do not jump as values change.
+  // Inter (bundled). Numerals are tabular everywhere money is displayed so
+  // digits do not jump as values change.
   static const _tabular = [FontFeature.tabularFigures()];
 
   static TextStyle get display => const TextStyle(
+    fontFamily: fontFamily,
     fontSize: 42,
     fontWeight: FontWeight.w800,
     letterSpacing: -1.4,
@@ -364,6 +377,7 @@ class T {
   );
 
   static TextStyle get heroNumber => const TextStyle(
+    fontFamily: fontFamily,
     fontSize: 40,
     fontWeight: FontWeight.w700,
     letterSpacing: -1.5,
@@ -373,6 +387,7 @@ class T {
   );
 
   static TextStyle get title => const TextStyle(
+    fontFamily: fontFamily,
     fontSize: 21,
     fontWeight: FontWeight.w700,
     letterSpacing: -0.5,
@@ -381,6 +396,7 @@ class T {
   );
 
   static TextStyle get sectionTitle => const TextStyle(
+    fontFamily: fontFamily,
     fontSize: 17,
     fontWeight: FontWeight.w700,
     letterSpacing: -0.25,
@@ -389,6 +405,7 @@ class T {
   );
 
   static TextStyle get cardTitle => const TextStyle(
+    fontFamily: fontFamily,
     fontSize: 15.5,
     fontWeight: FontWeight.w600,
     letterSpacing: -0.1,
@@ -397,6 +414,7 @@ class T {
   );
 
   static TextStyle get body => const TextStyle(
+    fontFamily: fontFamily,
     fontSize: 14,
     fontWeight: FontWeight.w400,
     height: 1.45,
@@ -404,6 +422,7 @@ class T {
   );
 
   static TextStyle get bodySmall => const TextStyle(
+    fontFamily: fontFamily,
     fontSize: 12.5,
     fontWeight: FontWeight.w400,
     height: 1.4,
@@ -411,14 +430,16 @@ class T {
   );
 
   static TextStyle get label => const TextStyle(
+    fontFamily: fontFamily,
     fontSize: 12,
     fontWeight: FontWeight.w600,
-    letterSpacing: 0.6,
+    letterSpacing: 0.2,
     height: 1.2,
     color: inkMuted,
   );
 
   static TextStyle get money => const TextStyle(
+    fontFamily: fontFamily,
     fontSize: 15.5,
     fontWeight: FontWeight.w600,
     height: 1.2,
@@ -427,6 +448,7 @@ class T {
   );
 
   static TextStyle moneyLarge([Color color = ink]) => TextStyle(
+    fontFamily: fontFamily,
     fontSize: 24,
     fontWeight: FontWeight.w700,
     height: 1.12,

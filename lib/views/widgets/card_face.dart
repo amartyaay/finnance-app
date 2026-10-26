@@ -351,13 +351,16 @@ class _CompactFace extends StatelessWidget {
               ),
             ),
             if (hasBill && due != null)
-              Text(
-                days == null ? shortDate(due!) : 'in $days d',
-                maxLines: 1,
-                style: T.bodySmall.copyWith(
-                  color: ink,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+              Flexible(
+                child: Text(
+                  dueCountdown(days, due!),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: T.bodySmall.copyWith(
+                    color: ink,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
           ],
@@ -609,4 +612,12 @@ class _PressableState extends State<_Pressable> {
       ),
     );
   }
+}
+
+/// "in 4 d", "due today", "3 d overdue" — never a negative countdown.
+String dueCountdown(int? days, DateTime due) {
+  if (days == null) return shortDate(due);
+  if (days < 0) return '${-days} d overdue';
+  if (days == 0) return 'due today';
+  return 'in $days d';
 }

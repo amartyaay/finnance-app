@@ -23,15 +23,32 @@ class RawStatementRow {
   bool yearPending = false;
   final int firstLine;
   final List<String> descriptionLines = [];
+
+  /// Right edge of each description line, and the glyph width there: a line
+  /// that runs to the column's edge was wrapped mid-word by the bank.
+  final List<double> descriptionRights = [];
+  double glyphWidth = 5;
   final List<String> refParts = [];
 
   /// Amount tokens: (right edge, paise, column guessed from the header).
   final List<({double x1, int paise, _Column column})> amounts = [];
 
-  String get description => descriptionLines.join(' ').replaceAll(
-    RegExp(r'\s+'),
-    ' ',
-  ).trim();
+  String get description => descriptionWithin(double.infinity);
+
+  /// Lines joined with a space, except after a line that reaches [edge]:
+  /// SBI wraps at a fixed width and splits words there ("ACME SOFTWARE PV" /
+  /// "T--", "UBER IND" / "IA"), so those join with no space.
+  String descriptionWithin(double edge) {
+    final out = StringBuffer();
+    for (var i = 0; i < descriptionLines.length; i++) {
+      if (i > 0) {
+        final full = descriptionRights[i - 1] >= edge - glyphWidth * 3;
+        if (!full) out.write(' ');
+      }
+      out.write(descriptionLines[i]);
+    }
+    return out.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
 
   /// Lines joined with no separator: SBI wraps narrations at a fixed width and
   /// splits words (`SBI C` / `REDIT CARD`), so keyword matching uses this.
@@ -237,7 +254,13 @@ class StatementTableBuilder {
     }
 
     final opening = meta.opening ?? broughtForward;
-    final built = _reconcile(rows, opening, warnings);
+    var wrapEdge = 0.0;
+    for (final row in rows) {
+      for (final right in row.descriptionRights) {
+        if (right > wrapEdge) wrapEdge = right;
+      }
+    }
+    final built = _reconcile(rows, opening, warnings, wrapEdge);
 
     return BankStatement(
       bank: meta.isSbi ? 'SBI' : 'Bank',
@@ -372,6 +395,8 @@ class StatementTableBuilder {
   void _collectCells(_Line line, _ColumnModel model, RawStatementRow row) {
     final desc = <String>[];
     final ref = <String>[];
+    var descRight = 0.0;
+    var glyph = 5.0;
     for (final word in line.words) {
       final text = word.text;
       // Date / value-date band — only date-shaped tokens: layout A's header
@@ -388,11 +413,15 @@ class StatementTableBuilder {
         if (word.x1 < model.amountZone || paise == null) ref.add(text);
       } else {
         desc.add(text);
+        if (word.x1 > descRight) descRight = word.x1;
+        if (text.isNotEmpty) glyph = (word.x1 - word.x0) / text.length;
       }
     }
     final descText = desc.join(' ').trim();
     if (descText.isNotEmpty && !_branchTrailer.hasMatch(descText)) {
       row.descriptionLines.add(descText);
+      row.descriptionRights.add(descRight);
+      row.glyphWidth = glyph;
     }
     if (ref.isNotEmpty) row.refParts.add(ref.join(' '));
   }
@@ -420,6 +449,7 @@ class StatementTableBuilder {
     List<RawStatementRow> raw,
     int? opening,
     List<String> warnings,
+    double wrapEdge,
   ) {
     // Turn cells into (debit, credit, balance). The rightmost figure is the
     // balance; any other non-zero figure is the movement, in the column whose
@@ -496,7 +526,7 @@ class StatementTableBuilder {
       if (!verified) unverified++;
       out.add(StatementRow(
         date: p.raw.date,
-        description: p.raw.description,
+        description: p.raw.descriptionWithin(wrapEdge),
         reference: p.raw.refParts.isEmpty ? null : p.raw.refParts.join(' '),
         debitPaise: debit,
         creditPaise: credit,

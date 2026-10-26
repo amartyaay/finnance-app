@@ -70,6 +70,21 @@ flutter:
   assets:
     - assets/models/sms_lr.json
 
+  # Inter 4.1 (SIL Open Font License, assets/fonts/Inter-LICENSE.txt):
+  # bundled so the app looks the same on every phone and never fetches fonts.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Inter-ExtraBold.ttf
+          weight: 800
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

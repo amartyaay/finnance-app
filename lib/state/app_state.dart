@@ -40,6 +40,10 @@ class AppState extends ChangeNotifier {
   bool _demoMode = false;
 
   HomeData get data => _data;
+
+  /// The app's clock. Screens read this instead of DateTime.now() so a fixed
+  /// clock (tests, demo renders) gives every screen the same month.
+  DateTime get now => _now();
   bool get isLoading => _isLoading;
   bool get isScanning => _isScanning;
   bool get isDemo => _demoMode;
