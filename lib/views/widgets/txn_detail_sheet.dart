@@ -296,22 +296,24 @@ class _CategoryChoice extends StatelessWidget {
             child: AnimatedContainer(
               duration: T.fast,
               height: 36,
-              // Centre the label in the pill: without it the text sat at
-              // the top of the 34 dp box.
-              alignment: Alignment.center,
               padding: const EdgeInsets.symmetric(horizontal: T.s4),
               decoration: BoxDecoration(
                 color: selected ? p.ink : p.surfaceMuted,
                 borderRadius: BorderRadius.circular(T.r5),
                 border: Border.all(color: selected ? p.ink : p.outlineVariant),
               ),
-              child: Text(
-                name,
-                maxLines: 1,
-                style: T.bodySmall.copyWith(
-                  color: selected ? p.bg : p.inkSecondary,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
+              // Centred in the pill, but only as wide as the label: an
+              // aligned container would stretch to the Wrap's full width.
+              child: Center(
+                widthFactor: 1,
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  style: T.bodySmall.copyWith(
+                    color: selected ? p.bg : p.inkSecondary,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ),
