@@ -24,8 +24,8 @@ object TransactionNotificationHelper {
     fun showSpendNotification(
         context: Context,
         smsId: String,
-        amountPaise: Long,
-        merchant: String?
+        title: String,
+        subtitle: String?
     ) {
         if (!canPostNotifications(context)) {
             return
@@ -34,8 +34,8 @@ object TransactionNotificationHelper {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         ensureChannel(manager)
 
-        val title = "Spent ${formatAmount(amountPaise)}"
-        val subtitle = merchant?.takeIf { it.isNotBlank() } ?: "Tap to categorise"
+        // Title and subtitle come from Dart (amount formatted as ₹1,05,590).
+        val text = subtitle?.takeIf { it.isNotBlank() } ?: "Tap to categorise"
 
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(context, CHANNEL_ID)
@@ -47,7 +47,7 @@ object TransactionNotificationHelper {
         val notification = builder
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
-            .setContentText(subtitle)
+            .setContentText(text)
             .setAutoCancel(true)
             .setContentIntent(openApp(context, base + 1))
             .addAction(action(context, smsId, "Food", base + 2))
@@ -110,15 +110,5 @@ object TransactionNotificationHelper {
             value = value or PendingIntent.FLAG_IMMUTABLE
         }
         return value
-    }
-
-    private fun formatAmount(amountPaise: Long): String {
-        val rupees = amountPaise / 100
-        val paise = amountPaise % 100
-        return if (paise == 0L) {
-            "₹$rupees"
-        } else {
-            "₹$rupees.${paise.toString().padStart(2, '0')}"
-        }
     }
 }

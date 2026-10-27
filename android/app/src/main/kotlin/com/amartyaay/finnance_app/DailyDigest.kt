@@ -10,12 +10,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
-import io.flutter.FlutterInjector
-import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.embedding.engine.dart.DartExecutor
-import io.flutter.plugin.common.MethodChannel
 import java.util.Calendar
 
 /**
@@ -136,49 +130,13 @@ class DailyDigestReceiver : BroadcastReceiver() {
         // Re-arm first, so a crash below never loses tomorrow's summary.
         DailyDigest.schedule(app)
         if (!DailyDigest.isEnabled(app)) return
-
-        val pending = goAsync()
-        val main = Handler(Looper.getMainLooper())
-        main.post {
-            var engine: FlutterEngine? = null
-            var finished = false
-            fun finish() {
-                if (finished) return
-                finished = true
-                engine?.destroy()
-                pending.finish()
-            }
-            try {
-                val loader = FlutterInjector.instance().flutterLoader()
-                loader.startInitialization(app)
-                loader.ensureInitializationComplete(app, null)
-                engine = FlutterEngine(app)
-                MethodChannel(engine.dartExecutor.binaryMessenger, DailyDigest.CHANNEL)
-                    .setMethodCallHandler { call, result ->
-                        when (call.method) {
-                            "post" -> {
-                                DailyDigest.post(
-                                    app,
-                                    call.argument<String>("title") ?: "Hisaab",
-                                    call.argument<String>("body") ?: "",
-                                )
-                                result.success(null)
-                            }
-                            "schedule" -> result.success(null)
-                            "done" -> {
-                                result.success(null)
-                                finish()
-                            }
-                            else -> result.notImplemented()
-                        }
-                    }
-                engine.dartExecutor.executeDartEntrypoint(
-                    DartExecutor.DartEntrypoint(loader.findAppBundlePath(), "digestMain"),
+        HeadlessDart.run(this, app, "digestMain", emptyList()) { ctx, call ->
+            if (call.method == "post") {
+                DailyDigest.post(
+                    ctx,
+                    call.argument<String>("title") ?: "Hisaab",
+                    call.argument<String>("body") ?: "",
                 )
-                // A broadcast gets about 10 s of goAsync time; never hold it.
-                main.postDelayed({ finish() }, 9_000)
-            } catch (error: Throwable) {
-                finish()
             }
         }
     }
