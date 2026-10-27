@@ -100,10 +100,19 @@ class _TransactionDetailSheet extends StatelessWidget {
             ],
             const SizedBox(height: T.s5),
             Text('Category', style: T.label.copyWith(color: p.inkSecondary)),
+            if (txn.sourceType == TxnSourceType.statement &&
+                (txn.merchant?.trim().isNotEmpty ?? false)) ...[
+              const SizedBox(height: 2),
+              Text(
+                'Applies to this and later payments to ${displayName(txn.merchant!)}.',
+                style: T.bodySmall.copyWith(color: p.inkMuted, fontSize: 12),
+              ),
+            ],
             const SizedBox(height: T.s2),
+            // Each chip's 48 dp tap box already spaces the rows.
             Wrap(
               spacing: T.s2,
-              runSpacing: T.s2,
+              runSpacing: 0,
               children: [
                 for (final name in options)
                   _CategoryChoice(
@@ -286,8 +295,11 @@ class _CategoryChoice extends StatelessWidget {
             widthFactor: 1,
             child: AnimatedContainer(
               duration: T.fast,
-              height: 34,
-              padding: const EdgeInsets.symmetric(horizontal: T.s3),
+              height: 36,
+              // Centre the label in the pill: without it the text sat at
+              // the top of the 34 dp box.
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: T.s4),
               decoration: BoxDecoration(
                 color: selected ? p.ink : p.surfaceMuted,
                 borderRadius: BorderRadius.circular(T.r5),

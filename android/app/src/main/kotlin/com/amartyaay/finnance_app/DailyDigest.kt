@@ -57,11 +57,13 @@ object DailyDigest {
             }
         }
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        // Allowed while idle, but not exact: the summary may arrive a few
-        // minutes after 10 pm, which is fine for a daily recap.
-        manager.setAndAllowWhileIdle(
+        // setAndAllowWhileIdle alone gave a one-hour window (10-11 pm) on the
+        // S24 FE. A 10-minute window needs no exact-alarm permission; Doze
+        // can still hold it to the next maintenance window.
+        manager.setWindow(
             AlarmManager.RTC_WAKEUP,
             next.timeInMillis,
+            10 * 60 * 1000L,
             pendingIntent(context),
         )
     }

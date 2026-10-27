@@ -268,6 +268,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     const SizedBox(height: T.s3),
                     _ActivityCaption(
                       periodLabel: outLabel,
+                    when: when,
                       summary: summary,
                       moneyIn: moneyInGroups(
                         transactions,
@@ -495,11 +496,15 @@ class _ActivityStat extends StatelessWidget {
 class _ActivityCaption extends StatelessWidget {
   const _ActivityCaption({
     required this.periodLabel,
+    required this.when,
     required this.summary,
     required this.moneyIn,
   });
 
   final String periodLabel;
+
+  /// "this week", "on 24 Oct", "this month".
+  final String when;
   final MonthlySummary summary;
   final List<MoneyInGroup> moneyIn;
 
@@ -516,7 +521,7 @@ class _ActivityCaption extends StatelessWidget {
       moneyIn.isEmpty
           ? (summary.hasTrueIncome
                 ? null
-                : 'No salary, refund or transfer messages this month.')
+                : 'No salary, refund or transfer messages $when.')
           : 'Money in: ${moneyInLine(moneyIn)}'
                 '${summary.hasTrueIncome ? '' : ' · Salary: none found'}',
       if (!summary.hasTrueIncome && moneyIn.isNotEmpty)

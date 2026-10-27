@@ -436,12 +436,13 @@ class _HeroCard extends StatelessWidget {
     final moneyIn = moneyInGroups(
       data.transactions,
       monthStart: summary.monthStart,
-      monthEnd: DateTime(summary.monthStart.year, summary.monthStart.month + 1),
+      // The period on screen (a day, a week or a month), not always a month.
+      monthEnd: summary.period.end(summary.monthStart),
     );
     final moneyInText = moneyIn.isEmpty
         ? (hasIncome
-              ? 'Money in: none found this month.'
-              : 'No salary, refund or transfer messages this month.')
+              ? 'Money in: none found $when.'
+              : 'No salary, refund or transfer messages $when.')
         : 'Money in: ${moneyInLine(moneyIn)}'
               '${hasIncome ? '' : ' · Salary: none found'}';
 

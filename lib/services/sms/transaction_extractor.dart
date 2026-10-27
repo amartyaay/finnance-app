@@ -953,6 +953,12 @@ class TransactionExtractor {
     if (_merchantStop.contains(lower.split(' ').first)) return false;
     if (_merchantNoise.contains(lower)) return false;
     if (RegExp(r'\d{3,}').hasMatch(lower)) return false;
+    // The safety footer, not a shop: "GOI helpline for cyber fraud 1930",
+    // "call customer care", "to block card".
+    if (RegExp(r'\b(?:fraud|helpline|customer care|complaint|block|dispute)\b')
+        .hasMatch(lower)) {
+      return false;
+    }
     if (RegExp(r'\b(?:account|balance|ref|upi|txn|transaction|card|otp|a/c|bank)\b')
         .hasMatch(lower)) {
       return false;
