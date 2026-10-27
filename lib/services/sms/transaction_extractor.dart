@@ -911,6 +911,12 @@ class TransactionExtractor {
       RegExp(r'^(?:ind|inf|payu|pyu|eba|mps|raz|bharatqr)\s*[*:]\s*', caseSensitive: false),
       '',
     );
+    // `WhiteOak Capital Mutual Fund UMRN: HDFC000…` — the mandate reference
+    // label is not part of the fund's name.
+    cleaned = cleaned.replaceFirst(
+      RegExp(r'\s+umrn\b.*$', caseSensitive: false),
+      '',
+    );
     // `PAYU ZOMATO` uses a space instead of the `*` separator (C05).
     cleaned = cleaned.replaceFirst(RegExp(r'^payu\s+', caseSensitive: false), '');
     cleaned = cleaned.replaceFirst(

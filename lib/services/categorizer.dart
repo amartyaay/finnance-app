@@ -249,6 +249,13 @@ class Categorizer {
       return (name: 'Cash', kind: SpendCategoryKind.cash);
     }
     if (kind == TxnKind.transfer) {
+      // A SIP, a mandate to a fund house, an FD: money put to work is
+      // "Investments", not a generic transfer (the owner had to fix a
+      // WhiteOak Capital SIP by hand).
+      if (transferReason == TransferReason.investment ||
+          transferReason == TransferReason.redemption) {
+        return (name: 'Investments', kind: SpendCategoryKind.investments);
+      }
       return (name: 'Transfers', kind: SpendCategoryKind.transfers);
     }
     final normalised = _normalise(merchant ?? '');
