@@ -203,7 +203,7 @@ class StatementStore {
       );
     }
 
-    return [
+    return pairReturned([
       for (final r in rows)
         fresh(
           StatementRow(
@@ -228,7 +228,7 @@ class StatementStore {
             },
           ),
         ),
-    ];
+    ]);
   }
 
   /// The days each imported account is covered by a statement: from the
@@ -376,6 +376,54 @@ class StatementStore {
       );
     });
   }
+}
+
+/// A payment and the same amount coming back from the same payee within
+/// three days cancel out: rent sent and returned, a split undone. Both rows
+/// become transfers ("returned"), so neither is spend nor money in. Matching
+/// is on the exact counterparty (the statement prints the same name and
+/// account), one credit per debit, nearest first.
+List<StatementRow> pairReturned(List<StatementRow> rows) {
+  final out = [...rows];
+  final used = <int>{};
+  String? key(StatementRow r) {
+    final c = r.counterparty?.trim().toUpperCase();
+    return c == null || c.isEmpty ? null : c;
+  }
+
+  for (var i = 0; i < out.length; i++) {
+    final debit = out[i];
+    if (!debit.isDebit || used.contains(i)) continue;
+    final payee = key(debit);
+    if (payee == null) continue;
+    int? best;
+    var bestGap = 4;
+    for (var j = 0; j < out.length; j++) {
+      final credit = out[j];
+      if (j == i || used.contains(j) || credit.isDebit) continue;
+      if (credit.creditPaise != debit.debitPaise || key(credit) != payee) {
+        continue;
+      }
+      final gap = credit.date.difference(debit.date).inDays.abs();
+      if (gap < bestGap) {
+        bestGap = gap;
+        best = j;
+      }
+    }
+    if (best == null) continue;
+    used
+      ..add(i)
+      ..add(best);
+    StatementRow returned(StatementRow r) => r.copyWith(
+      kind: StatementKind.selfTransfer,
+      counterparty: '${r.counterparty} (returned)',
+      categoryName: 'Transfers',
+      categoryKind: SpendCategoryKind.transfers,
+    );
+    out[i] = returned(debit);
+    out[best] = returned(out[best]);
+  }
+  return out;
 }
 
 /// "Payments to [payee] from [fromMs] on are [categoryName]". The newest
