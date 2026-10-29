@@ -14,7 +14,11 @@ enum NanoStatus {
     available => 'Ready on this phone',
     downloadable => 'Supported; the model needs to be downloaded once',
     downloading => 'Downloading the model',
-    unavailable => 'Not available on this phone',
+    unavailable =>
+      "Not available on this phone yet: Android's AICore is installed but "
+          'does not offer Gemini Nano prompts here (AICore error 606, feature '
+          'not found). Google may switch it on in an AICore update; this screen '
+          'will then say Ready. Hisaab works fully without it.',
   };
 }
 
