@@ -5,6 +5,7 @@ import '../app/design_tokens.dart';
 import '../app/widgets/kit.dart';
 import '../domain/merchant_rule.dart';
 import '../state/app_state.dart';
+import 'nano_screen.dart';
 import 'sms_inbox_screen.dart';
 import '../state/statements_controller.dart';
 import 'statements_screen.dart';
@@ -115,6 +116,14 @@ class SettingsScreen extends StatelessWidget {
                   subtitle: 'Review and categorise any SMS. Optional.',
                   trailing: chevron,
                   onTap: () => SmsInboxScreen.open(context),
+                ),
+                SettingsTile(
+                  icon: Icons.auto_awesome_rounded,
+                  title: 'On-device AI',
+                  subtitle:
+                      'Gemini Nano as a second opinion on unsure messages, if this phone has it.',
+                  trailing: chevron,
+                  onTap: () => NanoScreen.open(context),
                 ),
                 SettingsTile(
                   icon: Icons.delete_rounded,

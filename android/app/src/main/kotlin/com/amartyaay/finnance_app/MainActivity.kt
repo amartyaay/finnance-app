@@ -67,6 +67,9 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, GeminiNano.CHANNEL)
+            .setMethodCallHandler { call, result -> GeminiNano.handle(call, result) }
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DailyDigest.CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {

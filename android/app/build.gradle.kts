@@ -20,7 +20,8 @@ android {
         applicationId = "com.amartyaay.finnance_app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // ML Kit GenAI (Gemini Nano through AICore) needs API 26.
+        minSdk = maxOf(flutter.minSdkVersion, 26)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -43,4 +44,11 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Optional on-device second opinion: Gemini Nano via Android AICore. The
+    // model lives in the system's AICore app; this app still has no INTERNET.
+    implementation("com.google.mlkit:genai-prompt:1.0.0-beta4")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 }
